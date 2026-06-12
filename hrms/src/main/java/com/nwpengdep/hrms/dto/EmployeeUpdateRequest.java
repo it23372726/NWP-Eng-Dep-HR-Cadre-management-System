@@ -99,4 +99,6 @@ public class EmployeeUpdateRequest {
     private Integer grade1RequiredYears;
 
     private List<EmployeeRequirementRequest> requirements;
+
+    private List<CareerHistoryEventRequest> careerHistory;
 }

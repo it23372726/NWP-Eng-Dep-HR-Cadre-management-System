@@ -563,6 +563,7 @@ export default function EmployeeProfilePage() {
                 handleClose={() => setOpenEdit(false)}
                 handleSubmit={handleUpdate}
                 selectedEmployee={employee}
+                actionHistory={actionHistory}
             />
 
             <EmployeeQualificationsForm
