@@ -107,4 +107,6 @@ public class EmployeeRequest {
     private Integer grade1RequiredYears;
 
     private List<EmployeeRequirementRequest> requirements;
+
+    private List<CareerHistoryEventRequest> careerHistory;
 }

@@ -8,6 +8,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.nwpengdep.hrms.dto.CareerHistoryEventRequest;
 import com.nwpengdep.hrms.dto.EmployeeRequest;
 import com.nwpengdep.hrms.dto.EmployeeRequirementRequest;
 import com.nwpengdep.hrms.dto.EmployeeUpdateRequest;
@@ -26,6 +27,7 @@ import com.nwpengdep.hrms.entity.RequirementStatus;
 import com.nwpengdep.hrms.entity.RequirementType;
 import com.nwpengdep.hrms.entity.ServiceLevel;
 import com.nwpengdep.hrms.repository.DesignationRepository;
+import com.nwpengdep.hrms.repository.EmployeeActionRepository;
 import com.nwpengdep.hrms.repository.EmployeePostingRepository;
 import com.nwpengdep.hrms.repository.EmployeeRepository;
 
@@ -37,15 +39,22 @@ public class EmployeeService {
 
     private final EmployeeRepository employeeRepository;
     private final DesignationRepository designationRepository;
+    private final EmployeeActionRepository employeeActionRepository;
     private final EmployeePostingRepository postingRepository;
     private final ServiceLevelService serviceLevelService;
     private final DesignationAssignmentValidator designationAssignmentValidator;
     private final EmployeeActionService employeeActionService;
     private final CareerProgressionService careerProgressionService;
     private final EmployeeRequirementSyncService requirementSyncService;
+    private final CareerHistoryValidator careerHistoryValidator;
 
     @Transactional
     public Employee createEmployee(EmployeeRequest request) {
+        if (request.getCareerHistory() != null
+                && !request.getCareerHistory().isEmpty()) {
+            return createEmployeeWithHistory(request);
+        }
+
         if (request.getEntryType() == EmployeeEntryType.TRANSFER_IN) {
             if (request.getTransferredFrom() == null
                     || request.getTransferredFrom().isBlank()) {
@@ -115,6 +124,226 @@ public class EmployeeService {
         return employee;
     }
 
+    private Employee createEmployeeWithHistory(EmployeeRequest request) {
+        if (request.getEmploymentType() != EmploymentType.PERMANENT) {
+            throw new RuntimeException(
+                    "Career history entry is only supported for permanent employees"
+            );
+        }
+
+        List<CareerHistoryEventRequest> events = request.getCareerHistory();
+        careerHistoryValidator.validate(events);
+
+        CareerHistoryEventRequest firstEvent = events.getFirst();
+        Designation finalDesignation = resolveFinalDesignation(events);
+        ServiceLevel serviceLevel =
+                serviceLevelService.resolve(resolveFinalServiceLevelId(request, events));
+
+        Employee employee = mapRequestToEmployee(
+                new Employee(),
+                request,
+                finalDesignation,
+                serviceLevel
+        );
+
+        employee.setDateOfFirstAppointment(firstEvent.getActionDate());
+        employee.setStatus(EmployeeStatus.ACTIVE);
+        requirementSyncService.syncEmployeeRequirements(employee);
+        careerProgressionService.recalculateEmployeeCareer(employee);
+
+        employee = employeeRepository.save(employee);
+
+        recordCareerHistoryActions(employee, events);
+
+        employeeActionService.recalculateEmployeeState(employee.getId());
+
+        Employee result = employeeRepository.findById(employee.getId())
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+
+        if (result.getDesignation() != null) {
+            designationAssignmentValidator.validate(result, result.getDesignation());
+        }
+
+        return result;
+    }
+
+    private void recordCareerHistoryActions(
+            Employee employee,
+            List<CareerHistoryEventRequest> events
+    ) {
+        Designation currentDesignation = null;
+        Grade currentGrade = null;
+
+        for (CareerHistoryEventRequest event : events) {
+            switch (event.getActionType()) {
+                case NEW_APPOINTMENT -> {
+                    currentDesignation = resolveDesignation(event.getDesignationId());
+                    currentGrade = event.getGrade() != null
+                            ? event.getGrade()
+                            : Grade.III;
+                    employeeActionService.recordActionWithGrades(
+                            employee,
+                            EmployeeActionType.NEW_APPOINTMENT,
+                            event.getActionDate(),
+                            null,
+                            currentDesignation,
+                            null,
+                            currentGrade,
+                            null,
+                            null,
+                            null,
+                            event.getRemarks()
+                    );
+                }
+
+                case PERMANENT_CONFIRMATION -> employeeActionService.recordAction(
+                        employee,
+                        EmployeeActionType.PERMANENT_CONFIRMATION,
+                        event.getActionDate(),
+                        null,
+                        currentDesignation,
+                        null,
+                        null,
+                        null,
+                        event.getRemarks()
+                );
+
+                case PROMOTION, ASSIGNMENT_GRADE_UPDATE -> {
+                    Designation oldDesignation = currentDesignation;
+                    Grade oldGrade = currentGrade;
+                    Designation newDesignation = event.getDesignationId() != null
+                            ? resolveDesignation(event.getDesignationId())
+                            : currentDesignation;
+                    Grade newGrade = event.getGrade() != null
+                            ? event.getGrade()
+                            : currentGrade;
+
+                    boolean designationChanged = oldDesignation == null
+                            || newDesignation == null
+                            || !oldDesignation.getId().equals(newDesignation.getId());
+
+                    employeeActionService.recordActionWithGrades(
+                            employee,
+                            designationChanged
+                                    ? EmployeeActionType.PROMOTION
+                                    : EmployeeActionType.ASSIGNMENT_GRADE_UPDATE,
+                            event.getActionDate(),
+                            oldDesignation,
+                            newDesignation,
+                            oldGrade,
+                            newGrade,
+                            null,
+                            null,
+                            null,
+                            event.getRemarks()
+                    );
+
+                    currentDesignation = newDesignation;
+                    currentGrade = newGrade;
+                }
+
+                case TRANSFER_IN -> {
+                    if (event.getDesignationId() != null) {
+                        currentDesignation =
+                                resolveDesignation(event.getDesignationId());
+                    }
+                    employeeActionService.recordAction(
+                            employee,
+                            EmployeeActionType.TRANSFER_IN,
+                            event.getActionDate(),
+                            null,
+                            currentDesignation,
+                            trimToNull(event.getTransferredFrom()),
+                            null,
+                            null,
+                            event.getRemarks()
+                    );
+                }
+
+                case TRANSFER_OUT -> employeeActionService.recordAction(
+                        employee,
+                        EmployeeActionType.TRANSFER_OUT,
+                        event.getActionDate(),
+                        currentDesignation,
+                        currentDesignation,
+                        null,
+                        trimToNull(event.getTransferredTo()),
+                        null,
+                        event.getRemarks()
+                );
+
+                case RETIREMENT_OR_RESIGNATION, DEATH ->
+                        employeeActionService.recordAction(
+                                employee,
+                                event.getActionType(),
+                                event.getActionDate(),
+                                currentDesignation,
+                                null,
+                                null,
+                                null,
+                                null,
+                                event.getRemarks()
+                        );
+
+                case DISMISSAL -> employeeActionService.recordAction(
+                        employee,
+                        EmployeeActionType.DISMISSAL,
+                        event.getActionDate(),
+                        currentDesignation,
+                        null,
+                        null,
+                        null,
+                        trimToNull(event.getReason()),
+                        event.getRemarks()
+                );
+            }
+        }
+    }
+
+    private Designation resolveFinalDesignation(
+            List<CareerHistoryEventRequest> events
+    ) {
+        Long designationId = null;
+        for (CareerHistoryEventRequest event : events) {
+            if (event.getDesignationId() != null) {
+                designationId = event.getDesignationId();
+            }
+        }
+        if (designationId == null) {
+            throw new RuntimeException(
+                    "Career history must include at least one designation"
+            );
+        }
+        return resolveDesignation(designationId);
+    }
+
+    private Long resolveFinalServiceLevelId(
+            EmployeeRequest request,
+            List<CareerHistoryEventRequest> events
+    ) {
+        return resolveFinalServiceLevelId(request.getServiceLevelId(), events);
+    }
+
+    private Long resolveFinalServiceLevelId(
+            Long requestServiceLevelId,
+            List<CareerHistoryEventRequest> events
+    ) {
+        Long serviceLevelId = requestServiceLevelId;
+        for (CareerHistoryEventRequest event : events) {
+            if (event.getServiceLevelId() != null) {
+                serviceLevelId = event.getServiceLevelId();
+            }
+        }
+        if (serviceLevelId == null) {
+            throw new RuntimeException("Service level is required");
+        }
+        return serviceLevelId;
+    }
+
+    private String trimToNull(String value) {
+        return value != null && !value.isBlank() ? value.trim() : null;
+    }
+
     public List<Employee> getActiveEmployees() {
         return employeeRepository.findByStatus(EmployeeStatus.ACTIVE);
     }
@@ -146,6 +375,11 @@ public class EmployeeService {
 
     @Transactional
     public Employee updateEmployee(Long id, EmployeeUpdateRequest request) {
+        if (request.getCareerHistory() != null
+                && !request.getCareerHistory().isEmpty()) {
+            return updateEmployeeWithHistory(id, request);
+        }
+
         Employee employee = getEmployeeById(id);
 
         if (employee.getStatus() != EmployeeStatus.ACTIVE) {
@@ -179,6 +413,121 @@ public class EmployeeService {
         designationAssignmentValidator.validate(employee, designation);
 
         return employeeRepository.save(employee);
+    }
+
+    private Employee updateEmployeeWithHistory(
+            Long id,
+            EmployeeUpdateRequest request
+    ) {
+        Employee employee = getEmployeeById(id);
+
+        if (employee.getStatus() != EmployeeStatus.ACTIVE) {
+            throw new RuntimeException(
+                    "Only active employees can be updated"
+            );
+        }
+
+        if (request.getEmploymentType() != EmploymentType.PERMANENT) {
+            throw new RuntimeException(
+                    "Career history updates are only supported for permanent employees"
+            );
+        }
+
+        List<CareerHistoryEventRequest> events = request.getCareerHistory();
+        careerHistoryValidator.validate(events);
+        rejectTerminalHistoryForActiveEmployee(events);
+
+        CareerHistoryEventRequest firstEvent = events.getFirst();
+        ServiceLevel serviceLevel = serviceLevelService.resolve(
+                resolveFinalServiceLevelId(request.getServiceLevelId(), events)
+        );
+
+        applyNonCareerFieldsFromUpdate(employee, request, serviceLevel);
+        employee.setDateOfFirstAppointment(firstEvent.getActionDate());
+        employeeRepository.save(employee);
+
+        employeeActionRepository.deleteByEmployeeId(id);
+        postingRepository.deleteByEmployeeId(id);
+
+        recordCareerHistoryActions(employee, events);
+        employeeActionService.recalculateEmployeeState(id);
+
+        Employee result = getEmployeeById(id);
+        applyNonCareerFieldsFromUpdate(result, request, serviceLevel);
+        requirementSyncService.syncEmployeeRequirements(result);
+        careerProgressionService.recalculateEmployeeCareer(result);
+
+        if (result.getDesignation() != null) {
+            designationAssignmentValidator.validate(
+                    result,
+                    result.getDesignation()
+            );
+        }
+
+        return employeeRepository.save(result);
+    }
+
+    private void rejectTerminalHistoryForActiveEmployee(
+            List<CareerHistoryEventRequest> events
+    ) {
+        CareerHistoryEventRequest lastEvent = events.getLast();
+        switch (lastEvent.getActionType()) {
+            case TRANSFER_OUT, RETIREMENT_OR_RESIGNATION, DEATH, DISMISSAL ->
+                    throw new RuntimeException(
+                            "Active employees cannot have a terminal event "
+                                    + "as the last career history entry"
+                    );
+            default -> {
+            }
+        }
+    }
+
+    private void applyNonCareerFieldsFromUpdate(
+            Employee employee,
+            EmployeeUpdateRequest request,
+            ServiceLevel serviceLevel
+    ) {
+        employee.setEmployeeNo(request.getEmployeeNo().trim());
+        employee.setFullName(request.getFullName().trim());
+        employee.setNic(request.getNic().trim());
+        employee.setDateOfBirth(request.getDateOfBirth());
+        employee.setGender(request.getGender());
+        employee.setIncremantDate(request.getIncremantDate());
+        employee.setEnteredDateToAllIslandService(
+                request.getEnteredDateToAllIslandService()
+        );
+        employee.setReportedDateToPresentWorkingPlace(
+                request.getReportedDateToPresentWorkingPlace()
+        );
+        employee.setCurrentWorkingPlace(request.getCurrentWorkingPlace().trim());
+        employee.setCurrentDistrictOfWorking(
+                request.getCurrentDistrictOfWorking()
+        );
+        employee.setEnteredDateToNWPCouncil(request.getEnteredDateToNWPCouncil());
+        employee.setPermanentAddress(request.getPermanentAddress().trim());
+        employee.setResidentDistrict(request.getResidentDistrict());
+        employee.setContactNo(request.getContactNo().trim());
+        employee.setServiceLevel(serviceLevel);
+        employee.setEmploymentType(EmploymentType.PERMANENT);
+        applyQualificationFields(
+                employee,
+                request.getEbGrade3Passed(),
+                request.getLanguageQualificationPassed(),
+                request.getMedicalReportCompleted(),
+                request.getOlApproved(),
+                request.getAlApproved(),
+                request.getDegreeApproved(),
+                request.getOtherQualificationName(),
+                request.getOtherQualificationApproved(),
+                request.getBirthCertificateApproved(),
+                request.getAlreadyConfirmedPermanent(),
+                request.getPermanentConfirmationDate(),
+                request.getEbGrade2Passed(),
+                request.getOtherGrade2RequirementCompleted(),
+                request.getGrade2RequiredYears(),
+                request.getGrade1RequiredYears(),
+                request.getRequirements()
+        );
     }
 
     public List<Employee> searchActiveEmployees(String keyword) {
