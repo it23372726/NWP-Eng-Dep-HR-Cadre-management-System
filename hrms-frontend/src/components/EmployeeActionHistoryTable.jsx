@@ -1,4 +1,5 @@
 import {
+    Alert,
     Table,
     TableBody,
     TableCell,
@@ -18,7 +19,8 @@ import {
 
 import {
     ACTION_TYPE_LABELS,
-    formatActionDetails
+    formatActionDetails,
+    getApiErrorMessage
 } from "../constants/hrms";
 
 import LifecycleActionFormDialog from "./LifecycleActionFormDialog";
@@ -38,13 +40,19 @@ const actionColor = {
     TRANSFER_IN: "info",
     TRANSFER_OUT: "warning",
     PROMOTION: "success",
+    ASSIGNMENT_GRADE_UPDATE: "info",
     PERMANENT_CONFIRMATION: "success",
     RETIREMENT_OR_RESIGNATION: "default",
     DEATH: "default",
     DISMISSAL: "error"
 };
 
-export default function EmployeeActionHistoryTable({ actions, designations, onRefresh }) {
+export default function EmployeeActionHistoryTable({
+    actions,
+    designations,
+    employee,
+    onRefresh
+}) {
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [selectedAction, setSelectedAction] = useState(null);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -69,8 +77,7 @@ export default function EmployeeActionHistoryTable({ actions, designations, onRe
             onRefresh();
             setDeleteDialogOpen(false);
         } catch (error) {
-            toast.error("Failed to delete lifecycle action");
-            console.error(error);
+            toast.error(getApiErrorMessage(error));
         } finally {
             setDeleting(false);
         }
@@ -88,8 +95,16 @@ export default function EmployeeActionHistoryTable({ actions, designations, onRe
         );
     }
 
+    const latestActionId = actions.find((action) => action.canModify)?.id
+        ?? actions[0]?.id;
+
     return (
         <>
+            <Alert severity="info" sx={{ mb: 2 }}>
+                Actions are listed with the most recent at the top. Only the latest
+                action can be edited or deleted to keep employee history consistent.
+            </Alert>
+
             <TableContainer component={Paper} variant="outlined">
                 <Table size="small">
                     <TableHead>
@@ -126,23 +141,34 @@ export default function EmployeeActionHistoryTable({ actions, designations, onRe
                                     {action.remarks || "—"}
                                 </TableCell>
                                 <TableCell align="right">
-                                    <Tooltip title="Edit">
-                                        <IconButton
-                                            size="small"
-                                            onClick={() => handleEditClick(action)}
+                                    {action.canModify ?? action.id === latestActionId ? (
+                                        <>
+                                            <Tooltip title="Edit latest action">
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => handleEditClick(action)}
+                                                >
+                                                    <EditIcon fontSize="small" />
+                                                </IconButton>
+                                            </Tooltip>
+                                            <Tooltip title="Delete latest action">
+                                                <IconButton
+                                                    size="small"
+                                                    color="error"
+                                                    onClick={() => handleDeleteClick(action)}
+                                                >
+                                                    <DeleteIcon fontSize="small" />
+                                                </IconButton>
+                                            </Tooltip>
+                                        </>
+                                    ) : (
+                                        <Typography
+                                            variant="caption"
+                                            color="text.secondary"
                                         >
-                                            <EditIcon fontSize="small" />
-                                        </IconButton>
-                                    </Tooltip>
-                                    <Tooltip title="Delete">
-                                        <IconButton
-                                            size="small"
-                                            color="error"
-                                            onClick={() => handleDeleteClick(action)}
-                                        >
-                                            <DeleteIcon fontSize="small" />
-                                        </IconButton>
-                                    </Tooltip>
+                                            —
+                                        </Typography>
+                                    )}
                                 </TableCell>
                             </TableRow>
                         ))}
@@ -154,6 +180,7 @@ export default function EmployeeActionHistoryTable({ actions, designations, onRe
                 open={editDialogOpen}
                 onClose={() => setEditDialogOpen(false)}
                 action={selectedAction}
+                employee={employee}
                 designations={designations || []}
                 onSuccess={handleEditSuccess}
             />

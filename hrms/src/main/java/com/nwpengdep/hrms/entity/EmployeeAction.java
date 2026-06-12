@@ -38,6 +38,12 @@ public class EmployeeAction {
     @JoinColumn(name = "new_designation_id")
     private Designation newDesignation;
 
+    @Enumerated(EnumType.STRING)
+    private Grade oldGrade;
+
+    @Enumerated(EnumType.STRING)
+    private Grade newGrade;
+
     private String transferredFrom;
 
     private String transferredTo;

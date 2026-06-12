@@ -93,8 +93,8 @@ export default function SummaryCards({ summary, loading }) {
         },
         {
             icon: AssignmentIcon,
-            title: "Qualified For Permanent",
-            value: summary?.qualifiedForPermanentEmployees ?? 0,
+            title: "Eligible For Permanent",
+            value: summary?.eligibleForPermanent ?? 0,
             subtitle: "Awaiting confirmation",
             color: "#0284C7"
         },
@@ -104,13 +104,34 @@ export default function SummaryCards({ summary, loading }) {
             value: summary?.permanentEmployees ?? 0,
             subtitle: "Confirmed permanent",
             color: "#16A34A"
+        },
+        {
+            icon: AssignmentIcon,
+            title: "Eligible For Grade II",
+            value: summary?.eligibleForGrade2 ?? 0,
+            subtitle: "Ready for Grade II",
+            color: "#2563EB"
+        },
+        {
+            icon: AssignmentIcon,
+            title: "Eligible For Grade I",
+            value: summary?.eligibleForGrade1 ?? 0,
+            subtitle: "Ready for Grade I",
+            color: "#4F46E5"
+        },
+        {
+            icon: EventIcon,
+            title: "Recently Qualified",
+            value: summary?.recentlyQualified ?? 0,
+            subtitle: "Last 30 days",
+            color: "#0891B2"
         }
     ];
 
     return (
         <Grid container spacing={2} sx={{ mb: 4 }}>
             {cards.map((card, index) => (
-                <Grid item xs={12} sm={6} md={4} lg={2} key={index}>
+                <Grid item xs={12} sm={6} md={4} lg={3} key={index}>
                     <SummaryCard
                         icon={card.icon}
                         title={card.title}

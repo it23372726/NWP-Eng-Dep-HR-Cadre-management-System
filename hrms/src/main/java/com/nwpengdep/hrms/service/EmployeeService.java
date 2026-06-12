@@ -1,18 +1,35 @@
 package com.nwpengdep.hrms.service;
 
-import com.nwpengdep.hrms.dto.EmployeeRequest;
-import com.nwpengdep.hrms.dto.EmployeeUpdateRequest;
-import com.nwpengdep.hrms.entity.*;
-import com.nwpengdep.hrms.repository.DesignationRepository;
-import com.nwpengdep.hrms.repository.EmployeePostingRepository;
-import com.nwpengdep.hrms.repository.EmployeeRepository;
-import lombok.RequiredArgsConstructor;
+import java.time.LocalDate;
+import java.util.List;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
+import com.nwpengdep.hrms.dto.EmployeeRequest;
+import com.nwpengdep.hrms.dto.EmployeeRequirementRequest;
+import com.nwpengdep.hrms.dto.EmployeeUpdateRequest;
+import com.nwpengdep.hrms.entity.Designation;
+import com.nwpengdep.hrms.entity.Employee;
+import com.nwpengdep.hrms.entity.EmployeeActionType;
+import com.nwpengdep.hrms.entity.EmployeeCareerProgression;
+import com.nwpengdep.hrms.entity.EmployeeEntryType;
+import com.nwpengdep.hrms.entity.EmployeePosting;
+import com.nwpengdep.hrms.entity.EmployeeRequirement;
+import com.nwpengdep.hrms.entity.EmployeeStatus;
+import com.nwpengdep.hrms.entity.EmploymentType;
+import com.nwpengdep.hrms.entity.Grade;
+import com.nwpengdep.hrms.entity.PermanentStatus;
+import com.nwpengdep.hrms.entity.RequirementStatus;
+import com.nwpengdep.hrms.entity.RequirementType;
+import com.nwpengdep.hrms.entity.ServiceLevel;
+import com.nwpengdep.hrms.repository.DesignationRepository;
+import com.nwpengdep.hrms.repository.EmployeePostingRepository;
+import com.nwpengdep.hrms.repository.EmployeeRepository;
+
+import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
@@ -24,7 +41,8 @@ public class EmployeeService {
     private final ServiceLevelService serviceLevelService;
     private final DesignationAssignmentValidator designationAssignmentValidator;
     private final EmployeeActionService employeeActionService;
-    private final QualificationEvaluatorService qualificationEvaluatorService;
+    private final CareerProgressionService careerProgressionService;
+    private final EmployeeRequirementSyncService requirementSyncService;
 
     @Transactional
     public Employee createEmployee(EmployeeRequest request) {
@@ -49,7 +67,8 @@ public class EmployeeService {
         );
 
         employee.setStatus(EmployeeStatus.ACTIVE);
-        qualificationEvaluatorService.evaluatePermanentQualification(employee);
+        requirementSyncService.syncEmployeeRequirements(employee);
+        careerProgressionService.recalculateEmployeeCareer(employee);
 
         designationAssignmentValidator.validate(employee, designation);
 
@@ -114,7 +133,8 @@ public class EmployeeService {
                 .orElseThrow(() ->
                         new RuntimeException("Employee not found"));
 
-        qualificationEvaluatorService.evaluatePermanentQualification(employee);
+        requirementSyncService.syncEmployeeRequirements(employee);
+        careerProgressionService.recalculateEmployeeCareer(employee);
         return employeeRepository.save(employee);
     }
 
@@ -153,7 +173,8 @@ public class EmployeeService {
                 serviceLevel
         );
 
-        qualificationEvaluatorService.evaluatePermanentQualification(employee);
+        requirementSyncService.syncEmployeeRequirements(employee);
+        careerProgressionService.recalculateEmployeeCareer(employee);
 
         designationAssignmentValidator.validate(employee, designation);
 
@@ -232,7 +253,14 @@ public class EmployeeService {
                 request.getDegreeApproved(),
                 request.getOtherQualificationName(),
                 request.getOtherQualificationApproved(),
-                request.getBirthCertificateApproved()
+                request.getBirthCertificateApproved(),
+                request.getAlreadyConfirmedPermanent(),
+                request.getPermanentConfirmationDate(),
+                request.getEbGrade2Passed(),
+                request.getOtherGrade2RequirementCompleted(),
+                request.getGrade2RequiredYears(),
+                request.getGrade1RequiredYears(),
+                request.getRequirements()
         );
     }
 
@@ -284,7 +312,14 @@ public class EmployeeService {
                 request.getDegreeApproved(),
                 request.getOtherQualificationName(),
                 request.getOtherQualificationApproved(),
-                request.getBirthCertificateApproved()
+                request.getBirthCertificateApproved(),
+                request.getAlreadyConfirmedPermanent(),
+                request.getPermanentConfirmationDate(),
+                request.getEbGrade2Passed(),
+                request.getOtherGrade2RequirementCompleted(),
+                request.getGrade2RequiredYears(),
+                request.getGrade1RequiredYears(),
+                request.getRequirements()
         );
 
         return employee;
@@ -307,21 +342,307 @@ public class EmployeeService {
             Boolean degreeApproved,
             String otherQualificationName,
             Boolean otherQualificationApproved,
-            Boolean birthCertificateApproved
+            Boolean birthCertificateApproved,
+            Boolean alreadyConfirmedPermanent,
+            LocalDate permanentConfirmationDate,
+            Boolean ebGrade2Passed,
+            Boolean otherGrade2RequirementCompleted,
+            Integer grade2RequiredYears,
+            Integer grade1RequiredYears,
+            List<EmployeeRequirementRequest> requirements
     ) {
-        employee.setEbGrade3Passed(Boolean.TRUE.equals(ebGrade3Passed));
-        employee.setLanguageQualificationPassed(Boolean.TRUE.equals(languageQualificationPassed));
-        employee.setMedicalReportCompleted(Boolean.TRUE.equals(medicalReportCompleted));
-        employee.setOlApproved(Boolean.TRUE.equals(olApproved));
-        employee.setAlApproved(Boolean.TRUE.equals(alApproved));
-        employee.setDegreeApproved(Boolean.TRUE.equals(degreeApproved));
-        employee.setOtherQualificationName(
-                otherQualificationName != null && !otherQualificationName.isBlank()
-                        ? otherQualificationName.trim()
+        EmployeeCareerProgression careerProgression =
+                careerProgressionService.ensureCareerProgression(employee);
+
+        if (requirements != null) {
+            applyRequirementRequests(employee, requirements);
+        } else {
+            applyLegacyRequirementFields(
+                    employee,
+                    ebGrade3Passed,
+                    languageQualificationPassed,
+                    medicalReportCompleted,
+                    olApproved,
+                    alApproved,
+                    degreeApproved,
+                    otherQualificationName,
+                    otherQualificationApproved,
+                    birthCertificateApproved,
+                    ebGrade2Passed,
+                    otherGrade2RequirementCompleted
+            );
+        }
+
+        requirementSyncService.syncEmployeeRequirements(employee);
+
+        boolean permanentGradeThreeAlreadyConfirmed =
+                employee.getEmploymentType() == EmploymentType.PERMANENT
+                        && employee.getGrade() == Grade.III
+                        && Boolean.TRUE.equals(alreadyConfirmedPermanent);
+        boolean permanentGradeTwoOrAbove =
+                employee.getEmploymentType() == EmploymentType.PERMANENT
+                        && (employee.getGrade() == Grade.II
+                            || employee.getGrade() == Grade.I
+                            || employee.getGrade() == Grade.SUPRA
+                            || employee.getGrade() == Grade.SPECIAL);
+
+        if (permanentGradeThreeAlreadyConfirmed || permanentGradeTwoOrAbove) {
+            markPermanentRequirementsCompleted(employee);
+        }
+
+        if (permanentGradeThreeAlreadyConfirmed || permanentGradeTwoOrAbove) {
+            LocalDate confirmedDate = permanentConfirmationDate != null
+                    ? permanentConfirmationDate
+                    : employee.getAppointmentDateToPresentClassGrade();
+            careerProgression.setPermanentConfirmationDate(confirmedDate);
+            careerProgression.setGrade3AchievedDate(confirmedDate);
+        } else if (careerProgression.getPermanentConfirmationDate() != null
+                && employee.getPermanentStatus() == PermanentStatus.PERMANENT) {
+            careerProgression.setPermanentConfirmationDate(null);
+        }
+
+        if (permanentGradeTwoOrAbove) {
+            setRequirementCompleted(employee, RequirementType.EB_GRADE_2);
+            markCustomGrade2RequirementsCompleted(employee);
+        }
+        if (employee.getGrade() == Grade.I
+                || employee.getGrade() == Grade.SUPRA
+                || employee.getGrade() == Grade.SPECIAL) {
+            setRequirementCompleted(employee, RequirementType.EB_GRADE_1);
+            markCustomGrade1RequirementsCompleted(employee);
+        }
+        careerProgression.setGrade2RequiredYears(
+                employee.getDesignation() != null
+                        ? employee.getDesignation().getGrade2RequiredYears()
+                        : grade2RequiredYears
+        );
+        careerProgression.setGrade1RequiredYears(
+                employee.getDesignation() != null
+                        ? employee.getDesignation().getGrade1RequiredYears()
+                        : grade1RequiredYears
+        );
+    }
+
+    private void markPermanentRequirementsCompleted(Employee employee) {
+        setRequirementCompleted(employee, RequirementType.EB_GRADE_3);
+        setRequirementCompleted(
+                employee,
+                RequirementType.GOVERNMENT_LANGUAGE_QUALIFICATION
+        );
+        setRequirementCompleted(employee, RequirementType.MEDICAL_REPORT);
+        setRequirementCompleted(employee, RequirementType.OL_CERTIFICATE);
+        setRequirementCompleted(employee, RequirementType.AL_CERTIFICATE);
+        setRequirementCompleted(employee, RequirementType.DEGREE_CERTIFICATE);
+        setRequirementCompleted(employee, RequirementType.BIRTH_CERTIFICATE);
+        if (employee.getDesignation() != null
+                && employee.getDesignation().getPermanentRequirements() != null) {
+            employee.getDesignation()
+                    .getPermanentRequirements()
+                    .forEach(requirement -> setRequirementCompleted(
+                            employee,
+                            RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                            requirement.getRequirementName()
+                    ));
+        }
+    }
+
+    private void markCustomGrade2RequirementsCompleted(Employee employee) {
+        if (employee.getDesignation() == null
+                || employee.getDesignation().getGrade2Requirements() == null) {
+            return;
+        }
+
+        employee.getDesignation()
+                .getGrade2Requirements()
+                .forEach(requirement -> setRequirementCompleted(
+                        employee,
+                        RequirementType.CUSTOM_GRADE_2_REQUIREMENT,
+                        requirement.getRequirementName()
+                ));
+    }
+
+    private void markCustomGrade1RequirementsCompleted(Employee employee) {
+        if (employee.getDesignation() == null
+                || employee.getDesignation().getGrade1Requirements() == null) {
+            return;
+        }
+
+        employee.getDesignation()
+                .getGrade1Requirements()
+                .forEach(requirement -> setRequirementCompleted(
+                        employee,
+                        RequirementType.CUSTOM_GRADE_1_REQUIREMENT,
+                        requirement.getRequirementName()
+                ));
+    }
+
+    private void applyLegacyRequirementFields(
+            Employee employee,
+            Boolean ebGrade3Passed,
+            Boolean languageQualificationPassed,
+            Boolean medicalReportCompleted,
+            Boolean olApproved,
+            Boolean alApproved,
+            Boolean degreeApproved,
+            String otherQualificationName,
+            Boolean otherQualificationApproved,
+            Boolean birthCertificateApproved,
+            Boolean ebGrade2Passed,
+            Boolean otherGrade2RequirementCompleted
+    ) {
+        setRequirementStatus(
+                employee,
+                RequirementType.EB_GRADE_3,
+                ebGrade3Passed,
+                null
+        );
+        setRequirementStatus(
+                employee,
+                RequirementType.GOVERNMENT_LANGUAGE_QUALIFICATION,
+                languageQualificationPassed,
+                null
+        );
+        setRequirementStatus(
+                employee,
+                RequirementType.MEDICAL_REPORT,
+                medicalReportCompleted,
+                null
+        );
+        setRequirementStatus(
+                employee,
+                RequirementType.OL_CERTIFICATE,
+                olApproved,
+                null
+        );
+        setRequirementStatus(
+                employee,
+                RequirementType.AL_CERTIFICATE,
+                alApproved,
+                null
+        );
+        setRequirementStatus(
+                employee,
+                RequirementType.DEGREE_CERTIFICATE,
+                degreeApproved,
+                null
+        );
+        setRequirementStatus(
+                employee,
+                RequirementType.BIRTH_CERTIFICATE,
+                birthCertificateApproved,
+                null
+        );
+        setRequirementStatus(
+                employee,
+                RequirementType.EB_GRADE_2,
+                ebGrade2Passed,
+                null
+        );
+    }
+
+    private void applyRequirementRequests(
+            Employee employee,
+            List<EmployeeRequirementRequest> requirements
+    ) {
+        requirements.stream()
+                .filter(request -> request.getRequirementType() != null)
+                .forEach(request -> upsertRequirement(
+                        employee,
+                        request.getRequirementType(),
+                        request.getStatus() != null
+                                ? request.getStatus()
+                                : RequirementStatus.PENDING,
+                        request.getRequirementName(),
+                        request.getCompletedDate(),
+                        request.getRemarks()
+                ));
+    }
+
+    private void setRequirementStatus(
+            Employee employee,
+            RequirementType type,
+            Boolean completed,
+            String requirementName
+    ) {
+        upsertRequirement(
+                employee,
+                type,
+                Boolean.TRUE.equals(completed)
+                        ? RequirementStatus.COMPLETED
+                        : RequirementStatus.PENDING,
+                requirementName,
+                Boolean.TRUE.equals(completed) ? LocalDate.now() : null,
+                null
+        );
+    }
+
+    private void setRequirementCompleted(Employee employee, RequirementType type) {
+        setRequirementCompleted(employee, type, null);
+    }
+
+    private void setRequirementCompleted(
+            Employee employee,
+            RequirementType type,
+            String requirementName
+    ) {
+        upsertRequirement(
+                employee,
+                type,
+                RequirementStatus.COMPLETED,
+                requirementName,
+                LocalDate.now(),
+                null
+        );
+    }
+
+    private void upsertRequirement(
+            Employee employee,
+            RequirementType type,
+            RequirementStatus status,
+            String requirementName,
+            LocalDate completedDate,
+            String remarks
+    ) {
+        if (employee.getRequirements() == null) {
+            employee.setRequirements(new java.util.ArrayList<>());
+        }
+
+        EmployeeRequirement requirement = employee.getRequirements()
+                .stream()
+                .filter(existing -> existing.getRequirementType() == type
+                        && sameRequirementName(
+                                existing.getRequirementName(),
+                                requirementName
+                        ))
+                .findFirst()
+                .orElseGet(() -> {
+                    EmployeeRequirement created = new EmployeeRequirement();
+                    created.setEmployee(employee);
+                    created.setRequirementType(type);
+                    employee.getRequirements().add(created);
+                    return created;
+                });
+
+        requirement.setStatus(status);
+        requirement.setRequirementName(
+                requirementName != null && !requirementName.isBlank()
+                        ? requirementName.trim()
                         : null
         );
-        employee.setOtherQualificationApproved(Boolean.TRUE.equals(otherQualificationApproved));
-        employee.setBirthCertificateApproved(Boolean.TRUE.equals(birthCertificateApproved));
+        requirement.setCompletedDate(
+                status == RequirementStatus.COMPLETED
+                        ? (completedDate != null ? completedDate : LocalDate.now())
+                        : null
+        );
+        requirement.setRemarks(
+                remarks != null && !remarks.isBlank() ? remarks.trim() : null
+        );
+    }
+
+    private boolean sameRequirementName(String left, String right) {
+        String leftValue = left != null ? left.trim() : "";
+        String rightValue = right != null ? right.trim() : "";
+        return leftValue.equalsIgnoreCase(rightValue);
     }
 
     private Designation resolveDesignation(Long designationId) {

@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @Data
 public class EmployeeUpdateRequest {
@@ -48,7 +49,6 @@ public class EmployeeUpdateRequest {
     @NotNull(message = "Current district of working is required")
     private District currentDistrictOfWorking;
 
-    @NotNull(message = "Appointment date to present class/grade is required")
     private LocalDate appointmentDateToPresentClassGrade;
 
     @NotNull(message = "Entered date to N.W.P. Council is required")
@@ -85,4 +85,18 @@ public class EmployeeUpdateRequest {
     private Boolean otherQualificationApproved;
 
     private Boolean birthCertificateApproved;
+
+    private Boolean alreadyConfirmedPermanent;
+
+    private LocalDate permanentConfirmationDate;
+
+    private Boolean ebGrade2Passed;
+
+    private Boolean otherGrade2RequirementCompleted;
+
+    private Integer grade2RequiredYears;
+
+    private Integer grade1RequiredYears;
+
+    private List<EmployeeRequirementRequest> requirements;
 }

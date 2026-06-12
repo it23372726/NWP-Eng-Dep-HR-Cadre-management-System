@@ -15,10 +15,19 @@ import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { updateEmployeeAction } from "../services/employeeLifecycleService";
 import { getServiceLevels } from "../services/serviceLevelService";
-import { ACTION_TYPE_LABELS, GRADES, validateDesignationAssignment } from "../constants/hrms";
+import {
+    ACTION_TYPE_LABELS,
+    GRADES,
+    getApiErrorMessage,
+    validateDesignationAssignment
+} from "../constants/hrms";
 import { createFormFieldProps, dialogActionsSx } from "../utils/formLayout";
+import { getMinimumPromotionEffectiveDate } from "../utils/gradeAchievementDates";
 
 const today = () => new Date().toISOString().split("T")[0];
+
+const formatDisplayDate = (date) =>
+    date ? new Date(`${date}T00:00:00`).toLocaleDateString("en-GB") : "—";
 
 function buildValidationTarget(grade, serviceLevelId, serviceLevels) {
     return {
@@ -33,6 +42,7 @@ export default function LifecycleActionFormDialog({
     open,
     onClose,
     action,
+    employee,
     designations,
     onSuccess
 }) {
@@ -48,6 +58,9 @@ export default function LifecycleActionFormDialog({
     const [loading, setLoading] = useState(false);
 
     const isPromotion = action?.actionType === "PROMOTION";
+    const isAssignmentGradeUpdate =
+        action?.actionType === "ASSIGNMENT_GRADE_UPDATE";
+    const isPromotionLike = isPromotion || isAssignmentGradeUpdate;
 
     useEffect(() => {
         if (!open || !action) {
@@ -59,7 +72,7 @@ export default function LifecycleActionFormDialog({
 
             const initialForm = {
                 newDesignationId: String(action.newDesignationId || ""),
-                grade: "",
+                grade: action.newGrade || "",
                 serviceLevelId: "",
                 actionDate: action.actionDate || today(),
                 remarks: action.remarks || ""
@@ -69,14 +82,31 @@ export default function LifecycleActionFormDialog({
         });
     }, [open, action]);
 
-    const selectedDesignation = designations?.find(
+    const designation = designations?.find(
         (d) => d.id === Number(form.newDesignationId)
     );
 
-    const runValidation = (nextForm) => {
-        if (!isPromotion) return;
+    const minimumEffectiveDate = isPromotionLike
+        ? getMinimumPromotionEffectiveDate(
+            employee,
+            action?.oldGrade,
+            action?.newGrade || form.grade,
+            designation || employee?.designation
+        )
+        : null;
+    const actionDateTooEarly = Boolean(
+        minimumEffectiveDate
+        && form.actionDate
+        && form.actionDate < minimumEffectiveDate
+    );
 
-        const designation = designations?.find(
+    const runValidation = (nextForm) => {
+        if (!isPromotionLike) {
+            setError("");
+            return;
+        }
+
+        const nextDesignation = designations?.find(
             (d) => d.id === Number(nextForm.newDesignationId)
         );
 
@@ -86,10 +116,29 @@ export default function LifecycleActionFormDialog({
                 nextForm.serviceLevelId,
                 serviceLevels
             ),
-            designation
+            nextDesignation
         );
 
-        setError(validationError || "");
+        if (validationError) {
+            setError(validationError);
+            return;
+        }
+
+        const minDate = getMinimumPromotionEffectiveDate(
+            employee,
+            action?.oldGrade,
+            action?.newGrade || nextForm.grade,
+            nextDesignation || employee?.designation
+        );
+
+        if (minDate && nextForm.actionDate && nextForm.actionDate < minDate) {
+            setError(
+                `Effective date cannot be earlier than ${formatDisplayDate(minDate)}.`
+            );
+            return;
+        }
+
+        setError("");
     };
 
     const handleChange = (e) => {
@@ -97,10 +146,13 @@ export default function LifecycleActionFormDialog({
         setForm(next);
 
         if (
-            isPromotion &&
-            ["newDesignationId", "grade", "serviceLevelId"].includes(
-                e.target.name
-            )
+            isPromotionLike
+            && [
+                "newDesignationId",
+                "grade",
+                "serviceLevelId",
+                "actionDate"
+            ].includes(e.target.name)
         ) {
             runValidation(next);
         }
@@ -114,7 +166,7 @@ export default function LifecycleActionFormDialog({
         setLoading(true);
 
         try {
-            if (isPromotion) {
+            if (isPromotionLike) {
                 const designation = designations?.find(
                     (d) => d.id === Number(form.newDesignationId)
                 );
@@ -133,6 +185,21 @@ export default function LifecycleActionFormDialog({
                     setLoading(false);
                     return;
                 }
+
+                const minDate = getMinimumPromotionEffectiveDate(
+                    employee,
+                    action?.oldGrade,
+                    action?.newGrade || form.grade,
+                    designation || employee?.designation
+                );
+
+                if (minDate && form.actionDate < minDate) {
+                    setError(
+                        `Effective date cannot be earlier than ${formatDisplayDate(minDate)}.`
+                    );
+                    setLoading(false);
+                    return;
+                }
             }
 
             const updateData = {
@@ -141,7 +208,7 @@ export default function LifecycleActionFormDialog({
                 remarks: form.remarks?.trim() || null
             };
 
-            if (isPromotion) {
+            if (isPromotionLike) {
                 updateData.grade = form.grade;
                 updateData.serviceLevelId = Number(form.serviceLevelId) || null;
             }
@@ -150,9 +217,8 @@ export default function LifecycleActionFormDialog({
             toast.success("Lifecycle action updated successfully");
             onSuccess();
             onClose();
-        } catch (error) {
-            toast.error("Failed to update lifecycle action");
-            console.error(error);
+        } catch (submitError) {
+            toast.error(getApiErrorMessage(submitError));
         } finally {
             setLoading(false);
         }
@@ -160,7 +226,8 @@ export default function LifecycleActionFormDialog({
 
     const canSubmit =
         form.actionDate
-        && !error;
+        && !error
+        && !actionDateTooEarly;
 
     return (
         <Dialog
@@ -177,7 +244,7 @@ export default function LifecycleActionFormDialog({
             </DialogTitle>
 
             <DialogContent dividers>
-                {isPromotion && (
+                {isPromotionLike && (
                     <Alert severity="info" sx={{ mb: 2 }}>
                         Original designation cannot be changed. Only the target designation,
                         grade, service level, and effective date can be modified.
@@ -185,7 +252,7 @@ export default function LifecycleActionFormDialog({
                 )}
 
                 <Grid container spacing={2}>
-                    {isPromotion && (
+                {isPromotionLike && (
                         <Grid size={{ xs: 12 }}>
                             <TextField
                                 fullWidth
@@ -201,7 +268,7 @@ export default function LifecycleActionFormDialog({
                         </Grid>
                     )}
 
-                    {isPromotion && (
+                    {isPromotionLike && (
                         <Grid size={{ xs: 12 }}>
                             <TextField
                                 {...selectFieldProps}
@@ -218,7 +285,7 @@ export default function LifecycleActionFormDialog({
                         </Grid>
                     )}
 
-                    {isPromotion && (
+                    {isPromotionLike && (
                         <Grid size={{ xs: 12, sm: 6 }}>
                             <TextField
                                 {...selectFieldProps}
@@ -235,7 +302,7 @@ export default function LifecycleActionFormDialog({
                         </Grid>
                     )}
 
-                    {isPromotion && (
+                    {isPromotionLike && (
                         <Grid size={{ xs: 12, sm: 6 }}>
                             <TextField
                                 {...selectFieldProps}
@@ -258,6 +325,20 @@ export default function LifecycleActionFormDialog({
                             label="Effective Date"
                             name="actionDate"
                             value={form.actionDate}
+                            slotProps={{
+                                ...dateFieldProps.slotProps,
+                                htmlInput: {
+                                    min: minimumEffectiveDate || undefined
+                                }
+                            }}
+                            error={actionDateTooEarly}
+                            helperText={
+                                actionDateTooEarly
+                                    ? `Cannot be earlier than ${formatDisplayDate(minimumEffectiveDate)} (required service period not completed).`
+                                    : minimumEffectiveDate
+                                        ? `Earliest allowed date: ${formatDisplayDate(minimumEffectiveDate)}`
+                                        : undefined
+                            }
                         />
                     </Grid>
 
@@ -273,7 +354,7 @@ export default function LifecycleActionFormDialog({
                     </Grid>
                 </Grid>
 
-                {isPromotion && selectedDesignation && (
+                    {isPromotionLike && designation && (
                     <Stack
                         direction="row"
                         gap={1}
@@ -281,12 +362,12 @@ export default function LifecycleActionFormDialog({
                     >
                         <Chip
                             size="small"
-                            label={`Required level: ${selectedDesignation.serviceLevel?.levelName}`}
+                            label={`Required level: ${designation.serviceLevel?.levelName}`}
                             variant="outlined"
                         />
                         <Chip
                             size="small"
-                            label={`Allowed grades: ${(selectedDesignation.allowedGrades || []).join(", ")}`}
+                            label={`Allowed grades: ${(designation.allowedGrades || []).join(", ")}`}
                             variant="outlined"
                         />
                     </Stack>

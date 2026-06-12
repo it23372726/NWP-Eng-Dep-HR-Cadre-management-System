@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @Data
 public class PromotionRequest {
@@ -22,4 +23,12 @@ public class PromotionRequest {
     private LocalDate promotionDate;
 
     private String remarks;
+
+    private Boolean ebGrade2Passed;
+
+    private Boolean otherGrade2RequirementCompleted;
+
+    private Integer grade2RequiredYears;
+
+    private List<EmployeeRequirementRequest> requirements;
 }

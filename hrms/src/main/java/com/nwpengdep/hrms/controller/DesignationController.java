@@ -38,6 +38,15 @@ public class DesignationController {
                 .getAllDesignations();
     }
 
+    @GetMapping("/by-service/{serviceId}")
+    public List<Designation> getDesignationsByService(
+            @PathVariable Long serviceId
+    ) {
+
+        return designationService
+                .getDesignationsByService(serviceId);
+    }
+
     @PutMapping("/{id}")
     public Designation updateDesignation(
             @PathVariable Long id,

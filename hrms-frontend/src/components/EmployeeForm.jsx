@@ -27,9 +27,17 @@ import {
     DISTRICTS,
     EMPLOYEE_ENTRY_TYPES,
     EMPLOYMENT_TYPES,
+    FIXED_GRADE1_REQUIREMENTS,
+    FIXED_GRADE2_REQUIREMENTS,
+    FIXED_PERMANENT_REQUIREMENTS,
     GRADES,
+    isRequirementCompleted,
+    REQUIREMENT_STATUS,
     validateDesignationAssignment
 } from "../constants/hrms";
+
+const completedStatus = (checked) =>
+    checked ? REQUIREMENT_STATUS.COMPLETED : REQUIREMENT_STATUS.PENDING;
 
 const emptyForm = {
     entryType: "NEW_EMPLOYEE",
@@ -63,15 +71,61 @@ const emptyForm = {
     degreeApproved: false,
     otherQualificationName: "",
     otherQualificationApproved: false,
-    birthCertificateApproved: false
+    birthCertificateApproved: false,
+    alreadyConfirmedPermanent: false,
+    permanentConfirmationDate: "",
+    ebGrade2Passed: false,
+    ebGrade1Passed: false,
+    otherGrade2RequirementCompleted: false,
+    grade2RequiredYears: "",
+    grade1RequiredYears: ""
+};
+
+const appendCustomRequirementFields = (form, employee, designation) => {
+    (designation?.permanentRequirements || []).forEach((requirement) => {
+        const key = requirementKey(
+            "CUSTOM_PERMANENT_REQUIREMENT",
+            requirement.requirementName
+        );
+        form[key] = isNamedRequirementCompleted(
+            employee,
+            "CUSTOM_PERMANENT_REQUIREMENT",
+            requirement.requirementName
+        );
+    });
+
+    (designation?.grade2Requirements || []).forEach((requirement) => {
+        const key = requirementKey(
+            "CUSTOM_GRADE_2_REQUIREMENT",
+            requirement.requirementName
+        );
+        form[key] = isNamedRequirementCompleted(
+            employee,
+            "CUSTOM_GRADE_2_REQUIREMENT",
+            requirement.requirementName
+        );
+    });
+
+    (designation?.grade1Requirements || []).forEach((requirement) => {
+        const key = requirementKey(
+            "CUSTOM_GRADE_1_REQUIREMENT",
+            requirement.requirementName
+        );
+        form[key] = isNamedRequirementCompleted(
+            employee,
+            "CUSTOM_GRADE_1_REQUIREMENT",
+            requirement.requirementName
+        );
+    });
 };
 
 function mapEmployeeToForm(employee) {
     if (!employee) {
         return emptyForm;
     }
+    const careerProgression = employee.careerProgression || {};
 
-    return {
+    const form = {
         employeeNo: employee.employeeNo ?? "",
         fullName: employee.fullName ?? "",
         designationId: employee.designation?.id ?? "",
@@ -95,17 +149,241 @@ function mapEmployeeToForm(employee) {
         contactNo: employee.contactNo ?? "",
         serviceLevelId: employee.serviceLevel?.id ?? "",
         employmentType: employee.employmentType ?? "PERMANENT",
-        ebGrade3Passed: Boolean(employee.ebGrade3Passed),
-        languageQualificationPassed: Boolean(employee.languageQualificationPassed),
-        medicalReportCompleted: Boolean(employee.medicalReportCompleted),
-        olApproved: Boolean(employee.olApproved),
-        alApproved: Boolean(employee.alApproved),
-        degreeApproved: Boolean(employee.degreeApproved),
-        otherQualificationName: employee.otherQualificationName ?? "",
-        otherQualificationApproved: Boolean(employee.otherQualificationApproved),
-        birthCertificateApproved: Boolean(employee.birthCertificateApproved)
+        ebGrade3Passed: isRequirementCompleted(employee, "EB_GRADE_3"),
+        languageQualificationPassed: isRequirementCompleted(
+            employee,
+            "GOVERNMENT_LANGUAGE_QUALIFICATION"
+        ),
+        medicalReportCompleted: isRequirementCompleted(employee, "MEDICAL_REPORT"),
+        olApproved: isRequirementCompleted(employee, "OL_CERTIFICATE"),
+        alApproved: isRequirementCompleted(employee, "AL_CERTIFICATE"),
+        degreeApproved: isRequirementCompleted(employee, "DEGREE_CERTIFICATE"),
+        birthCertificateApproved: isRequirementCompleted(
+            employee,
+            "BIRTH_CERTIFICATE"
+        ),
+        alreadyConfirmedPermanent: Boolean(
+            careerProgression.permanentConfirmationDate
+        ),
+        permanentConfirmationDate:
+            careerProgression.permanentConfirmationDate ?? "",
+        ebGrade2Passed: isRequirementCompleted(employee, "EB_GRADE_2"),
+        ebGrade1Passed: isRequirementCompleted(employee, "EB_GRADE_1"),
+        otherGrade2RequirementCompleted: isRequirementCompleted(
+            employee,
+            "OTHER_GRADE_2_REQUIREMENT"
+        ),
+        grade2RequiredYears: careerProgression.grade2RequiredYears ?? "",
+        grade1RequiredYears: careerProgression.grade1RequiredYears ?? ""
     };
+
+    appendCustomRequirementFields(form, employee, employee.designation);
+    return form;
 }
+
+const formatDisplayDate = (date) => {
+    if (!date) return "—";
+    return new Date(`${date}T00:00:00`).toLocaleDateString("en-GB");
+};
+
+const requirementKey = (type, name) => `${type}:${name}`;
+
+const FIXED_REQUIREMENT_FIELD_NAMES = {
+    EB_GRADE_3: "ebGrade3Passed",
+    GOVERNMENT_LANGUAGE_QUALIFICATION: "languageQualificationPassed",
+    MEDICAL_REPORT: "medicalReportCompleted",
+    OL_CERTIFICATE: "olApproved",
+    AL_CERTIFICATE: "alApproved",
+    DEGREE_CERTIFICATE: "degreeApproved",
+    BIRTH_CERTIFICATE: "birthCertificateApproved",
+    EB_GRADE_2: "ebGrade2Passed",
+    EB_GRADE_1: "ebGrade1Passed"
+};
+
+const renderFixedRequirementCheckboxes = (
+    fixedRequirements,
+    formData,
+    handleChange
+) =>
+    fixedRequirements.map(({ requirementType, label }) => {
+        const fieldName = FIXED_REQUIREMENT_FIELD_NAMES[requirementType];
+        if (!fieldName) {
+            return null;
+        }
+
+        return (
+            <Grid key={requirementType} size={{ xs: 12, sm: 6, md: 4 }}>
+                <FormControlLabel
+                    control={
+                        <Checkbox
+                            name={fieldName}
+                            checked={Boolean(formData[fieldName])}
+                            onChange={handleChange}
+                        />
+                    }
+                    label={label}
+                />
+            </Grid>
+        );
+    });
+
+const renderCustomRequirementCheckboxes = (
+    requirementType,
+    designationRequirements,
+    formData,
+    employee,
+    handleChange
+) =>
+    (designationRequirements || []).map((requirement) => {
+        const key = requirementKey(
+            requirementType,
+            requirement.requirementName
+        );
+        const checked = formData[key] ?? isNamedRequirementCompleted(
+            employee,
+            requirementType,
+            requirement.requirementName
+        );
+
+        return (
+            <Grid key={key} size={{ xs: 12, sm: 6, md: 4 }}>
+                <FormControlLabel
+                    control={
+                        <Checkbox
+                            name={key}
+                            checked={Boolean(checked)}
+                            onChange={handleChange}
+                        />
+                    }
+                    label={requirement.requirementName}
+                />
+            </Grid>
+        );
+    });
+
+const isNamedRequirementCompleted = (employee, type, name) =>
+    (employee?.requirements || []).some(
+        (requirement) =>
+            requirement.requirementType === type
+            && requirement.status === "COMPLETED"
+            && (requirement.requirementName || "").toLowerCase()
+                === name.toLowerCase()
+    );
+
+const buildRequirements = (formData, designation, employee) => {
+    const requirements = [
+        {
+            requirementType: "EB_GRADE_3",
+            status: completedStatus(formData.ebGrade3Passed)
+        },
+        {
+            requirementType: "GOVERNMENT_LANGUAGE_QUALIFICATION",
+            status: completedStatus(formData.languageQualificationPassed)
+        },
+        {
+            requirementType: "MEDICAL_REPORT",
+            status: completedStatus(formData.medicalReportCompleted)
+        },
+        {
+            requirementType: "OL_CERTIFICATE",
+            status: completedStatus(formData.olApproved)
+        },
+        {
+            requirementType: "AL_CERTIFICATE",
+            status: completedStatus(formData.alApproved)
+        },
+        {
+            requirementType: "DEGREE_CERTIFICATE",
+            status: completedStatus(formData.degreeApproved)
+        },
+        {
+            requirementType: "BIRTH_CERTIFICATE",
+            status: completedStatus(formData.birthCertificateApproved)
+        },
+        {
+            requirementType: "EB_GRADE_2",
+            status: completedStatus(formData.ebGrade2Passed)
+        },
+        {
+            requirementType: "EB_GRADE_1",
+            status: completedStatus(formData.ebGrade1Passed)
+        }
+    ];
+
+    const appendCustomRequirements = (type, designationRequirements) => {
+        (designationRequirements || []).forEach((requirement) => {
+            const key = requirementKey(type, requirement.requirementName);
+            const checked = formData[key] ?? isNamedRequirementCompleted(
+                employee,
+                type,
+                requirement.requirementName
+            );
+            requirements.push({
+                requirementType: type,
+                requirementName: requirement.requirementName,
+                status: completedStatus(checked)
+            });
+        });
+    };
+
+    appendCustomRequirements(
+        "CUSTOM_PERMANENT_REQUIREMENT",
+        designation?.permanentRequirements
+    );
+    appendCustomRequirements(
+        "CUSTOM_GRADE_2_REQUIREMENT",
+        designation?.grade2Requirements
+    );
+    appendCustomRequirements(
+        "CUSTOM_GRADE_1_REQUIREMENT",
+        designation?.grade1Requirements
+    );
+
+    return requirements;
+};
+
+const buildEmployeePayload = (
+    formData,
+    designation,
+    employee,
+    {
+        showPermanentConfirmationSection,
+        showQualificationSection
+    }
+) => ({
+    employeeNo: formData.employeeNo,
+    fullName: formData.fullName,
+    designationId: Number(formData.designationId),
+    nic: formData.nic,
+    dateOfBirth: formData.dateOfBirth,
+    gender: formData.gender,
+    grade: formData.grade,
+    dateOfFirstAppointment: formData.dateOfFirstAppointment,
+    incremantDate: formData.incremantDate || null,
+    enteredDateToAllIslandService:
+        formData.enteredDateToAllIslandService || null,
+    reportedDateToPresentWorkingPlace:
+        formData.reportedDateToPresentWorkingPlace,
+    currentWorkingPlace: formData.currentWorkingPlace,
+    currentDistrictOfWorking: formData.currentDistrictOfWorking,
+    appointmentDateToPresentClassGrade:
+        showPermanentConfirmationSection
+            ? formData.permanentConfirmationDate || null
+            : showQualificationSection
+                ? null
+                : formData.appointmentDateToPresentClassGrade || null,
+    enteredDateToNWPCouncil: formData.enteredDateToNWPCouncil,
+    permanentAddress: formData.permanentAddress,
+    residentDistrict: formData.residentDistrict || null,
+    contactNo: formData.contactNo,
+    serviceLevelId: Number(formData.serviceLevelId),
+    employmentType: formData.employmentType,
+    alreadyConfirmedPermanent: formData.alreadyConfirmedPermanent,
+    permanentConfirmationDate: formData.permanentConfirmationDate || null,
+    grade2RequiredYears: null,
+    grade1RequiredYears: null,
+    requirements: buildRequirements(formData, designation, employee)
+});
 
 export default function EmployeeForm({
     open,
@@ -121,8 +399,10 @@ export default function EmployeeForm({
     const isEdit = Boolean(selectedEmployee);
 
     useEffect(() => {
-        loadDropdowns();
-    }, []);
+        if (open) {
+            loadDropdowns();
+        }
+    }, [open]);
 
     useEffect(() => {
         setFormData(mapEmployeeToForm(selectedEmployee));
@@ -173,6 +453,51 @@ export default function EmployeeForm({
             nextFormData.grade = "None";
         }
 
+        const isPermanent = nextFormData.employmentType === "PERMANENT";
+        const gradeImpliesPermanent =
+            isPermanent
+            && ["II", "I", "Supra", "Special"].includes(nextFormData.grade);
+        const gradeThreeAlreadyConfirmed =
+            isPermanent
+            && nextFormData.grade === "III"
+            && nextFormData.alreadyConfirmedPermanent;
+
+        if (gradeImpliesPermanent || gradeThreeAlreadyConfirmed) {
+            nextFormData.ebGrade3Passed = true;
+            nextFormData.languageQualificationPassed = true;
+            nextFormData.medicalReportCompleted = true;
+            nextFormData.olApproved = true;
+            nextFormData.alApproved = true;
+            nextFormData.degreeApproved = true;
+            nextFormData.birthCertificateApproved = true;
+        }
+
+        if (gradeImpliesPermanent) {
+            nextFormData.alreadyConfirmedPermanent = true;
+            nextFormData.ebGrade2Passed = true;
+            nextFormData.otherGrade2RequirementCompleted = true;
+            if (!nextFormData.permanentConfirmationDate) {
+                nextFormData.permanentConfirmationDate =
+                    nextFormData.appointmentDateToPresentClassGrade;
+            }
+        }
+
+        if (gradeThreeAlreadyConfirmed && nextFormData.permanentConfirmationDate) {
+            nextFormData.appointmentDateToPresentClassGrade =
+                nextFormData.permanentConfirmationDate;
+        }
+
+        if (name === "designationId") {
+            const designation = designations.find(
+                (item) => item.id === Number(value)
+            );
+            appendCustomRequirementFields(
+                nextFormData,
+                selectedEmployee,
+                designation
+            );
+        }
+
         setFormData(nextFormData);
 
         if (
@@ -192,20 +517,18 @@ export default function EmployeeForm({
             return;
         }
 
-        const payload = {
-            ...formData,
-            designationId: Number(formData.designationId),
-            serviceLevelId: Number(formData.serviceLevelId),
-            enteredDateToAllIslandService:
-                formData.enteredDateToAllIslandService || null
-        };
+        const payload = buildEmployeePayload(
+            formData,
+            selectedDesignation,
+            selectedEmployee,
+            {
+                showPermanentConfirmationSection,
+                showQualificationSection
+            }
+        );
 
         if (isEdit) {
-            const updatePayload = { ...payload };
-            delete updatePayload.entryType;
-            delete updatePayload.transferredFrom;
-            delete updatePayload.remarks;
-            handleSubmit(updatePayload);
+            handleSubmit(payload);
             return;
         }
 
@@ -233,7 +556,25 @@ export default function EmployeeForm({
     const isTransferIn = formData.entryType === "TRANSFER_IN";
     const showGradeField = formData.employmentType === "PERMANENT";
     const showQualificationSection =
-        formData.employmentType === "PERMANENT" && formData.grade === "III";
+        formData.employmentType === "PERMANENT"
+        && formData.grade === "III"
+        && !formData.alreadyConfirmedPermanent;
+    const showPermanentConfirmationSection =
+        formData.employmentType === "PERMANENT"
+        && formData.grade === "III"
+        && formData.alreadyConfirmedPermanent;
+    const showGrade2Section =
+        formData.employmentType === "PERMANENT" && formData.grade === "II";
+    const showGrade2ProgressSection =
+        formData.employmentType === "PERMANENT"
+        && formData.grade === "III"
+        && formData.alreadyConfirmedPermanent;
+    const showGrade1ProgressSection =
+        formData.employmentType === "PERMANENT" && formData.grade === "II";
+    const showPresentClassGradeDate =
+        !showGrade2Section
+        && !showQualificationSection
+        && !showPermanentConfirmationSection;
 
     return (
         <Dialog
@@ -471,6 +812,16 @@ export default function EmployeeForm({
                                 ))}
                             </TextField>
                         </Grid>
+                        {showGrade2Section && (
+                            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                                <TextField
+                                    {...dateFieldProps}
+                                    label="Present Class / Grade Date"
+                                    name="appointmentDateToPresentClassGrade"
+                                    value={formData.appointmentDateToPresentClassGrade}
+                                />
+                            </Grid>
+                        )}
 
                     </Grid>
 
@@ -511,9 +862,78 @@ export default function EmployeeForm({
                     )}
                 </FormSection>
 
+                {formData.employmentType === "PERMANENT" && formData.grade === "III" && (
+                    <FormSection
+                        title="Permanent Confirmation"
+                        description="Use this only when an existing employee is already confirmed permanent."
+                    >
+                        <Grid container spacing={2}>
+                            <Grid size={{ xs: 12 }}>
+                                <FormControlLabel
+                                    control={
+                                        <Checkbox
+                                            name="alreadyConfirmedPermanent"
+                                            checked={formData.alreadyConfirmedPermanent}
+                                            onChange={handleChange}
+                                        />
+                                    }
+                                    label="Already Confirmed Permanent?"
+                                />
+                            </Grid>
+                            {showPermanentConfirmationSection && (
+                                <Grid size={{ xs: 12, sm: 6 }}>
+                                    <TextField
+                                        {...dateFieldProps}
+                                        label="Permanent Confirmation Date"
+                                        name="permanentConfirmationDate"
+                                        value={formData.permanentConfirmationDate}
+                                        helperText="This also becomes the present class / grade date."
+                                    />
+                                </Grid>
+                            )}
+                        </Grid>
+                    </FormSection>
+                )}
+
+                {showGrade2ProgressSection && (
+                    <FormSection
+                        title="Grade II Requirements"
+                        description="This employee is still Grade III. Record requirements already completed toward future Grade II promotion."
+                    >
+                        {selectedDesignation?.grade2RequiredYears != null && (
+                            <Chip
+                                size="small"
+                                label={`Required service before Grade II: ${selectedDesignation.grade2RequiredYears} year(s) from first appointment date`}
+                                variant="outlined"
+                                sx={{ mb: 2 }}
+                            />
+                        )}
+                        <Grid container spacing={1.5}>
+                            {renderFixedRequirementCheckboxes(
+                                FIXED_GRADE2_REQUIREMENTS,
+                                formData,
+                                handleChange
+                            )}
+                            {renderCustomRequirementCheckboxes(
+                                "CUSTOM_GRADE_2_REQUIREMENT",
+                                selectedDesignation?.grade2Requirements,
+                                formData,
+                                selectedEmployee,
+                                handleChange
+                            )}
+                        </Grid>
+                        {(selectedDesignation?.grade2Requirements || []).length === 0 && (
+                            <Alert severity="info" sx={{ mt: 1 }}>
+                                No custom Grade II requirements are configured for
+                                this designation.
+                            </Alert>
+                        )}
+                    </FormSection>
+                )}
+
                 {showQualificationSection && (
                     <FormSection
-                        title="Permanent Qualification Requirements"
+                        title="Qualification Requirements"
                         description="Grade III permanency requirements and certificate approvals."
                     >
                         <Grid container spacing={1.5}>
@@ -589,27 +1009,6 @@ export default function EmployeeForm({
                                     label="Degree Approved"
                                 />
                             </Grid>
-                            <Grid size={{ xs: 12, md: 8 }}>
-                                <TextField
-                                    {...fieldProps}
-                                    label="Other Qualification Name"
-                                    name="otherQualificationName"
-                                    value={formData.otherQualificationName}
-                                    placeholder="Optional qualification"
-                                />
-                            </Grid>
-                            <Grid size={{ xs: 12, md: 4 }}>
-                                <FormControlLabel
-                                    control={
-                                        <Checkbox
-                                            name="otherQualificationApproved"
-                                            checked={formData.otherQualificationApproved}
-                                            onChange={handleChange}
-                                        />
-                                    }
-                                    label="Other Qualification Approved"
-                                />
-                            </Grid>
                             <Grid size={{ xs: 12 }}>
                                 <FormControlLabel
                                     control={
@@ -622,7 +1021,74 @@ export default function EmployeeForm({
                                     label="Birth Certificate Approved"
                                 />
                             </Grid>
+                            {(selectedDesignation?.permanentRequirements || []).map(
+                                (requirement) => {
+                                    const key = requirementKey(
+                                        "CUSTOM_PERMANENT_REQUIREMENT",
+                                        requirement.requirementName
+                                    );
+                                    const checked = formData[key]
+                                        ?? isNamedRequirementCompleted(
+                                            selectedEmployee,
+                                            "CUSTOM_PERMANENT_REQUIREMENT",
+                                            requirement.requirementName
+                                        );
+                                    return (
+                                        <Grid
+                                            key={key}
+                                            size={{ xs: 12, sm: 6, md: 4 }}
+                                        >
+                                            <FormControlLabel
+                                                control={
+                                                    <Checkbox
+                                                        name={key}
+                                                        checked={Boolean(checked)}
+                                                        onChange={handleChange}
+                                                    />
+                                                }
+                                                label={requirement.requirementName}
+                                            />
+                                        </Grid>
+                                    );
+                                }
+                            )}
                         </Grid>
+                    </FormSection>
+                )}
+
+                {showGrade1ProgressSection && (
+                    <FormSection
+                        title="Grade I Requirements"
+                        description="This employee is Grade II. Record requirements already completed toward future Grade I promotion."
+                    >
+                        {selectedDesignation?.grade1RequiredYears != null && (
+                            <Chip
+                                size="small"
+                                label={`Required service before Grade I: ${selectedDesignation.grade1RequiredYears} year(s) from present class / grade date`}
+                                variant="outlined"
+                                sx={{ mb: 2 }}
+                            />
+                        )}
+                        <Grid container spacing={1.5}>
+                            {renderFixedRequirementCheckboxes(
+                                FIXED_GRADE1_REQUIREMENTS,
+                                formData,
+                                handleChange
+                            )}
+                            {renderCustomRequirementCheckboxes(
+                                "CUSTOM_GRADE_1_REQUIREMENT",
+                                selectedDesignation?.grade1Requirements,
+                                formData,
+                                selectedEmployee,
+                                handleChange
+                            )}
+                        </Grid>
+                        {(selectedDesignation?.grade1Requirements || []).length === 0 && (
+                            <Alert severity="info" sx={{ mt: 1 }}>
+                                No custom Grade I requirements are configured for
+                                this designation.
+                            </Alert>
+                        )}
                     </FormSection>
                 )}
 
@@ -668,15 +1134,17 @@ export default function EmployeeForm({
                                 helperText="Entered date to council"
                             />
                         </Grid>
-                        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                            <TextField
-                                {...dateFieldProps}
-                                label="Present Class / Grade"
-                                name="appointmentDateToPresentClassGrade"
-                                value={formData.appointmentDateToPresentClassGrade}
-                                helperText="Appointment to current class"
-                            />
-                        </Grid>
+                        {showPresentClassGradeDate && (
+                            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                                <TextField
+                                    {...dateFieldProps}
+                                    label="Present Class / Grade"
+                                    name="appointmentDateToPresentClassGrade"
+                                    value={formData.appointmentDateToPresentClassGrade}
+                                    helperText="Appointment to current class"
+                                />
+                            </Grid>
+                        )}
                         <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                             <TextField
                                 {...dateFieldProps}

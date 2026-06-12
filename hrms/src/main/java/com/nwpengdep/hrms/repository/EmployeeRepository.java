@@ -31,6 +31,8 @@ public interface EmployeeRepository
 
     long countByDesignationId(Long designationId);
 
+    List<Employee> findByDesignationId(Long designationId);
+
     long countByDesignationIdAndStatus(
             Long designationId,
             EmployeeStatus status

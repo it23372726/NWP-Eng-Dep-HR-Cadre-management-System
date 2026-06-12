@@ -26,4 +26,12 @@ public class DashboardSummaryDto {
     private Integer qualifiedForPermanentEmployees;
 
     private Integer permanentEmployees;
+
+    private Integer eligibleForPermanent;
+
+    private Integer eligibleForGrade2;
+
+    private Integer eligibleForGrade1;
+
+    private Integer recentlyQualified;
 }

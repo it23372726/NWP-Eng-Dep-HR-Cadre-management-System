@@ -15,6 +15,8 @@ public interface DesignationRepository
             String keyword
     );
 
+    List<Designation> findByServiceId(Long serviceId);
+
     @Query("SELECT COUNT(d) FROM Designation d WHERE d.serviceLevel.id = :serviceLevelId")
     long countByServiceLevelId(Long serviceLevelId);
 }
