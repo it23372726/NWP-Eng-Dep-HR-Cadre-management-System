@@ -27,6 +27,10 @@ public class EmployeeActionResponse {
 
     private Long newDesignationId;
 
+    private String oldGrade;
+
+    private String newGrade;
+
     private String transferredFrom;
 
     private String transferredTo;
@@ -36,4 +40,6 @@ public class EmployeeActionResponse {
     private String remarks;
 
     private LocalDateTime createdAt;
+
+    private Boolean canModify;
 }

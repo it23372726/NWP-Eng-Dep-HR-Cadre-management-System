@@ -19,7 +19,6 @@ public class DashboardService {
     private final EmployeePostingService employeePostingService;
     private final CadrePositionRepository cadrePositionRepository;
     private final ServiceLevelRepository serviceLevelRepository;
-    private final ServiceTypeRepository serviceTypeRepository;
     private final EmployeeActionRepository employeeActionRepository;
 
     public DashboardStatsResponse getDashboardStats() {
@@ -35,11 +34,14 @@ public class DashboardService {
         long totalEmployees = activeEmployees.size();
         long approvedCadre = cadrePositionRepository.findAll()
                 .stream()
-                .mapToLong(cp -> cp.getApprovedCount() != null ? cp.getApprovedCount() : 0)
+                .mapToLong(cp -> cp.getApprovedCount() != null
+                        ? cp.getApprovedCount().longValue()
+                        : 0L)
                 .sum();
 
         // Count retirement watch list
         long retirementWatch = getRetirementWatchList().size();
+        LocalDate recentlyQualifiedCutoff = LocalDate.now().minusDays(30);
 
         return DashboardSummaryDto.builder()
                 .activeEmployees((int) totalEmployees)
@@ -57,7 +59,51 @@ public class DashboardService {
                         .filter(employee -> employee.getPermanentStatus()
                                 == PermanentStatus.PERMANENT)
                         .count()))
+                .eligibleForPermanent(Math.toIntExact(activeEmployees.stream()
+                        .filter(employee -> employee.getCareerProgression() != null)
+                        .filter(employee -> Boolean.TRUE.equals(
+                                employee.getCareerProgression()
+                                        .getQualifiedForPermanent()))
+                        .count()))
+                .eligibleForGrade2(Math.toIntExact(activeEmployees.stream()
+                        .filter(employee -> employee.getCareerProgression() != null)
+                        .filter(employee -> Boolean.TRUE.equals(
+                                employee.getCareerProgression()
+                                        .getQualifiedForGrade2()))
+                        .count()))
+                .eligibleForGrade1(Math.toIntExact(activeEmployees.stream()
+                        .filter(employee -> employee.getCareerProgression() != null)
+                        .filter(employee -> Boolean.TRUE.equals(
+                                employee.getCareerProgression()
+                                        .getQualifiedForGrade1()))
+                        .count()))
+                .recentlyQualified(Math.toIntExact(activeEmployees.stream()
+                        .filter(employee -> employee.getCareerProgression() != null)
+                        .filter(employee -> {
+                            EmployeeCareerProgression progression =
+                                    employee.getCareerProgression();
+                            return recentlyQualified(
+                                    progression.getPermanentQualificationDate(),
+                                    recentlyQualifiedCutoff
+                            ) || recentlyQualified(
+                                    progression.getGrade2EligibilityDate(),
+                                    recentlyQualifiedCutoff
+                            ) || recentlyQualified(
+                                    progression.getGrade1EligibilityDate(),
+                                    recentlyQualifiedCutoff
+                            );
+                        })
+                        .count()))
                 .build();
+    }
+
+    private boolean recentlyQualified(
+            LocalDate qualificationDate,
+            LocalDate cutoff
+    ) {
+        return qualificationDate != null
+                && !qualificationDate.isBefore(cutoff)
+                && !qualificationDate.isAfter(LocalDate.now());
     }
 
     public List<EmployeeDistributionDto> getServiceLevelDistribution() {
@@ -97,7 +143,9 @@ public class DashboardService {
         return cadrePositionRepository.findAll()
                 .stream()
                 .map(cadre -> {
-                    long approved = cadre.getApprovedCount() != null ? cadre.getApprovedCount() : 0;
+                    long approved = cadre.getApprovedCount() != null
+                            ? cadre.getApprovedCount().longValue()
+                            : 0L;
                     long existing = cadre.getDesignation() != null 
                             ? activeEmployees.stream()
                             .filter(e -> e.getDesignation() != null && 

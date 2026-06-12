@@ -41,4 +41,38 @@ public class Designation {
     private Set<Grade> allowedGrades = new HashSet<>();
 
     private String salaryCode;
+
+    private Integer grade2RequiredYears;
+
+    private Integer grade1RequiredYears;
+
+    @OneToMany(
+            mappedBy = "designation",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true,
+            fetch = FetchType.EAGER
+    )
+    @Builder.Default
+    private Set<DesignationPermanentRequirement> permanentRequirements =
+            new HashSet<>();
+
+    @OneToMany(
+            mappedBy = "designation",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true,
+            fetch = FetchType.EAGER
+    )
+    @Builder.Default
+    private Set<DesignationGrade2Requirement> grade2Requirements =
+            new HashSet<>();
+
+    @OneToMany(
+            mappedBy = "designation",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true,
+            fetch = FetchType.EAGER
+    )
+    @Builder.Default
+    private Set<DesignationGrade1Requirement> grade1Requirements =
+            new HashSet<>();
 }

@@ -5,6 +5,8 @@ import lombok.*;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "employees")
@@ -81,47 +83,22 @@ public class Employee {
     @Builder.Default
     private PermanentStatus permanentStatus = PermanentStatus.PROBATION;
 
-    @Column(nullable = false)
+    @OneToOne(
+            mappedBy = "employee",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true,
+            fetch = FetchType.EAGER
+    )
+    private EmployeeCareerProgression careerProgression;
+
+    @OneToMany(
+            mappedBy = "employee",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true,
+            fetch = FetchType.EAGER
+    )
     @Builder.Default
-    private Boolean ebGrade3Passed = false;
-
-    @Column(nullable = false)
-    @Builder.Default
-    private Boolean languageQualificationPassed = false;
-
-    @Column(nullable = false)
-    @Builder.Default
-    private Boolean medicalReportCompleted = false;
-
-    @Column(nullable = false)
-    @Builder.Default
-    private Boolean olApproved = false;
-
-    @Column(nullable = false)
-    @Builder.Default
-    private Boolean alApproved = false;
-
-    @Column(nullable = false)
-    @Builder.Default
-    private Boolean degreeApproved = false;
-
-    private String otherQualificationName;
-
-    @Column(nullable = false)
-    @Builder.Default
-    private Boolean otherQualificationApproved = false;
-
-    @Column(nullable = false)
-    @Builder.Default
-    private Boolean birthCertificateApproved = false;
-
-    @Column(nullable = false)
-    @Builder.Default
-    private Boolean qualifiedForPermanent = false;
-
-    private LocalDate permanentQualificationDate;
-
-    private LocalDate permanentConfirmationDate;
+    private List<EmployeeRequirement> requirements = new ArrayList<>();
 
     private String transferredFrom;
 

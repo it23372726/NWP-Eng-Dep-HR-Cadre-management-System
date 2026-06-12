@@ -8,6 +8,18 @@ export const getDesignations = async () => {
     return response.data;
 };
 
+export const getDesignationsByService = async (
+    serviceId
+) => {
+
+    const response =
+        await api.get(
+            `/designations/by-service/${serviceId}`
+        );
+
+    return response.data;
+};
+
 export const createDesignation = async (
     data
 ) => {

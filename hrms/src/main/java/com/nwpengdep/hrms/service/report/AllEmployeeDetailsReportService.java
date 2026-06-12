@@ -44,6 +44,7 @@ public class AllEmployeeDetailsReportService {
                 serialNo = null;
             }
         }
+        var careerProgression = employee.getCareerProgression();
 
         return AllEmployeeDetailsReportRowResponse.builder()
                 .serialNo(serialNo)
@@ -60,9 +61,9 @@ public class AllEmployeeDetailsReportService {
                 .natureOfAppointment(employee.getEmploymentType() != null ? employee.getEmploymentType().name() : "—")
                 .employmentType(employee.getEmploymentType() != null ? employee.getEmploymentType().name() : "—")
                 .permanentStatus(employee.getPermanentStatus() != null ? employee.getPermanentStatus().name() : "—")
-                .qualifiedForPermanent(Boolean.TRUE.equals(employee.getQualifiedForPermanent()) ? "Yes" : "No")
-                .permanentQualificationDate(employee.getPermanentQualificationDate())
-                .permanentConfirmationDate(employee.getPermanentConfirmationDate())
+                .qualifiedForPermanent(careerProgression != null && Boolean.TRUE.equals(careerProgression.getQualifiedForPermanent()) ? "Yes" : "No")
+                .permanentQualificationDate(careerProgression != null ? careerProgression.getPermanentQualificationDate() : null)
+                .permanentConfirmationDate(careerProgression != null ? careerProgression.getPermanentConfirmationDate() : null)
                 .dateOfFirstAppointment(employee.getDateOfFirstAppointment())
                 .incremantDate(employee.getIncremantDate() != null ? employee.getIncremantDate() : "—")
                 .enteredDateToAllIslandService(employee.getEnteredDateToAllIslandService())

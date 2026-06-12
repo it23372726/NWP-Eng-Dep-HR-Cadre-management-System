@@ -39,11 +39,70 @@ export const ACTION_TYPE_LABELS = {
     TRANSFER_IN: "Transfer In",
     TRANSFER_OUT: "Transfer Out",
     PROMOTION: "Promotion",
+    ASSIGNMENT_GRADE_UPDATE: "Assignment / Grade Update",
     PERMANENT_CONFIRMATION: "Permanent Confirmation",
     RETIREMENT_OR_RESIGNATION: "Retirement / Resignation",
     DEATH: "Death",
     DISMISSAL: "Dismissal"
 };
+
+export const REQUIREMENT_STATUS = {
+    PENDING: "PENDING",
+    COMPLETED: "COMPLETED",
+    REJECTED: "REJECTED"
+};
+
+export const REQUIREMENT_TYPE_LABELS = {
+    EB_GRADE_3: "EB Grade III Exam Passed",
+    EB_GRADE_2: "EB Grade II Passed",
+    GOVERNMENT_LANGUAGE_QUALIFICATION: "Government Language Qualification",
+    MEDICAL_REPORT: "Medical Report Completed",
+    OL_CERTIFICATE: "O/L Approved",
+    AL_CERTIFICATE: "A/L Approved",
+    DEGREE_CERTIFICATE: "Degree Approved",
+    OTHER_CERTIFICATE: "Other Qualification Approved",
+    BIRTH_CERTIFICATE: "Birth Certificate Approved",
+    OTHER_GRADE_2_REQUIREMENT: "Other Grade II Requirement Completed",
+    EB_GRADE_1: "EB Grade I Passed",
+    SUPRA_REQUIREMENT: "Supra Grade Requirement",
+    SPECIAL_GRADE_REQUIREMENT: "Special Grade Requirement",
+    TRAINING_PROGRAM: "Training Program",
+    PROFESSIONAL_QUALIFICATION: "Professional Qualification",
+    CUSTOM_PERMANENT_REQUIREMENT: "Custom Permanent Requirement",
+    CUSTOM_GRADE_2_REQUIREMENT: "Custom Grade II Requirement",
+    CUSTOM_GRADE_1_REQUIREMENT: "Custom Grade I Requirement"
+};
+
+export const FIXED_PERMANENT_REQUIREMENTS = [
+    { requirementType: "EB_GRADE_3", label: "EB Grade III Passed" },
+    {
+        requirementType: "GOVERNMENT_LANGUAGE_QUALIFICATION",
+        label: "Government Language Qualification Passed"
+    },
+    { requirementType: "MEDICAL_REPORT", label: "Medical Report Completed" },
+    { requirementType: "OL_CERTIFICATE", label: "O/L Approved" },
+    { requirementType: "AL_CERTIFICATE", label: "A/L Approved" },
+    { requirementType: "DEGREE_CERTIFICATE", label: "Degree Approved" },
+    { requirementType: "BIRTH_CERTIFICATE", label: "Birth Certificate Approved" }
+];
+
+export const FIXED_GRADE2_REQUIREMENTS = [
+    { requirementType: "EB_GRADE_2", label: "EB Grade II Passed" }
+];
+
+export const FIXED_GRADE1_REQUIREMENTS = [
+    { requirementType: "EB_GRADE_1", label: "EB Grade I Passed" }
+];
+
+export function getRequirement(employee, requirementType) {
+    return (employee?.requirements || []).find(
+        (requirement) => requirement.requirementType === requirementType
+    );
+}
+
+export function isRequirementCompleted(employee, requirementType) {
+    return getRequirement(employee, requirementType)?.status === "COMPLETED";
+}
 
 export const STATUS_COLORS = {
     ACTIVE: "success",
@@ -73,6 +132,10 @@ export function formatActionDetails(action) {
 
     if (action.reason) {
         parts.push(`Reason: ${action.reason}`);
+    }
+
+    if (action.oldGrade && action.newGrade) {
+        parts.push(`Grade ${action.oldGrade} → ${action.newGrade}`);
     }
 
     if (action.actionType === "PERMANENT_CONFIRMATION") {

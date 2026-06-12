@@ -1,22 +1,22 @@
 import {
     Typography,
-    Paper,
     Box,
     Button,
     Stack,
-    Grid,
     Divider,
     Menu,
     MenuItem,
     ListItemIcon,
-    ListItemText
+    ListItemText,
+    Tabs,
+    Tab
 } from "@mui/material";
 
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 
-import { getEmployeeById } from "../services/employeeService";
+import { getEmployeeById, updateEmployee } from "../services/employeeService";
 import { getDesignations } from "../services/designationService";
 import {
     getEmployeeActions,
@@ -32,8 +32,8 @@ import {
 } from "../services/employeeLifecycleService";
 
 import EmployeeStatusChip from "../components/EmployeeStatusChip";
-import PermanentStatusChip from "../components/PermanentStatusChip";
 import EmployeeActionHistoryTable from "../components/EmployeeActionHistoryTable";
+import EmployeeProfilePersonalTab from "../components/EmployeeProfilePersonalTab";
 import TransferOutDialog from "../components/lifecycle/TransferOutDialog";
 import TransferInDialog from "../components/lifecycle/TransferInDialog";
 import NewAppointmentDialog from "../components/lifecycle/NewAppointmentDialog";
@@ -41,14 +41,14 @@ import PromotionDialog from "../components/lifecycle/PromotionDialog";
 import SimpleLifecycleDialog from "../components/lifecycle/SimpleLifecycleDialog";
 import MakePermanentDialog from "../components/lifecycle/MakePermanentDialog";
 import DeleteEmployeeDialog from "../components/DeleteEmployeeDialog";
+import EmployeeForm from "../components/EmployeeForm";
+import EmployeeQualificationsCard from "../components/EmployeeQualificationsCard";
+import EmployeeQualificationsForm from "../components/EmployeeQualificationsForm";
+import { getQualificationUpdateContext } from "../utils/employeeQualificationForm";
 import {
     getApiErrorMessage,
-    PERMANENT_STATUS_LABELS
+    isRequirementCompleted
 } from "../constants/hrms";
-
-const formatDate = (date) => date
-    ? new Date(date).toLocaleDateString("en-GB")
-    : "—";
 
 const getThreeYearRequirementDate = (dateOfFirstAppointment) => {
     if (!dateOfFirstAppointment) {
@@ -75,13 +75,13 @@ const meetsGradeThreePermanentRequirements = (employee) => {
     }
 
     return Boolean(
-        employee.ebGrade3Passed
-        && employee.languageQualificationPassed
-        && employee.medicalReportCompleted
-        && employee.olApproved
-        && employee.alApproved
-        && employee.degreeApproved
-        && employee.birthCertificateApproved
+        isRequirementCompleted(employee, "EB_GRADE_3")
+        && isRequirementCompleted(employee, "GOVERNMENT_LANGUAGE_QUALIFICATION")
+        && isRequirementCompleted(employee, "MEDICAL_REPORT")
+        && isRequirementCompleted(employee, "OL_CERTIFICATE")
+        && isRequirementCompleted(employee, "AL_CERTIFICATE")
+        && isRequirementCompleted(employee, "DEGREE_CERTIFICATE")
+        && isRequirementCompleted(employee, "BIRTH_CERTIFICATE")
         && hasCompletedThreeYears(employee.dateOfFirstAppointment)
     );
 };
@@ -101,7 +101,10 @@ export default function EmployeeProfilePage() {
     const [openDismiss, setOpenDismiss] = useState(false);
     const [openMakePermanent, setOpenMakePermanent] = useState(false);
     const [openDelete, setOpenDelete] = useState(false);
+    const [openEdit, setOpenEdit] = useState(false);
+    const [openQualifications, setOpenQualifications] = useState(false);
     const [anchorEl, setAnchorEl] = useState(null);
+    const [activeTab, setActiveTab] = useState(0);
 
     const isActive = employee?.status === "ACTIVE";
 
@@ -139,20 +142,48 @@ export default function EmployeeProfilePage() {
         }
     };
 
+    const handleUpdate = async (data) => {
+        try {
+            await updateEmployee(employee.id, data);
+            toast.success("Employee updated successfully");
+            setOpenEdit(false);
+            loadProfile();
+        } catch (error) {
+            toast.error(getApiErrorMessage(error));
+        }
+    };
+
+    const handleQualificationUpdate = async (data) => {
+        try {
+            await updateEmployee(employee.id, data);
+            toast.success("Qualifications updated successfully");
+            setOpenQualifications(false);
+            loadProfile();
+        } catch (error) {
+            toast.error(getApiErrorMessage(error));
+        }
+    };
+
     if (!employee) {
         return <Typography>Loading...</Typography>;
     }
 
-    const serviceLabel = employee.designation?.service
-        ? `${employee.designation.service.serviceCode} — ${employee.designation.service.description}`
-        : "—";
+    const grade2RequiredYears =
+        employee.designation?.grade2RequiredYears
+        ?? employee.careerProgression?.grade2RequiredYears;
+    const grade1RequiredYears =
+        employee.designation?.grade1RequiredYears
+        ?? employee.careerProgression?.grade1RequiredYears;
     const canMakePermanent =
         meetsGradeThreePermanentRequirements(employee)
-        && employee.qualifiedForPermanent
+        && employee.careerProgression?.qualifiedForPermanent
         && employee.permanentStatus !== "PERMANENT";
     const threeYearDate = getThreeYearRequirementDate(
         employee.dateOfFirstAppointment
     );
+    const qualificationContext = getQualificationUpdateContext(employee);
+    const canUpdateQualifications =
+        isActive && qualificationContext.canUpdate;
 
     return (
         <Box>
@@ -183,7 +214,26 @@ export default function EmployeeProfilePage() {
                 </Box>
 
                 {isActive && (
-                    <Box>
+                    <Stack direction="row" spacing={1} flexWrap="wrap">
+                        <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={() => setOpenEdit(true)}
+                        >
+                            Edit Details
+                        </Button>
+                        {canUpdateQualifications && (
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={() => {
+                                    setActiveTab(1);
+                                    setOpenQualifications(true);
+                                }}
+                            >
+                                Update Qualifications
+                            </Button>
+                        )}
                         <Button
                             variant="contained"
                             size="small"
@@ -299,163 +349,60 @@ export default function EmployeeProfilePage() {
                                 <ListItemText sx={{ color: "error.main" }}>Delete Permanently</ListItemText>
                             </MenuItem>
                         </Menu>
-                    </Box>
+                    </Stack>
                 )}
             </Stack>
 
-            <Paper sx={{ p: 3, mb: 3 }}>
-                <Grid container spacing={2}>
-                    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                        <Typography variant="body2" color="text.secondary">
-                            NIC
-                        </Typography>
-                        <Typography>{employee.nic}</Typography>
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                        <Typography variant="body2" color="text.secondary">
-                            Contact
-                        </Typography>
-                        <Typography>{employee.contactNo}</Typography>
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                        <Typography variant="body2" color="text.secondary">
-                            Grade
-                        </Typography>
-                        <Typography>{employee.grade ?? "—"}</Typography>
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                        <Typography variant="body2" color="text.secondary">
-                            Service Level
-                        </Typography>
-                        <Typography>
-                            {employee.serviceLevel?.levelName ?? "—"}
-                        </Typography>
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                        <Typography variant="body2" color="text.secondary">
-                            Service
-                        </Typography>
-                        <Typography>{serviceLabel}</Typography>
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                        <Typography variant="body2" color="text.secondary">
-                            Working Place
-                        </Typography>
-                        <Typography>
-                            {employee.currentWorkingPlace ?? "—"}
-                        </Typography>
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                        <Typography variant="body2" color="text.secondary">
-                            Incremant Date
-                        </Typography>
-                        <Typography>
-                            {employee.incremantDate ?? "—"}
-                        </Typography>
-                    </Grid>
-                    {employee.transferredFrom && (
-                        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                            <Typography variant="body2" color="text.secondary">
-                                Transferred From
-                            </Typography>
-                            <Typography>{employee.transferredFrom}</Typography>
-                        </Grid>
-                    )}
-                    <Grid size={{ xs: 12 }}>
-                        <Typography variant="body2" color="text.secondary">
-                            Permanent Address
-                        </Typography>
-                        <Typography>
-                            {employee.permanentAddress ?? "—"}
-                        </Typography>
-                    </Grid>
-                </Grid>
-            </Paper>
-
-            <Paper sx={{ p: 3, mb: 3 }}>
-                <Stack
-                    direction={{ xs: "column", sm: "row" }}
-                    spacing={2}
-                    sx={{ justifyContent: "space-between", alignItems: "flex-start" }}
+            <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 3 }}>
+                <Tabs
+                    value={activeTab}
+                    onChange={(_, value) => setActiveTab(value)}
+                    variant="scrollable"
+                    scrollButtons="auto"
                 >
-                    <Box>
-                        <Typography variant="h6" gutterBottom>
-                            Permanent Status
-                        </Typography>
-                        <PermanentStatusChip status={employee.permanentStatus} />
-                    </Box>
-                    {canMakePermanent && (
-                        <Button
-                            variant="contained"
-                            onClick={() => setOpenMakePermanent(true)}
-                        >
-                            Make Permanent
-                        </Button>
-                    )}
-                </Stack>
-                <Divider sx={{ my: 2 }} />
-                <Grid container spacing={2}>
-                    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                        <Typography variant="body2" color="text.secondary">
-                            Employment Type
-                        </Typography>
-                        <Typography>{employee.employmentType ?? "—"}</Typography>
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                        <Typography variant="body2" color="text.secondary">
-                            Current Status
-                        </Typography>
-                        <Typography>
-                            {PERMANENT_STATUS_LABELS[employee.permanentStatus] || "Probation"}
-                        </Typography>
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                        <Typography variant="body2" color="text.secondary">
-                            Qualified For Permanent
-                        </Typography>
-                        <Typography>{employee.qualifiedForPermanent ? "Yes" : "No"}</Typography>
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                        <Typography variant="body2" color="text.secondary">
-                            Qualification Progress
-                        </Typography>
-                        <Typography>
-                            {employee.qualifiedForPermanent
-                                ? "All requirements completed"
-                                : "Requirements pending"}
-                        </Typography>
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                        <Typography variant="body2" color="text.secondary">
-                            3 Year Requirement
-                        </Typography>
-                        <Typography>
-                            {threeYearDate ? `Required date: ${formatDate(threeYearDate)}` : "—"}
-                        </Typography>
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                        <Typography variant="body2" color="text.secondary">
-                            Qualification Date
-                        </Typography>
-                        <Typography>{formatDate(employee.permanentQualificationDate)}</Typography>
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                        <Typography variant="body2" color="text.secondary">
-                            Permanent Confirmation Date
-                        </Typography>
-                        <Typography>{formatDate(employee.permanentConfirmationDate)}</Typography>
-                    </Grid>
-                </Grid>
-            </Paper>
+                    <Tab label="Personal Information" />
+                    <Tab label="Qualifications & Requirements" />
+                    <Tab label="Lifecycle Action History" />
+                </Tabs>
+            </Box>
 
-            <Typography variant="h6" gutterBottom>
-                Lifecycle Action History
-            </Typography>
-            <EmployeeActionHistoryTable
-                actions={actionHistory}
-                designations={designations}
-                onRefresh={loadProfile}
-            />
+            {activeTab === 0 && (
+                <EmployeeProfilePersonalTab
+                    employee={employee}
+                    grade2RequiredYears={grade2RequiredYears}
+                    grade1RequiredYears={grade1RequiredYears}
+                    threeYearDate={threeYearDate}
+                    canMakePermanent={canMakePermanent}
+                    onMakePermanent={() => setOpenMakePermanent(true)}
+                />
+            )}
+
+            {activeTab === 1 && (
+                <EmployeeQualificationsCard
+                    employee={employee}
+                    embedded
+                    onUpdateQualifications={
+                        canUpdateQualifications
+                            ? () => setOpenQualifications(true)
+                            : null
+                    }
+                />
+            )}
+
+            {activeTab === 2 && (
+                <Box>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        Most recent lifecycle events appear first. Only the latest action
+                        can be corrected or removed.
+                    </Typography>
+                    <EmployeeActionHistoryTable
+                        actions={actionHistory}
+                        designations={designations}
+                        employee={employee}
+                        onRefresh={loadProfile}
+                    />
+                </Box>
+            )}
 
             <TransferOutDialog
                 open={openTransferOut}
@@ -582,6 +529,7 @@ export default function EmployeeProfilePage() {
                 open={openMakePermanent}
                 onClose={() => setOpenMakePermanent(false)}
                 employeeName={employee.fullName}
+                minDate={threeYearDate}
                 onSubmit={(data) =>
                     handleLifecycle(
                         async () => {
@@ -608,6 +556,20 @@ export default function EmployeeProfilePage() {
                         "Employee deleted permanently"
                     )
                 }
+            />
+
+            <EmployeeForm
+                open={openEdit}
+                handleClose={() => setOpenEdit(false)}
+                handleSubmit={handleUpdate}
+                selectedEmployee={employee}
+            />
+
+            <EmployeeQualificationsForm
+                open={openQualifications}
+                handleClose={() => setOpenQualifications(false)}
+                handleSubmit={handleQualificationUpdate}
+                employee={employee}
             />
         </Box>
     );

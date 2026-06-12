@@ -17,18 +17,30 @@ export default function MakePermanentDialog({
     open,
     onClose,
     employeeName,
+    minDate,
     onSubmit
 }) {
+    const defaultConfirmationDate = () => {
+        const current = today();
+        return minDate && current < minDate ? minDate : current;
+    };
+
     const [form, setForm] = useState({
-        confirmationDate: today(),
+        confirmationDate: defaultConfirmationDate(),
         remarks: ""
     });
 
     useEffect(() => {
         if (open) {
-            setForm({ confirmationDate: today(), remarks: "" });
+            setForm({ confirmationDate: defaultConfirmationDate(), remarks: "" });
         }
-    }, [open]);
+    }, [open, minDate]);
+
+    const dateBeforeMinimum = Boolean(
+        minDate
+        && form.confirmationDate
+        && form.confirmationDate < minDate
+    );
 
     const handleChange = (e) => {
         setForm({ ...form, [e.target.name]: e.target.value });
@@ -66,6 +78,18 @@ export default function MakePermanentDialog({
                             name="confirmationDate"
                             value={form.confirmationDate}
                             required
+                            slotProps={{
+                                ...dateFieldProps.slotProps,
+                                htmlInput: minDate ? { min: minDate } : undefined
+                            }}
+                            error={dateBeforeMinimum}
+                            helperText={
+                                dateBeforeMinimum
+                                    ? `Confirmation date cannot be earlier than ${minDate} (end of the 3-year probation period).`
+                                    : minDate
+                                        ? `Earliest allowed date: ${minDate} (end of the 3-year probation period).`
+                                        : undefined
+                            }
                         />
                     </Grid>
                     <Grid size={{ xs: 12 }}>
@@ -85,7 +109,7 @@ export default function MakePermanentDialog({
                 <Button
                     variant="contained"
                     onClick={submit}
-                    disabled={!form.confirmationDate}
+                    disabled={!form.confirmationDate || dateBeforeMinimum}
                 >
                     Confirm Permanent Status
                 </Button>

@@ -14,6 +14,8 @@ public class EmployeeActionSchemaMigration {
 
     private static final String PERMANENT_CONFIRMATION =
             "PERMANENT_CONFIRMATION";
+    private static final String ASSIGNMENT_GRADE_UPDATE =
+            "ASSIGNMENT_GRADE_UPDATE";
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -50,7 +52,8 @@ public class EmployeeActionSchemaMigration {
             return;
         }
 
-        if (columnType.contains("'" + PERMANENT_CONFIRMATION + "'")) {
+        if (columnType.contains("'" + PERMANENT_CONFIRMATION + "'")
+                && columnType.contains("'" + ASSIGNMENT_GRADE_UPDATE + "'")) {
             return;
         }
 
@@ -61,6 +64,7 @@ public class EmployeeActionSchemaMigration {
                     'TRANSFER_IN',
                     'TRANSFER_OUT',
                     'PROMOTION',
+                    'ASSIGNMENT_GRADE_UPDATE',
                     'PERMANENT_CONFIRMATION',
                     'RETIREMENT_OR_RESIGNATION',
                     'DEATH',
@@ -68,8 +72,7 @@ public class EmployeeActionSchemaMigration {
                 ) NOT NULL
                 """);
         log.info(
-                "Added {} to employee_actions.action_type enum",
-                PERMANENT_CONFIRMATION
+                "Ensured new lifecycle values exist in employee_actions.action_type enum"
         );
     }
 
