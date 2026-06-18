@@ -20,8 +20,13 @@ public enum District {
 
     @JsonCreator
     public static District fromLabel(String label) {
+        if (label == null || label.isBlank()) {
+            return null;
+        }
+
         for (District district : values()) {
-            if (district.label.equalsIgnoreCase(label)) {
+            if (district.label.equalsIgnoreCase(label.trim())
+                    || district.name().equalsIgnoreCase(label.trim())) {
                 return district;
             }
         }

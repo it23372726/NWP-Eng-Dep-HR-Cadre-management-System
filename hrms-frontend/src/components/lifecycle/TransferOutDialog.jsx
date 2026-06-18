@@ -8,22 +8,46 @@ import {
     Grid,
     Alert
 } from "@mui/material";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFormFieldProps, dialogActionsSx } from "../../utils/formLayout";
-
-const today = () => new Date().toISOString().split("T")[0];
+import { timelineMinDateHelperText } from "../../utils/timelineDates";
+import DepartmentOfficeFields, {
+    DEPARTMENT_OPTIONS,
+    ReadonlyWorkplaceFields,
+    resolveDepartmentValue
+} from "../workplace/DepartmentOfficeFields";
 
 export default function TransferOutDialog({
     open,
     onClose,
     onSubmit,
-    employeeName
+    employeeName,
+    currentDepartment,
+    currentOffice,
+    currentDistrictOfWorking,
+    previousEventDate
 }) {
     const [form, setForm] = useState({
-        transferDate: today(),
-        transferredTo: "",
+        transferDate: "",
+        toDepartmentType: DEPARTMENT_OPTIONS.NWP,
+        toOtherDepartmentName: "",
+        toDistrict: "",
+        toOffice: "",
         remarks: ""
     });
+
+    useEffect(() => {
+        if (open) {
+            setForm({
+                transferDate: "",
+                toDepartmentType: DEPARTMENT_OPTIONS.NWP,
+                toOtherDepartmentName: "",
+                toDistrict: "",
+                toOffice: "",
+                remarks: ""
+            });
+        }
+    }, [open]);
 
     const handleChange = (e) => {
         setForm({ ...form, [e.target.name]: e.target.value });
@@ -31,10 +55,29 @@ export default function TransferOutDialog({
 
     const { fieldProps, dateFieldProps } = createFormFieldProps(handleChange);
 
+    const toDepartment = resolveDepartmentValue(
+        form.toDepartmentType,
+        form.toOtherDepartmentName
+    );
+
+    const sameDepartment = currentDepartment
+        && toDepartment
+        && currentDepartment.toLowerCase() === toDepartment.toLowerCase();
+
+    const dateBeforeMinimum = Boolean(
+        previousEventDate
+        && form.transferDate
+        && form.transferDate < previousEventDate
+    );
+
     const submit = () => {
         onSubmit({
             transferDate: form.transferDate,
-            transferredTo: form.transferredTo.trim(),
+            toDepartment,
+            toOffice: form.toOffice.trim(),
+            toDistrict: form.toDepartmentType === DEPARTMENT_OPTIONS.NWP
+                ? form.toDistrict
+                : null,
             remarks: form.remarks?.trim() || null
         });
     };
@@ -51,28 +94,66 @@ export default function TransferOutDialog({
         >
             <DialogTitle>Transfer Out</DialogTitle>
             <DialogContent dividers>
-                <Alert severity="warning" sx={{ mb: 2 }}>
-                    {employeeName} will leave the N.W.P. Engineering Department.
-                    Designation stays unchanged; employee becomes inactive.
+                <Alert severity="info" sx={{ mb: 2 }}>
+                    {employeeName} will transfer out from their current department.
+                    A paired transfer-in will be recorded automatically. The employee
+                    stays active and their designation stays unchanged.
                 </Alert>
                 <Grid container spacing={2}>
+                    <ReadonlyWorkplaceFields
+                        department={currentDepartment}
+                        office={currentOffice}
+                        district={currentDistrictOfWorking}
+                    />
                     <Grid size={{ xs: 12 }}>
                         <TextField
                             {...dateFieldProps}
                             label="Transfer Date"
                             name="transferDate"
                             value={form.transferDate}
+                            required
+                            slotProps={{
+                                ...dateFieldProps.slotProps,
+                                htmlInput: previousEventDate
+                                    ? { min: previousEventDate }
+                                    : undefined
+                            }}
+                            error={dateBeforeMinimum}
+                            helperText={
+                                dateBeforeMinimum
+                                    ? timelineMinDateHelperText(
+                                        previousEventDate,
+                                        { tooEarly: true }
+                                    )
+                                    : timelineMinDateHelperText(previousEventDate)
+                            }
                         />
                     </Grid>
-                    <Grid size={{ xs: 12 }}>
-                        <TextField
-                            {...fieldProps}
-                            label="Transferred To"
-                            name="transferredTo"
-                            value={form.transferredTo}
-                            placeholder="e.g. Irrigation Department"
-                        />
-                    </Grid>
+                    <DepartmentOfficeFields
+                        departmentType={form.toDepartmentType}
+                        otherDepartmentName={form.toOtherDepartmentName}
+                        district={form.toDistrict}
+                        office={form.toOffice}
+                        onDepartmentTypeChange={(value) =>
+                            setForm((prev) => ({
+                                ...prev,
+                                toDepartmentType: value,
+                                toDistrict: "",
+                                toOffice: ""
+                            }))
+                        }
+                        onOtherDepartmentNameChange={(value) =>
+                            setForm((prev) => ({ ...prev, toOtherDepartmentName: value }))
+                        }
+                        onDistrictChange={(value) =>
+                            setForm((prev) => ({ ...prev, toDistrict: value, toOffice: "" }))
+                        }
+                        onOfficeChange={(value) =>
+                            setForm((prev) => ({ ...prev, toOffice: value }))
+                        }
+                        departmentLabel="Transfer To — Department"
+                        officeLabel="Transfer To — Office"
+                    />
                     <Grid size={{ xs: 12 }}>
                         <TextField
                             {...fieldProps}
@@ -91,7 +172,17 @@ export default function TransferOutDialog({
                     variant="contained"
                     color="warning"
                     onClick={submit}
-                    disabled={!form.transferredTo.trim()}
+                    disabled={
+                        !form.transferDate
+                        || dateBeforeMinimum
+                        || !form.toOffice.trim()
+                        || !toDepartment
+                        || (form.toDepartmentType === DEPARTMENT_OPTIONS.OTHER
+                            && !form.toOtherDepartmentName.trim())
+                        || (form.toDepartmentType === DEPARTMENT_OPTIONS.NWP
+                            && !form.toDistrict)
+                        || sameDepartment
+                    }
                 >
                     Confirm Transfer Out
                 </Button>

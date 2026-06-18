@@ -9,9 +9,9 @@ import {
     Typography,
     Alert
 } from "@mui/material";
-
 import { useEffect, useState } from "react";
 
+import FormSection from "./FormSection";
 import {
     createFormFieldProps,
     dialogActionsSx
@@ -74,50 +74,66 @@ export default function ServiceLevelForm({
         handleSubmit({ levelName: trimmedName });
     };
 
+    const canSave = formData.levelName.trim() && !levelError;
+
     return (
         <Dialog
             open={open}
             onClose={handleClose}
             fullWidth
             maxWidth="sm"
+            scroll="paper"
             onTransitionExited={() => {
                 document.activeElement?.blur();
             }}
         >
-            <DialogTitle>
-                {isEdit ? "Edit Service Level" : "Add Service Level"}
+            <DialogTitle sx={{ pb: 1 }}>
+                <Typography variant="h6" component="span">
+                    {isEdit ? "Edit Service Level" : "Add Service Level"}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    Define a service level classification for designations and employees.
+                </Typography>
             </DialogTitle>
 
-            <DialogContent dividers>
-                <Typography
-                    variant="subtitle2"
-                    color="text.secondary"
-                    gutterBottom
+            <DialogContent
+                dividers
+                sx={{
+                    bgcolor: "grey.50",
+                    px: { xs: 2, sm: 3 },
+                    py: 2
+                }}
+            >
+                <FormSection
+                    title="Level Details"
+                    description="Enter a descriptive name for this service level."
                 >
-                    Level details
-                </Typography>
+                    <Grid container spacing={2}>
+                        <Grid size={{ xs: 12 }}>
+                            <TextField
+                                {...fieldProps}
+                                label="Level Name"
+                                name="levelName"
+                                value={formData.levelName}
+                                onChange={handleChange}
+                                required
+                                error={Boolean(levelError)}
+                                helperText={
+                                    levelError
+                                    || `${formData.levelName.length}/${MAX_LENGTH} characters`
+                                }
+                                inputProps={{ maxLength: MAX_LENGTH }}
+                            />
+                        </Grid>
 
-                <Grid container spacing={2}>
-                    <Grid size={{ xs: 12 }}>
-                        <TextField
-                            {...fieldProps}
-                            label="Level Name"
-                            name="levelName"
-                            value={formData.levelName}
-                            onChange={handleChange}
-                            error={Boolean(levelError)}
-                            helperText={levelError || "Enter a custom service level name"}
-                            inputProps={{ maxLength: MAX_LENGTH }}
-                        />
+                        <Grid size={{ xs: 12 }}>
+                            <Alert severity="info">
+                                Examples: Primary, Secondary, Senior, Tertiary, Executive,
+                                Special Grade, Technical Level, and similar classifications.
+                            </Alert>
+                        </Grid>
                     </Grid>
-
-                    <Grid size={{ xs: 12 }}>
-                        <Alert severity="info">
-                            Enter any custom service level name. Examples: Primary, Secondary,
-                            Senior, Tertiary, Executive, Special Grade, Technical Level, etc.
-                        </Alert>
-                    </Grid>
-                </Grid>
+                </FormSection>
             </DialogContent>
 
             <DialogActions sx={dialogActionsSx}>
@@ -125,9 +141,9 @@ export default function ServiceLevelForm({
                 <Button
                     variant="contained"
                     onClick={submitForm}
-                    disabled={!formData.levelName.trim() || Boolean(levelError)}
+                    disabled={!canSave}
                 >
-                    Save
+                    {isEdit ? "Save Changes" : "Create Service Level"}
                 </Button>
             </DialogActions>
         </Dialog>

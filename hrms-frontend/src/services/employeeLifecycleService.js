@@ -13,6 +13,14 @@ export const transferOutEmployee = async (employeeId, data) => {
     return response.data;
 };
 
+export const officeChangeEmployee = async (employeeId, data) => {
+    const response = await api.post(
+        `/employees/${employeeId}/office-change`,
+        data
+    );
+    return response.data;
+};
+
 export const promoteEmployee = async (employeeId, data) => {
     const response = await api.post(
         `/employees/${employeeId}/promote`,
@@ -33,14 +41,6 @@ export const markEmployeeDeath = async (employeeId, data) => {
 
 export const dismissEmployee = async (employeeId, data) => {
     const response = await api.post(`/employees/${employeeId}/dismiss`, data);
-    return response.data;
-};
-
-export const transferInEmployee = async (employeeId, data) => {
-    const response = await api.post(
-        `/employees/${employeeId}/transfer-in`,
-        data
-    );
     return response.data;
 };
 

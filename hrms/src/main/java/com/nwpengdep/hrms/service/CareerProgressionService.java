@@ -21,6 +21,8 @@ import com.nwpengdep.hrms.entity.RequirementType;
 @Service
 public class CareerProgressionService {
 
+    public static final int PROBATION_YEARS = 3;
+
     public void recalculateEmployeeCareer(Employee employee) {
         syncDesignationRules(employee);
         calculatePermanentEligibility(employee);
@@ -301,11 +303,50 @@ public class CareerProgressionService {
         return baseDate.plusYears(requiredYears);
     }
 
-    public LocalDate getThreeYearRequirementDate(Employee employee) {
-        if (employee == null || employee.getDateOfFirstAppointment() == null) {
+    public LocalDate getMinimumPermanentConfirmationDate(LocalDate firstAppointmentDate) {
+        if (firstAppointmentDate == null) {
             return null;
         }
-        return employee.getDateOfFirstAppointment().plusYears(3);
+        return firstAppointmentDate.plusYears(PROBATION_YEARS);
+    }
+
+    public LocalDate getMinimumGrade2PromotionDate(
+            LocalDate firstAppointmentDate,
+            Designation designation
+    ) {
+        if (firstAppointmentDate == null || designation == null) {
+            return null;
+        }
+
+        Integer requiredYears = designation.getGrade2RequiredYears();
+        if (requiredYears == null) {
+            return null;
+        }
+
+        return firstAppointmentDate.plusYears(requiredYears);
+    }
+
+    public LocalDate getMinimumGrade1PromotionDate(
+            LocalDate grade2AchievedDate,
+            Designation designation
+    ) {
+        if (grade2AchievedDate == null || designation == null) {
+            return null;
+        }
+
+        Integer requiredYears = designation.getGrade1RequiredYears();
+        if (requiredYears == null) {
+            return null;
+        }
+
+        return grade2AchievedDate.plusYears(requiredYears);
+    }
+
+    public LocalDate getThreeYearRequirementDate(Employee employee) {
+        if (employee == null) {
+            return null;
+        }
+        return getMinimumPermanentConfirmationDate(employee.getDateOfFirstAppointment());
     }
 
     public boolean completedThreeYears(Employee employee) {

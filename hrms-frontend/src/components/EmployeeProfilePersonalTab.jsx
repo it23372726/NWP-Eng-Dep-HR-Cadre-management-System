@@ -9,12 +9,23 @@ import {
     Typography
 } from "@mui/material";
 import PermanentStatusChip from "./PermanentStatusChip";
-import { PERMANENT_STATUS_LABELS } from "../constants/hrms";
+import { formatMonthDayDisplay } from "../utils/monthDayDate";
+import { NWP_ENGINEERING_DEPARTMENT } from "../constants/hrms";
 import {
     getGrade1AchievedDate,
     getGrade2AchievedDate,
     getGrade3AchievedDate
 } from "../utils/gradeAchievementDates";
+import {
+    calculateRetirementDate,
+    formatEmployeeDate
+} from "../utils/employeeRetirement";
+import {
+    formatVehiclePermitDate,
+    getVehiclePermitStatusColor,
+    getVehiclePermitStatusLabel,
+    isSeniorEmployee
+} from "../utils/vehiclePermit";
 
 const formatDate = (date) =>
     date ? new Date(date).toLocaleDateString("en-GB") : "—";
@@ -33,6 +44,23 @@ function ProfileSection({ title, action, children }) {
             <Divider sx={{ my: 2 }} />
             {children}
         </Paper>
+    );
+}
+
+function ProfileSubsection({ title, children }) {
+    return (
+        <Box>
+            <Typography
+                variant="overline"
+                color="text.secondary"
+                sx={{ fontWeight: 700, letterSpacing: 0.8, display: "block" }}
+            >
+                {title}
+            </Typography>
+            <Grid container spacing={2.5} sx={{ mt: 0.5 }}>
+                {children}
+            </Grid>
+        </Box>
     );
 }
 
@@ -156,13 +184,19 @@ export default function EmployeeProfilePersonalTab({
     grade1RequiredYears,
     threeYearDate,
     canMakePermanent,
-    onMakePermanent
+    onMakePermanent,
+    onRevokePrivateVehicle,
+    vehiclePermitStatus,
+    onRecordVehiclePermit
 }) {
     const career = employee.careerProgression;
     const serviceLabel = employee.designation?.service
         ? `${employee.designation.service.serviceCode} — ${employee.designation.service.description}`
         : "—";
     const isPermanentEmployee = employee.employmentType === "PERMANENT";
+    const previousOrganization = employee.transferredFrom?.trim() || null;
+    const showPreviousOrganization = previousOrganization
+        && previousOrganization !== employee.currentDepartment;
 
     const permanentStatusChip = employee.permanentStatus === "PERMANENT"
         ? <PermanentStatusChip status="PERMANENT" />
@@ -180,6 +214,9 @@ export default function EmployeeProfilePersonalTab({
         "I",
         career?.qualifiedForGrade1
     );
+    const showPrivateVehicleSection = employee.privateVehicleUsedForGovWork === true;
+    const showVehiclePermitSection = isSeniorEmployee(employee)
+        && vehiclePermitStatus?.applicable;
 
     return (
         <Stack spacing={3}>
@@ -187,7 +224,12 @@ export default function EmployeeProfilePersonalTab({
                 <Grid container spacing={2.5}>
                     <InfoField label="NIC" value={employee.nic} />
                     <InfoField label="Date of Birth" value={formatDate(employee.dateOfBirth)} />
+                    <InfoField
+                        label="Expected Retirement Date"
+                        value={formatEmployeeDate(calculateRetirementDate(employee.dateOfBirth))}
+                    />
                     <InfoField label="Gender" value={employee.gender} />
+                    <InfoField label="Marital Status" value={employee.maritalStatus} />
                     <InfoField label="Contact Number" value={employee.contactNo} />
                     <InfoField label="Resident District" value={employee.residentDistrict} />
                     <InfoField
@@ -198,55 +240,146 @@ export default function EmployeeProfilePersonalTab({
                 </Grid>
             </ProfileSection>
 
-            <ProfileSection title="Employment & Assignment">
-                <Grid container spacing={2.5}>
-                    <InfoField label="Current Grade" value={employee.grade} />
-                    <InfoField
-                        label="Service Level"
-                        value={employee.serviceLevel?.levelName}
-                    />
-                    <InfoField label="Service" value={serviceLabel} />
-                    <InfoField
-                        label="Working Place"
-                        value={employee.currentWorkingPlace}
-                    />
-                    <InfoField
-                        label="District of Working"
-                        value={employee.currentDistrictOfWorking}
-                    />
-                    <InfoField label="Employment Type" value={employee.employmentType} />
-                    <InfoField
-                        label="Permanent Status"
-                        value={PERMANENT_STATUS_LABELS[employee.permanentStatus] || "Probation"}
-                    />
-                    <InfoField
-                        label="Date of First Appointment"
-                        value={formatDate(employee.dateOfFirstAppointment)}
-                    />
-                    <InfoField
-                        label="Entered All Island Service"
-                        value={formatDate(employee.enteredDateToAllIslandService)}
-                    />
-                    <InfoField
-                        label="Reported to Present Working Place"
-                        value={formatDate(employee.reportedDateToPresentWorkingPlace)}
-                    />
-                    <InfoField
-                        label="Appointment to Present Class / Grade"
-                        value={formatDate(employee.appointmentDateToPresentClassGrade)}
-                    />
-                    <InfoField
-                        label="Entered NWP Council"
-                        value={formatDate(employee.enteredDateToNWPCouncil)}
-                    />
-                    <InfoField label="Increment Date" value={employee.incremantDate} />
-                    {employee.transferredFrom && (
+            {showPrivateVehicleSection && (
+                <ProfileSection
+                    title="Private Vehicle — Government Work"
+                    action={
+                        onRevokePrivateVehicle && (
+                            <Button
+                                variant="outlined"
+                                color="warning"
+                                size="small"
+                                onClick={onRevokePrivateVehicle}
+                            >
+                                Stop using private vehicle
+                            </Button>
+                        )
+                    }
+                >
+                    <Grid container spacing={2.5}>
                         <InfoField
-                            label="Transferred From"
-                            value={employee.transferredFrom}
+                            label="Vehicle"
+                            value={employee.privateVehicleDescription}
                         />
-                    )}
-                </Grid>
+                        <InfoField
+                            label="Permission granted on"
+                            value={formatDate(employee.privateVehiclePermissionDate)}
+                        />
+                    </Grid>
+                </ProfileSection>
+            )}
+
+            {showVehiclePermitSection && (
+                <ProfileSection
+                    title="Vehicle Permit"
+                    action={
+                        vehiclePermitStatus?.canCollectNow && onRecordVehiclePermit && (
+                            <Button
+                                variant="contained"
+                                size="small"
+                                onClick={onRecordVehiclePermit}
+                            >
+                                Record collection
+                            </Button>
+                        )
+                    }
+                >
+                    <Grid container spacing={2.5}>
+                        <Grid size={{ xs: 12 }}>
+                            <Chip
+                                size="small"
+                                color={getVehiclePermitStatusColor(vehiclePermitStatus)}
+                                label={getVehiclePermitStatusLabel(vehiclePermitStatus)}
+                            />
+                        </Grid>
+                        <InfoField
+                            label="Senior since"
+                            value={formatVehiclePermitDate(vehiclePermitStatus.seniorSinceDate)}
+                        />
+                        <InfoField
+                            label="Last collected"
+                            value={formatVehiclePermitDate(
+                                vehiclePermitStatus.lastCollectedDate
+                                    ?? employee.vehiclePermitCollectedDate
+                            )}
+                        />
+                        <InfoField
+                            label="Next collectable"
+                            value={formatVehiclePermitDate(vehiclePermitStatus.nextCollectableDate)}
+                        />
+                    </Grid>
+                </ProfileSection>
+            )}
+
+            <ProfileSection title="Employment & Assignment">
+                <Stack spacing={3}>
+                    <ProfileSubsection title="Current Assignment">
+                        <InfoField label="Current Grade" value={employee.grade} />
+                        <InfoField
+                            label="Service Level"
+                            value={employee.serviceLevel?.levelName}
+                        />
+                        <InfoField label="Service" value={serviceLabel} />
+                        <InfoField
+                            label="Department"
+                            value={employee.currentDepartment}
+                        />
+                        <InfoField
+                            label="Office"
+                            value={employee.currentOffice}
+                        />
+                        {employee.currentDepartment === NWP_ENGINEERING_DEPARTMENT && (
+                            <InfoField
+                                label="District of Working"
+                                value={
+                                    employee.currentDistrictOfWorking?.label
+                                    ?? employee.currentDistrictOfWorking
+                                }
+                            />
+                        )}
+                    </ProfileSubsection>
+
+                    <Divider />
+
+                    <ProfileSubsection title="Employment">
+                        <InfoField label="Employment Type" value={employee.employmentType} />
+                        {showPreviousOrganization && (
+                            <InfoField
+                                label="Previous Organization"
+                                value={previousOrganization}
+                            />
+                        )}
+                    </ProfileSubsection>
+
+                    <Divider />
+
+                    <ProfileSubsection title="Service Timeline">
+                        <InfoField
+                            label="Date of First Appointment"
+                            value={formatDate(employee.dateOfFirstAppointment)}
+                        />
+                        <InfoField
+                            label="Entered All Island Service"
+                            value={formatDate(employee.enteredDateToAllIslandService)}
+                        />
+                        <InfoField
+                            label="Entered NWP Council"
+                            value={formatDate(employee.enteredDateToNWPCouncil)}
+                        />
+                        <InfoField
+                            label="Reported to Present Working Place"
+                            value={formatDate(employee.reportedDateToPresentWorkingPlace)}
+                        />
+                        <InfoField
+                            label="Appointment to Present Class / Grade"
+                            value={formatDate(employee.appointmentDateToPresentClassGrade)}
+                        />
+                        <InfoField
+                            label="Increment Date"
+                            value={formatMonthDayDisplay(employee.incremantDate)}
+                        />
+                    </ProfileSubsection>
+                </Stack>
             </ProfileSection>
 
             <ProfileSection title="Career Progression">

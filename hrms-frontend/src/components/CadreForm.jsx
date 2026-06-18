@@ -8,12 +8,15 @@ import {
     MenuItem,
     Grid,
     Typography,
-    Alert
+    Alert,
+    Stack,
+    Chip,
+    Box
 } from "@mui/material";
-
 import { useEffect, useState } from "react";
 
 import { getDesignations } from "../services/designationService";
+import FormSection from "./FormSection";
 import {
     createFormFieldProps,
     dialogActionsSx
@@ -32,6 +35,7 @@ export default function CadreForm({
 }) {
     const [designations, setDesignations] = useState([]);
     const [formData, setFormData] = useState(emptyForm);
+    const [countError, setCountError] = useState("");
 
     const isEdit = Boolean(selectedCadre);
 
@@ -48,6 +52,7 @@ export default function CadreForm({
         } else {
             setFormData(emptyForm);
         }
+        setCountError("");
     }, [selectedCadre, open]);
 
     const loadDesignations = async () => {
@@ -60,6 +65,9 @@ export default function CadreForm({
             ...formData,
             [e.target.name]: e.target.value
         });
+        if (e.target.name === "approvedCount") {
+            setCountError("");
+        }
     };
 
     const { fieldProps, selectFieldProps } = createFormFieldProps(handleChange);
@@ -69,11 +77,27 @@ export default function CadreForm({
     );
 
     const submitForm = () => {
+        if (!formData.designationId) {
+            return;
+        }
+
+        const count = Number(formData.approvedCount);
+        if (formData.approvedCount === "" || Number.isNaN(count) || count < 0) {
+            setCountError("Enter a valid approved count (0 or greater)");
+            return;
+        }
+
         handleSubmit({
             designationId: Number(formData.designationId),
-            approvedCount: Number(formData.approvedCount)
+            approvedCount: count
         });
     };
+
+    const canSave =
+        formData.designationId
+        && formData.approvedCount !== ""
+        && Number(formData.approvedCount) >= 0
+        && !countError;
 
     return (
         <Dialog
@@ -81,71 +105,143 @@ export default function CadreForm({
             onClose={handleClose}
             fullWidth
             maxWidth="sm"
+            scroll="paper"
             onTransitionExited={() => {
                 document.activeElement?.blur();
             }}
         >
-            <DialogTitle>
-                {isEdit ? "Edit Cadre Position" : "Add Cadre Position"}
+            <DialogTitle sx={{ pb: 1 }}>
+                <Typography variant="h6" component="span">
+                    {isEdit ? "Edit Cadre Position" : "Add Cadre Position"}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    Link a designation to an approved headcount for cadre management.
+                </Typography>
             </DialogTitle>
 
-            <DialogContent dividers>
-                <Typography
-                    variant="subtitle2"
-                    color="text.secondary"
-                    gutterBottom
+            <DialogContent
+                dividers
+                sx={{
+                    bgcolor: "grey.50",
+                    px: { xs: 2, sm: 3 },
+                    py: 2
+                }}
+            >
+                <FormSection
+                    title="Cadre Position"
+                    description="Select the designation and set the approved staff count."
                 >
-                    Cadre position
-                </Typography>
+                    <Grid container spacing={2}>
+                        <Grid size={{ xs: 12 }}>
+                            <TextField
+                                {...selectFieldProps}
+                                label="Designation"
+                                name="designationId"
+                                value={formData.designationId}
+                                required
+                            >
+                                {designations.map((designation) => (
+                                    <MenuItem
+                                        key={designation.id}
+                                        value={designation.id}
+                                    >
+                                        {designation.designationName}
+                                    </MenuItem>
+                                ))}
+                            </TextField>
+                        </Grid>
 
-                <Grid container spacing={2}>
-                    <Grid size={{ xs: 12 }}>
-                        <TextField
-                            {...selectFieldProps}
-                            label="Designation"
-                            name="designationId"
-                            value={formData.designationId}
-                        >
-                            {designations.map((designation) => (
-                                <MenuItem
-                                    key={designation.id}
-                                    value={designation.id}
+                        {selectedDesignation && (
+                            <Grid size={{ xs: 12 }}>
+                                <Box
+                                    sx={{
+                                        p: 2,
+                                        borderRadius: 1,
+                                        bgcolor: "background.paper",
+                                        border: "1px solid",
+                                        borderColor: "divider"
+                                    }}
                                 >
-                                    {designation.designationName}
-                                </MenuItem>
-                            ))}
-                        </TextField>
-                    </Grid>
+                                    <Typography
+                                        variant="caption"
+                                        color="text.secondary"
+                                        fontWeight={600}
+                                        display="block"
+                                        sx={{ mb: 1 }}
+                                    >
+                                        Selected designation details
+                                    </Typography>
+                                    <Stack
+                                        direction="row"
+                                        spacing={1}
+                                        flexWrap="wrap"
+                                        useFlexGap
+                                    >
+                                        <Chip
+                                            size="small"
+                                            label={
+                                                selectedDesignation.service?.serviceCode
+                                                ?? "No service"
+                                            }
+                                            variant="outlined"
+                                        />
+                                        <Chip
+                                            size="small"
+                                            label={
+                                                selectedDesignation.serviceLevel?.levelName
+                                                ?? "No service level"
+                                            }
+                                            variant="outlined"
+                                        />
+                                    </Stack>
+                                    {selectedDesignation.service?.description && (
+                                        <Typography
+                                            variant="body2"
+                                            color="text.secondary"
+                                            sx={{ mt: 1 }}
+                                        >
+                                            {selectedDesignation.service.description}
+                                        </Typography>
+                                    )}
+                                </Box>
+                            </Grid>
+                        )}
 
-                    {selectedDesignation && (
+                        <Grid size={{ xs: 12, sm: 6 }}>
+                            <TextField
+                                {...fieldProps}
+                                label="Approved Count"
+                                name="approvedCount"
+                                type="number"
+                                value={formData.approvedCount}
+                                required
+                                error={Boolean(countError)}
+                                helperText={
+                                    countError
+                                    || "Number of approved positions for this designation"
+                                }
+                                slotProps={{ htmlInput: { min: 0 } }}
+                            />
+                        </Grid>
+
                         <Grid size={{ xs: 12 }}>
                             <Alert severity="info">
-                                Service:{" "}
-                                {selectedDesignation.service?.serviceCode} —{" "}
-                                {selectedDesignation.service?.description}
-                                <br />
-                                Service level:{" "}
-                                {selectedDesignation.serviceLevel?.levelName}
+                                Approved count is used in cadre vacancy and excess reports.
+                                Each cadre position is tied to one designation.
                             </Alert>
                         </Grid>
-                    )}
-
-                    <Grid size={{ xs: 12, sm: 6 }}>
-                        <TextField
-                            {...fieldProps}
-                            label="Approved Count"
-                            name="approvedCount"
-                            type="number"
-                            value={formData.approvedCount}
-                        />
                     </Grid>
-                </Grid>
+                </FormSection>
             </DialogContent>
 
             <DialogActions sx={dialogActionsSx}>
                 <Button onClick={handleClose}>Cancel</Button>
-                <Button variant="contained" onClick={submitForm}>
-                    Save
+                <Button
+                    variant="contained"
+                    onClick={submitForm}
+                    disabled={!canSave}
+                >
+                    {isEdit ? "Save Changes" : "Create Cadre Position"}
                 </Button>
             </DialogActions>
         </Dialog>

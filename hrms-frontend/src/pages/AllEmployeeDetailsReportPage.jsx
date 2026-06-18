@@ -31,6 +31,7 @@ import {
 } from "../services/allEmployeeDetailsReportService";
 import { getDesignations } from "../services/designationService";
 import { getApiErrorMessage } from "../constants/hrms";
+import { formatMonthDayDisplay } from "../utils/monthDayDate";
 
 const COLUMNS = [
     { key: "serialNo", label: "S/N", align: "center", width: 60 },
@@ -50,7 +51,7 @@ const COLUMNS = [
     { key: "permanentQualificationDate", label: "Qualification Date", align: "center", width: 120 },
     { key: "permanentConfirmationDate", label: "Permanent Confirmation Date", align: "center", width: 140 },
     { key: "dateOfFirstAppointment", label: "Date of First Appointment", align: "center", width: 120 },
-    { key: "incremantDate", label: "Incremant Date", align: "center", width: 120 },
+    { key: "incremantDate", label: "Increment Date", align: "center", width: 120 },
     { key: "enteredDateToAllIslandService", label: "Entered Date to All Island Service", align: "center", width: 120 },
     { key: "reportedDateToPresentWorkingPlace", label: "Reported Date to Present Working Place", align: "center", width: 120 },
     { key: "currentWorkingPlace", label: "Current Working Place", align: "left", width: 180 },
@@ -395,7 +396,7 @@ export default function AllEmployeeDetailsReportPage() {
                                                     align={col.align || "center"}
                                                 >
                                                 {col.key === "incremantDate"
-                                                    ? (row[col.key] ?? "—")
+                                                    ? formatMonthDayDisplay(row[col.key])
                                                     : col.key.includes("date") || col.key.includes("Date")
                                                     ? formatDate(row[col.key])
                                                     : row[col.key] ?? "—"}

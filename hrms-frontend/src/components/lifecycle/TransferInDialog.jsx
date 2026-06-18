@@ -8,10 +8,8 @@ import {
     Grid,
     Alert
 } from "@mui/material";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFormFieldProps, dialogActionsSx } from "../../utils/formLayout";
-
-const today = () => new Date().toISOString().split("T")[0];
 
 export default function TransferInDialog({
     open,
@@ -20,10 +18,16 @@ export default function TransferInDialog({
     employeeName
 }) {
     const [form, setForm] = useState({
-        effectiveDate: today(),
+        effectiveDate: "",
         transferredFrom: "",
         remarks: ""
     });
+
+    useEffect(() => {
+        if (open) {
+            setForm({ effectiveDate: "", transferredFrom: "", remarks: "" });
+        }
+    }, [open]);
 
     const handleChange = (e) => {
         setForm({ ...form, [e.target.name]: e.target.value });
@@ -62,6 +66,7 @@ export default function TransferInDialog({
                             label="Effective Date"
                             name="effectiveDate"
                             value={form.effectiveDate}
+                            required
                         />
                     </Grid>
                     <Grid size={{ xs: 12 }}>
@@ -91,7 +96,7 @@ export default function TransferInDialog({
                     variant="contained"
                     color="primary"
                     onClick={submit}
-                    disabled={!form.transferredFrom.trim()}
+                    disabled={!form.effectiveDate || !form.transferredFrom.trim()}
                 >
                     Confirm Transfer In
                 </Button>

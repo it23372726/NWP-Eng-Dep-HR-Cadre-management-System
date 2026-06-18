@@ -6,11 +6,12 @@ import {
     Button,
     DialogActions,
     Grid,
-    Typography
+    Typography,
+    Alert
 } from "@mui/material";
-
 import { useEffect, useState } from "react";
 
+import FormSection from "./FormSection";
 import {
     createFormFieldProps,
     dialogActionsSx
@@ -28,6 +29,7 @@ export default function ServiceForm({
     selectedService
 }) {
     const [formData, setFormData] = useState(emptyForm);
+    const [codeError, setCodeError] = useState("");
 
     const isEdit = Boolean(selectedService);
 
@@ -40,6 +42,7 @@ export default function ServiceForm({
         } else {
             setFormData(emptyForm);
         }
+        setCodeError("");
     }, [selectedService, open]);
 
     const handleChange = (e) => {
@@ -47,9 +50,30 @@ export default function ServiceForm({
             ...formData,
             [e.target.name]: e.target.value
         });
+        if (e.target.name === "serviceCode") {
+            setCodeError("");
+        }
     };
 
     const { fieldProps } = createFormFieldProps(handleChange);
+
+    const submitForm = () => {
+        const trimmedCode = formData.serviceCode.trim();
+        const trimmedDescription = formData.description.trim();
+
+        if (!trimmedCode) {
+            setCodeError("Service code is required");
+            return;
+        }
+
+        handleSubmit({
+            serviceCode: trimmedCode,
+            description: trimmedDescription
+        });
+    };
+
+    const canSave =
+        formData.serviceCode.trim() && formData.description.trim();
 
     return (
         <Dialog
@@ -57,55 +81,77 @@ export default function ServiceForm({
             onClose={handleClose}
             fullWidth
             maxWidth="sm"
+            scroll="paper"
             onTransitionExited={() => {
                 document.activeElement?.blur();
             }}
         >
-            <DialogTitle>
-                {isEdit ? "Edit Service" : "Add Service"}
+            <DialogTitle sx={{ pb: 1 }}>
+                <Typography variant="h6" component="span">
+                    {isEdit ? "Edit Service" : "Add Service"}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    Define a service classification for designations and employees.
+                </Typography>
             </DialogTitle>
 
-            <DialogContent dividers>
-                <Typography
-                    variant="subtitle2"
-                    color="text.secondary"
-                    gutterBottom
+            <DialogContent
+                dividers
+                sx={{
+                    bgcolor: "grey.50",
+                    px: { xs: 2, sm: 3 },
+                    py: 2
+                }}
+            >
+                <FormSection
+                    title="Service Details"
+                    description="Enter the service code and a clear description."
                 >
-                    Service details
-                </Typography>
+                    <Grid container spacing={2}>
+                        <Grid size={{ xs: 12, sm: 6 }}>
+                            <TextField
+                                {...fieldProps}
+                                label="Service Code"
+                                name="serviceCode"
+                                value={formData.serviceCode}
+                                placeholder="e.g. SLEgS"
+                                required
+                                error={Boolean(codeError)}
+                                helperText={codeError || "Short unique identifier"}
+                            />
+                        </Grid>
 
-                <Grid container spacing={2}>
-                    <Grid size={{ xs: 12, sm: 6 }}>
-                        <TextField
-                            {...fieldProps}
-                            label="Service Code"
-                            name="serviceCode"
-                            value={formData.serviceCode}
-                            placeholder="e.g. SLEgS"
-                        />
-                    </Grid>
+                        <Grid size={{ xs: 12 }}>
+                            <TextField
+                                {...fieldProps}
+                                label="Description"
+                                name="description"
+                                value={formData.description}
+                                multiline
+                                minRows={2}
+                                required
+                                placeholder="Full service name or description"
+                            />
+                        </Grid>
 
-                    <Grid size={{ xs: 12 }}>
-                        <TextField
-                            {...fieldProps}
-                            label="Description"
-                            name="description"
-                            value={formData.description}
-                            multiline
-                            minRows={2}
-                        />
+                        <Grid size={{ xs: 12 }}>
+                            <Alert severity="info">
+                                Service codes are used across designations and reports.
+                                Use a consistent, recognizable code for each service type.
+                            </Alert>
+                        </Grid>
                     </Grid>
-                </Grid>
+                </FormSection>
             </DialogContent>
 
             <DialogActions sx={dialogActionsSx}>
                 <Button onClick={handleClose}>Cancel</Button>
-
                 <Button
                     variant="contained"
-                    onClick={() => handleSubmit(formData)}
+                    onClick={submitForm}
+                    disabled={!canSave}
                 >
-                    Save
+                    {isEdit ? "Save Changes" : "Create Service"}
                 </Button>
             </DialogActions>
         </Dialog>

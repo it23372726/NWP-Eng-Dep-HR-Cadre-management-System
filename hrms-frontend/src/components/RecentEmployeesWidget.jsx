@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import {
     Paper,
     Table,
@@ -18,6 +19,7 @@ const formatDate = (date) => {
 };
 
 export default function RecentEmployeesWidget({ data, loading }) {
+    const navigate = useNavigate();
     if (loading) {
         return (
             <Paper sx={{ p: 3, borderRadius: 2 }}>
@@ -54,8 +56,15 @@ export default function RecentEmployeesWidget({ data, loading }) {
                     </TableHead>
                     <TableBody>
                         {data.map((employee, index) => (
-                            <TableRow key={index} hover>
-                                <TableCell>{employee.employeeName}</TableCell>
+                            <TableRow
+                                key={index}
+                                hover
+                                sx={{ cursor: "pointer" }}
+                                onClick={() => navigate(`/employees/${employee.employeeId}`)}
+                            >
+                                <TableCell sx={{ color: "primary.main" }}>
+                                    {employee.employeeName}
+                                </TableCell>
                                 <TableCell>{employee.designation}</TableCell>
                                 <TableCell align="center">{formatDate(employee.createdAt)}</TableCell>
                             </TableRow>

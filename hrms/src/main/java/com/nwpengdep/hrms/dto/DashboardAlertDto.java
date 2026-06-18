@@ -16,4 +16,10 @@ public class DashboardAlertDto {
     private String severity;
 
     private Long count;
+
+    private String category;
+
+    private String actionPath;
+
+    private String actionQuery;
 }

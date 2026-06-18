@@ -1,5 +1,6 @@
 package com.nwpengdep.hrms.service.report;
 
+import com.nwpengdep.hrms.constants.DepartmentConstants;
 import com.nwpengdep.hrms.entity.*;
 import org.springframework.stereotype.Component;
 
@@ -33,18 +34,27 @@ public class CadreHistoricalStateService {
                 .toList();
 
         boolean active = false;
+        boolean inNwpDepartment = false;
         Long designationId = null;
 
         for (EmployeeAction action : relevant) {
             switch (action.getActionType()) {
                 case NEW_APPOINTMENT, TRANSFER_IN, PROMOTION -> {
                     active = true;
+                    inNwpDepartment = DepartmentConstants.isNwpEngineering(
+                            action.getDepartment()
+                    );
                     if (action.getNewDesignation() != null) {
                         designationId = action.getNewDesignation().getId();
                     }
                 }
-                case TRANSFER_OUT,
-                        RETIREMENT_OR_RESIGNATION,
+                case TRANSFER_OUT, OFFICE_CHANGE -> {
+                    active = true;
+                    inNwpDepartment = DepartmentConstants.isNwpEngineering(
+                            action.getDepartment()
+                    );
+                }
+                case RETIREMENT_OR_RESIGNATION,
                         DEATH,
                         DISMISSAL -> active = false;
                 default -> {
@@ -53,8 +63,11 @@ public class CadreHistoricalStateService {
         }
 
         if (!relevant.isEmpty()) {
+            if (!active || !inNwpDepartment) {
+                return EmployeeSnapshot.inactive();
+            }
             return new EmployeeSnapshot(
-                    active,
+                    true,
                     designationId,
                     employee.getEmploymentType()
             );
@@ -64,7 +77,8 @@ public class CadreHistoricalStateService {
             return EmployeeSnapshot.inactive();
         }
 
-        if (employee.getDesignation() != null) {
+        if (employee.getDesignation() != null
+                && DepartmentConstants.isNwpEngineering(employee.getCurrentDepartment())) {
             return new EmployeeSnapshot(
                     true,
                     employee.getDesignation().getId(),
@@ -83,17 +97,13 @@ public class CadreHistoricalStateService {
                 .filter(action -> (action.getDeleted() == null || !action.getDeleted()))
                 .filter(action -> !action.getActionDate().isAfter(asOfDate))
                 .anyMatch(action ->
-                        action.getActionType() == EmployeeActionType.TRANSFER_OUT
-                                || action.getActionType()
-                                == EmployeeActionType.RETIREMENT_OR_RESIGNATION
+                        action.getActionType() == EmployeeActionType.RETIREMENT_OR_RESIGNATION
                                 || action.getActionType() == EmployeeActionType.DEATH
                                 || action.getActionType() == EmployeeActionType.DISMISSAL
                 );
     }
 
     private LocalDate resolveJoinDate(Employee employee) {
-        // Cadre reports must be based on the date the employee actually joined
-        // the NWP Engineering Department (Reported to Present Working Place).
         if (employee.getReportedDateToPresentWorkingPlace() != null) {
             return employee.getReportedDateToPresentWorkingPlace();
         }

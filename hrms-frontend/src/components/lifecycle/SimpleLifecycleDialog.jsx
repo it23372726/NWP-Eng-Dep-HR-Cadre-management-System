@@ -8,10 +8,9 @@ import {
     Grid,
     Alert
 } from "@mui/material";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createFormFieldProps, dialogActionsSx } from "../../utils/formLayout";
-
-const today = () => new Date().toISOString().split("T")[0];
+import { timelineMinDateHelperText } from "../../utils/timelineDates";
 
 export default function SimpleLifecycleDialog({
     open,
@@ -22,17 +21,18 @@ export default function SimpleLifecycleDialog({
     severity = "info",
     confirmLabel,
     confirmColor = "primary",
-    requireReason = false
+    requireReason = false,
+    previousEventDate
 }) {
     const [form, setForm] = useState({
-        actionDate: today(),
+        actionDate: "",
         reason: "",
         remarks: ""
     });
 
     useEffect(() => {
         if (open) {
-            setForm({ actionDate: today(), reason: "", remarks: "" });
+            setForm({ actionDate: "", reason: "", remarks: "" });
         }
     }, [open]);
 
@@ -42,22 +42,26 @@ export default function SimpleLifecycleDialog({
 
     const { fieldProps, dateFieldProps } = createFormFieldProps(handleChange);
 
+    const dateBeforeMinimum = Boolean(
+        previousEventDate
+        && form.actionDate
+        && form.actionDate < previousEventDate
+    );
+
     const submit = () => {
+        const payload = {
+            actionDate: form.actionDate,
+            remarks: form.remarks?.trim() || null
+        };
         if (requireReason) {
-            onSubmit({
-                actionDate: form.actionDate,
-                reason: form.reason.trim(),
-                remarks: form.remarks?.trim() || null
-            });
-        } else {
-            onSubmit({
-                actionDate: form.actionDate,
-                remarks: form.remarks?.trim() || null
-            });
+            payload.reason = form.reason.trim();
         }
+        onSubmit(payload);
     };
 
-    const disabled = requireReason && !form.reason.trim();
+    const valid = form.actionDate
+        && (!requireReason || form.reason.trim())
+        && !dateBeforeMinimum;
 
     return (
         <Dialog
@@ -83,6 +87,22 @@ export default function SimpleLifecycleDialog({
                             label="Action Date"
                             name="actionDate"
                             value={form.actionDate}
+                            required
+                            slotProps={{
+                                ...dateFieldProps.slotProps,
+                                htmlInput: previousEventDate
+                                    ? { min: previousEventDate }
+                                    : undefined
+                            }}
+                            error={dateBeforeMinimum}
+                            helperText={
+                                dateBeforeMinimum
+                                    ? timelineMinDateHelperText(
+                                        previousEventDate,
+                                        { tooEarly: true }
+                                    )
+                                    : timelineMinDateHelperText(previousEventDate)
+                            }
                         />
                     </Grid>
                     {requireReason && (
@@ -114,7 +134,7 @@ export default function SimpleLifecycleDialog({
                     variant="contained"
                     color={confirmColor}
                     onClick={submit}
-                    disabled={disabled}
+                    disabled={!valid}
                 >
                     {confirmLabel}
                 </Button>

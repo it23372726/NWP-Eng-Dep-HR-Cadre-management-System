@@ -1,14 +1,18 @@
-import { Grid, MenuItem, TextField } from "@mui/material";
+import { Grid, TextField } from "@mui/material";
 
-import { DISTRICTS } from "../../constants/hrms";
 import FormSection from "../FormSection";
+import MonthDayPicker from "../MonthDayPicker";
+import NwpOfficeSelect from "../workplace/NwpOfficeSelect";
 
 export default function EmployeeWorkplaceSection({
     formData,
     fieldProps,
     dateFieldProps,
-    selectFieldProps,
-    variant = "permanent"
+    variant = "permanent",
+    readOnlyWorkplace = false,
+    onDistrictChange,
+    onOfficeChange,
+    onIncrementDateChange
 }) {
     const showFirstAppointment = variant === "nonPermanent";
     const showPresentClassGrade = variant === "nonPermanent";
@@ -19,7 +23,7 @@ export default function EmployeeWorkplaceSection({
             title="Service & workplace"
             description={
                 variant === "permanent"
-                    ? "Current posting details and council service dates not captured in career history."
+                    ? "Council service dates. Current department, office, and working district are derived from career history."
                     : "Workplace and service dates for this employee."
             }
         >
@@ -49,41 +53,57 @@ export default function EmployeeWorkplaceSection({
                         label="Reported to Workplace"
                         name="reportedDateToPresentWorkingPlace"
                         value={formData.reportedDateToPresentWorkingPlace}
+                        helperText="Date joined N.W.P. Engineering Department"
                     />
                 </Grid>
-                <Grid size={{ xs: 12, md: 8 }}>
-                    <TextField
-                        {...fieldProps}
-                        label="Current Working Place"
-                        name="currentWorkingPlace"
-                        value={formData.currentWorkingPlace}
-                        placeholder="Office / station name"
+                {readOnlyWorkplace ? (
+                    <>
+                        <Grid size={{ xs: 12, md: 6 }}>
+                            <TextField
+                                {...fieldProps}
+                                label="Current Department"
+                                name="currentDepartment"
+                                value={formData.currentDepartment || "—"}
+                                disabled
+                            />
+                        </Grid>
+                        <Grid size={{ xs: 12, md: 6 }}>
+                            <TextField
+                                {...fieldProps}
+                                label="Current Office"
+                                name="currentOffice"
+                                value={formData.currentOffice || "—"}
+                                disabled
+                            />
+                        </Grid>
+                        <Grid size={{ xs: 12, md: 6 }}>
+                            <TextField
+                                {...fieldProps}
+                                label="Working District"
+                                name="currentDistrictOfWorking"
+                                value={formData.currentDistrictOfWorking || "—"}
+                                disabled
+                            />
+                        </Grid>
+                    </>
+                ) : (
+                    <NwpOfficeSelect
+                        district={formData.currentDistrictOfWorking || ""}
+                        office={formData.currentWorkingPlace || ""}
+                        onDistrictChange={onDistrictChange}
+                        onOfficeChange={onOfficeChange}
+                        districtLabelText="Working District"
+                        officeLabel="Office"
                     />
-                </Grid>
-                <Grid size={{ xs: 12, md: 4 }}>
-                    <TextField
-                        {...selectFieldProps}
-                        label="Working District"
-                        name="currentDistrictOfWorking"
-                        value={formData.currentDistrictOfWorking}
-                    >
-                        {DISTRICTS.map((district) => (
-                            <MenuItem key={district} value={district}>
-                                {district}
-                            </MenuItem>
-                        ))}
-                    </TextField>
-                </Grid>
+                )}
                 {showOptionalDates && (
                     <>
                         <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                            <TextField
-                                {...fieldProps}
-                                label="Incremant Date"
+                            <MonthDayPicker
+                                label="Increment Date"
                                 name="incremantDate"
                                 value={formData.incremantDate}
-                                placeholder="e.g. 02-Jul"
-                                helperText="Month-Day only (e.g., 02-Jul)"
+                                onChange={onIncrementDateChange}
                             />
                         </Grid>
                         <Grid size={{ xs: 12, sm: 6, md: 4 }}>

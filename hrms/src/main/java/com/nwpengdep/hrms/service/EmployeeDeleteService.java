@@ -15,6 +15,7 @@ public class EmployeeDeleteService {
     private final EmployeeRepository employeeRepository;
     private final EmployeeActionRepository employeeActionRepository;
     private final EmployeePostingRepository employeePostingRepository;
+    private final EmployeePhotoService employeePhotoService;
 
     @Transactional
     public void deleteEmployeePermanently(Long employeeId) {
@@ -22,6 +23,8 @@ public class EmployeeDeleteService {
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
         try {
+            employeePhotoService.deletePhotoForEmployee(employee);
+
             // Delete in order of dependencies (foreign key constraints)
             
             // Delete lifecycle actions first (they reference employee)

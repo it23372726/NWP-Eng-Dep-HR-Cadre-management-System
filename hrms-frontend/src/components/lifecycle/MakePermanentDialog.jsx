@@ -10,36 +10,32 @@ import {
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import { createFormFieldProps, dialogActionsSx } from "../../utils/formLayout";
-
-const today = () => new Date().toISOString().split("T")[0];
+import { combineMinDates, timelineMinDateHelperText } from "../../utils/timelineDates";
 
 export default function MakePermanentDialog({
     open,
     onClose,
     employeeName,
     minDate,
+    previousEventDate,
     onSubmit
 }) {
-    const defaultConfirmationDate = () => {
-        const current = today();
-        return minDate && current < minDate ? minDate : current;
-    };
-
     const [form, setForm] = useState({
-        confirmationDate: defaultConfirmationDate(),
+        confirmationDate: "",
         remarks: ""
     });
 
     useEffect(() => {
         if (open) {
-            setForm({ confirmationDate: defaultConfirmationDate(), remarks: "" });
+            setForm({ confirmationDate: "", remarks: "" });
         }
-    }, [open, minDate]);
+    }, [open]);
 
+    const effectiveMinDate = combineMinDates(minDate, previousEventDate);
     const dateBeforeMinimum = Boolean(
-        minDate
+        effectiveMinDate
         && form.confirmationDate
-        && form.confirmationDate < minDate
+        && form.confirmationDate < effectiveMinDate
     );
 
     const handleChange = (e) => {
@@ -54,6 +50,12 @@ export default function MakePermanentDialog({
             remarks: form.remarks?.trim() || null
         });
     };
+
+    const helperText = dateBeforeMinimum
+        ? timelineMinDateHelperText(effectiveMinDate, { tooEarly: true })
+        : effectiveMinDate
+            ? timelineMinDateHelperText(effectiveMinDate)
+            : undefined;
 
     return (
         <Dialog
@@ -80,16 +82,12 @@ export default function MakePermanentDialog({
                             required
                             slotProps={{
                                 ...dateFieldProps.slotProps,
-                                htmlInput: minDate ? { min: minDate } : undefined
+                                htmlInput: effectiveMinDate
+                                    ? { min: effectiveMinDate }
+                                    : undefined
                             }}
                             error={dateBeforeMinimum}
-                            helperText={
-                                dateBeforeMinimum
-                                    ? `Confirmation date cannot be earlier than ${minDate} (end of the 3-year probation period).`
-                                    : minDate
-                                        ? `Earliest allowed date: ${minDate} (end of the 3-year probation period).`
-                                        : undefined
-                            }
+                            helperText={helperText}
                         />
                     </Grid>
                     <Grid size={{ xs: 12 }}>

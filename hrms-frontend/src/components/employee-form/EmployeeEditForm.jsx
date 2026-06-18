@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 
 import { Alert } from "@mui/material";
 
@@ -13,7 +13,9 @@ import {
     buildPermanentUpdatePayload,
     mapActionsToCareerHistory,
     mapEmployeeToForm,
-    validateCareerHistoryTimeline
+    prepareCareerHistoryForSave,
+    validateCareerHistoryTimeline,
+    validatePrivateVehicleFields
 } from "../../utils/employeeFormUtils";
 import { validateDesignationAssignment } from "../../constants/hrms";
 import CareerHistoryBuilder, {
@@ -24,6 +26,7 @@ import EmployeeEmploymentTypeSection, {
     EmployeeNonPermanentPositionSection
 } from "./EmployeeEmploymentTypeSection";
 import EmployeePersonalSection from "./EmployeePersonalSection";
+import EmployeePhotoUpload from "./EmployeePhotoUpload";
 import EmployeeQualificationsSection from "./EmployeeQualificationsSection";
 import EmployeeWorkplaceSection from "./EmployeeWorkplaceSection";
 
@@ -39,6 +42,11 @@ const EmployeeEditForm = forwardRef(function EmployeeEditForm(
     const [submitError, setSubmitError] = useState("");
     const [loadingHistory, setLoadingHistory] = useState(false);
     const initialHistoryRef = useRef("");
+    const photoOptionsRef = useRef({ photoFile: null, removePhoto: false });
+
+    const handlePhotoChange = useCallback((options) => {
+        photoOptionsRef.current = options;
+    }, []);
 
     const isPermanent = formData.employmentType === "PERMANENT";
     const hasHistory = historyEvents.length > 0;
@@ -76,6 +84,7 @@ const EmployeeEditForm = forwardRef(function EmployeeEditForm(
             setLoadingHistory(true);
             setAssignmentError("");
             setSubmitError("");
+            photoOptionsRef.current = { photoFile: null, removePhoto: false };
 
             const nextFormData = mapEmployeeToForm(employee);
 
@@ -162,6 +171,11 @@ const EmployeeEditForm = forwardRef(function EmployeeEditForm(
             [name]: type === "checkbox" ? checked : value
         };
 
+        if (name === "privateVehicleUsedForGovWork" && value === "No") {
+            nextFormData.privateVehicleDescription = "";
+            nextFormData.privateVehiclePermissionDate = "";
+        }
+
         nextFormData = applyGradeDerivedRequirements(nextFormData);
 
         setFormData(nextFormData);
@@ -198,6 +212,12 @@ const EmployeeEditForm = forwardRef(function EmployeeEditForm(
 
     const submitForm = () => {
         setSubmitError("");
+
+        const privateVehicleError = validatePrivateVehicleFields(formData);
+        if (privateVehicleError) {
+            setSubmitError(privateVehicleError);
+            return false;
+        }
 
         if (isPermanent) {
             if (!hasHistory) {
@@ -248,7 +268,8 @@ const EmployeeEditForm = forwardRef(function EmployeeEditForm(
                     historyEvents,
                     selectedDesignation,
                     employee
-                )
+                ),
+                photoOptionsRef.current
             );
             return true;
         }
@@ -263,7 +284,8 @@ const EmployeeEditForm = forwardRef(function EmployeeEditForm(
                 formData,
                 selectedDesignation,
                 employee
-            )
+            ),
+            photoOptionsRef.current
         );
         return true;
     };
@@ -295,6 +317,14 @@ const EmployeeEditForm = forwardRef(function EmployeeEditForm(
                 fieldProps={fieldProps}
                 dateFieldProps={dateFieldProps}
                 selectFieldProps={selectFieldProps}
+                photoSlot={(
+                    <EmployeePhotoUpload
+                        employeeId={employee?.id}
+                        hasExistingPhoto={Boolean(employee?.profilePhotoPath)}
+                        open={open}
+                        onChange={handlePhotoChange}
+                    />
+                )}
             />
 
             {isPermanent ? (
@@ -319,6 +349,8 @@ const EmployeeEditForm = forwardRef(function EmployeeEditForm(
                                 dateFieldProps={dateFieldProps}
                                 selectFieldProps={selectFieldProps}
                                 variant="permanent"
+                                readOnlyWorkplace
+                                onIncrementDateChange={handleChange}
                             />
 
                             <EmployeeQualificationsSection

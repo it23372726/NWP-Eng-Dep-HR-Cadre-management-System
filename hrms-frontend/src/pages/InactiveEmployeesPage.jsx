@@ -1,97 +1,162 @@
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    Paper,
     Typography,
     Container,
     TextField,
     Stack,
     IconButton,
     InputAdornment,
-    Box
+    Box,
+    Chip,
+    Button
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
-import Button from "@mui/material/Button";
-
-import { useEffect, useState } from "react";
+import FilterListOffIcon from "@mui/icons-material/FilterListOff";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
+import { getApiErrorMessage } from "../constants/hrms";
+import { getInactiveEmployees } from "../services/employeeService";
+import EmployeeListItem from "../components/EmployeeListItem";
 import {
-    getInactiveEmployees
-} from "../services/employeeService";
-import EmployeeStatusChip from "../components/EmployeeStatusChip";
-
-// Helper function to filter employees by multiple fields
-const filterEmployees = (employees, searchTerm) => {
-    if (!searchTerm.trim()) return employees;
-    
-    const term = searchTerm.toLowerCase().trim();
-    
-    return employees.filter(emp => {
-        const fullName = emp.fullName?.toLowerCase() || "";
-        const sn = emp.employeeNo?.toString() || "";
-        const nic = emp.nic?.toLowerCase() || "";
-        const designation = emp.designation?.designationName?.toLowerCase() || "";
-        const serviceLevel = emp.serviceLevel?.levelName?.toLowerCase() || "";
-        const contact = emp.contactNo?.toLowerCase() || "";
-        
-        return (
-            fullName.includes(term) ||
-            sn.includes(term) ||
-            nic.includes(term) ||
-            designation.includes(term) ||
-            serviceLevel.includes(term) ||
-            contact.includes(term)
-        );
-    });
-};
-
-// Helper function to sort employees by S/N
-const sortEmployeesBySN = (employees) => {
-    return [...employees].sort((a, b) => {
-        const snA = a.employeeNo?.toString() || "";
-        const snB = b.employeeNo?.toString() || "";
-        return snA.localeCompare(snB, undefined, { numeric: true });
-    });
-};
+    EmployeeListEmpty,
+    EmployeeListError,
+    EmployeeListNotice,
+    EmployeeListSkeleton
+} from "../components/EmployeeListStates";
+import {
+    filterInactiveEmployees,
+    hasInactiveEmployeeFilters,
+    sortEmployeesBySerialNo
+} from "../utils/employeeListFilters";
 
 export default function InactiveEmployeesPage() {
     const [allEmployees, setAllEmployees] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
     const [searchKeyword, setSearchKeyword] = useState("");
     const navigate = useNavigate();
 
-    // Filter and sort employees based on search term and S/N
-    const employees = sortEmployeesBySN(filterEmployees(allEmployees, searchKeyword));
+    const employees = sortEmployeesBySerialNo(
+        filterInactiveEmployees(allEmployees, searchKeyword)
+    );
+
+    const filtersActive = hasInactiveEmployeeFilters({ searchTerm: searchKeyword });
+
+    const loadEmployees = useCallback(async () => {
+        setLoading(true);
+        setLoadError("");
+
+        try {
+            const data = await getInactiveEmployees();
+            setAllEmployees(Array.isArray(data) ? data : []);
+        } catch (error) {
+            console.error(error);
+            setAllEmployees([]);
+            setLoadError(getApiErrorMessage(error));
+            toast.error(getApiErrorMessage(error));
+        } finally {
+            setLoading(false);
+        }
+    }, []);
 
     useEffect(() => {
         loadEmployees();
-    }, []);
+    }, [loadEmployees]);
 
-    const loadEmployees = async () => {
-        try {
-            const data = await getInactiveEmployees();
-            setAllEmployees(data);
-        } catch {
-            toast.error("Failed to load inactive employees");
+    const openProfile = (employee) => {
+        if (!employee?.id) {
+            return;
         }
+        navigate(`/employees/${employee.id}`);
+    };
+
+    const renderListContent = () => {
+        if (loading) {
+            return <EmployeeListSkeleton />;
+        }
+
+        if (loadError) {
+            return (
+                <EmployeeListError
+                    message={loadError}
+                    onRetry={loadEmployees}
+                />
+            );
+        }
+
+        if (employees.length === 0) {
+            return (
+                <EmployeeListEmpty
+                    variant={filtersActive ? "filtered" : "empty"}
+                    title={
+                        filtersActive
+                            ? "No inactive employees match your search"
+                            : "No inactive employee records"
+                    }
+                    description={
+                        filtersActive
+                            ? "Try a different search term"
+                            : "Former employees will appear here after transfer out, retirement, resignation, death, or dismissal"
+                    }
+                    action={
+                        filtersActive ? (
+                            <Button
+                                variant="outlined"
+                                startIcon={<FilterListOffIcon />}
+                                onClick={() => setSearchKeyword("")}
+                            >
+                                Clear Search
+                            </Button>
+                        ) : null
+                    }
+                />
+            );
+        }
+
+        return (
+            <Stack spacing={1.5}>
+                {employees.map((employee) => (
+                    <EmployeeListItem
+                        key={employee.id}
+                        employee={employee}
+                        variant="inactive"
+                        onClick={openProfile}
+                    />
+                ))}
+            </Stack>
+        );
     };
 
     return (
-        <Container>
-            <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ mb: 3, alignItems: "center" }}>
+        <Container maxWidth="lg">
+            <Box sx={{ mb: 3 }}>
+                <Box sx={{ mb: 2 }}>
+                    <Typography variant="h4" gutterBottom>
+                        Inactive Employees & History
+                    </Typography>
+                    <Typography variant="body1" color="text.secondary">
+                        Former employees retained for audit and career history.
+                        Not included in dashboard or vacancy counts.
+                    </Typography>
+                </Box>
+
+                <Box sx={{ mb: 2 }}>
+                    <EmployeeListNotice>
+                        Select an employee to view their complete service history,
+                        including final status and lifecycle actions.
+                    </EmployeeListNotice>
+                </Box>
+
                 <TextField
-                    label="Search Inactive Employees"
+                    label="Search inactive employees"
                     placeholder="Name, S/N, NIC, designation, service level, contact..."
                     value={searchKeyword}
                     onChange={(e) => setSearchKeyword(e.target.value)}
                     size="small"
-                    sx={{ minWidth: 300, flexGrow: 1 }}
+                    fullWidth
+                    sx={{ maxWidth: 520, mb: 1.5 }}
                     slotProps={{
                         input: {
                             startAdornment: (
@@ -114,72 +179,40 @@ export default function InactiveEmployeesPage() {
                         }
                     }}
                 />
-            </Stack>
 
-            <Box sx={{ mb: 2 }}>
-                <Typography variant="h4" gutterBottom>
-                    Inactive Employees & History
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                    Showing {employees.length} of {allEmployees.length} employee{allEmployees.length !== 1 ? "s" : ""}
-                </Typography>
+                <Stack
+                    direction="row"
+                    spacing={1}
+                    alignItems="center"
+                    flexWrap="wrap"
+                    useFlexGap
+                >
+                    <Typography variant="body2" color="text.secondary">
+                        {loading
+                            ? "Loading employees..."
+                            : `Showing ${employees.length} of ${allEmployees.length} employee${allEmployees.length !== 1 ? "s" : ""}`}
+                    </Typography>
+                    {filtersActive && !loading && (
+                        <>
+                            <Chip
+                                label="Search applied"
+                                size="small"
+                                color="primary"
+                                variant="outlined"
+                            />
+                            <Button
+                                size="small"
+                                startIcon={<FilterListOffIcon />}
+                                onClick={() => setSearchKeyword("")}
+                            >
+                                Clear
+                            </Button>
+                        </>
+                    )}
+                </Stack>
             </Box>
 
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Former employees retained for audit. Not included in dashboard
-                or vacancy counts.
-            </Typography>
-
-            {employees.length === 0 && searchKeyword ? (
-                <Paper sx={{ p: 3, textAlign: "center" }}>
-                    <Typography color="text.secondary" gutterBottom>
-                        No employees found
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                        Try a different search term
-                    </Typography>
-                </Paper>
-            ) : (
-            <TableContainer component={Paper}>
-                <Table>
-                    <TableHead>
-                        <TableRow>
-                            <TableCell>S/N</TableCell>
-                            <TableCell>Name</TableCell>
-                            <TableCell>Designation</TableCell>
-                            <TableCell>Status</TableCell>
-                            <TableCell>Actions</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {employees.map((employee) => (
-                            <TableRow key={employee.id}>
-                                <TableCell>{employee.employeeNo}</TableCell>
-                                <TableCell>{employee.fullName}</TableCell>
-                                <TableCell>
-                                    {employee.designation?.designationName ?? "—"}
-                                </TableCell>
-                                <TableCell>
-                                    <EmployeeStatusChip
-                                        status={employee.status}
-                                    />
-                                </TableCell>
-                                <TableCell>
-                                    <Button
-                                        size="small"
-                                        onClick={() =>
-                                            navigate(`/employees/${employee.id}`)
-                                        }
-                                    >
-                                        View History
-                                    </Button>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </TableContainer>
-            )}
+            {renderListContent()}
         </Container>
     );
 }

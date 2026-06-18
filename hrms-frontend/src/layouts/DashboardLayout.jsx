@@ -31,6 +31,7 @@ import PeopleAltIcon from "@mui/icons-material/PeopleAlt";
 import HistoryIcon from "@mui/icons-material/History";
 import BadgeIcon from "@mui/icons-material/Badge";
 import ApartmentIcon from "@mui/icons-material/Apartment";
+import BusinessIcon from "@mui/icons-material/Business";
 import LayersIcon from "@mui/icons-material/Layers";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import AssessmentIcon from "@mui/icons-material/Assessment";
@@ -49,6 +50,7 @@ const NAV_ITEMS = [
     },
     { label: "Designations", path: "/designations", icon: <BadgeIcon /> },
     { label: "Services", path: "/services", icon: <ApartmentIcon /> },
+    { label: "Offices", path: "/offices", icon: <BusinessIcon /> },
     { label: "Service Levels", path: "/service-levels", icon: <LayersIcon /> },
     { label: "Cadres", path: "/cadres", icon: <AccountTreeIcon /> },
     {

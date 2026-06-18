@@ -1,429 +1,298 @@
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    Paper,
     Typography,
     Container,
     Button,
-    TextField,
     Stack,
-    IconButton,
-    InputAdornment,
     Box,
-    MenuItem
+    Tabs,
+    Tab
 } from "@mui/material";
-
-import SearchIcon from "@mui/icons-material/Search";
-import ClearIcon from "@mui/icons-material/Clear";
-import { useEffect, useState } from "react";
+import AddIcon from "@mui/icons-material/Add";
+import FilterListOffIcon from "@mui/icons-material/FilterListOff";
+import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import {
-    getApiErrorMessage,
-    PERMANENT_STATUS_OPTIONS
-} from "../constants/hrms";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
+import { getApiErrorMessage } from "../constants/hrms";
 import {
     getActiveEmployees,
     createEmployee,
-    updateEmployee
+    saveEmployeePhoto
 } from "../services/employeeService";
-
-import EmployeeStatusChip from "../components/EmployeeStatusChip";
-import PermanentStatusChip from "../components/PermanentStatusChip";
-
-import EmployeeForm
-from "../components/EmployeeForm";
-
-import { useNavigate }
-from "react-router-dom";
-
-// Helper function to filter employees by multiple fields
-const filterEmployees = (employees, searchTerm, permanentStatusFilter) => {
-    const statusFiltered = permanentStatusFilter === "ALL"
-        ? employees
-        : employees.filter(
-            (emp) => emp.permanentStatus === permanentStatusFilter
-        );
-
-    if (!searchTerm.trim()) return statusFiltered;
-    
-    const term = searchTerm.toLowerCase().trim();
-    
-    return statusFiltered.filter(emp => {
-        const fullName = emp.fullName?.toLowerCase() || "";
-        const sn = emp.employeeNo?.toString() || "";
-        const nic = emp.nic?.toLowerCase() || "";
-        const designation = emp.designation?.designationName?.toLowerCase() || "";
-        const serviceLevel = emp.serviceLevel?.levelName?.toLowerCase() || "";
-        const contact = emp.contactNo?.toLowerCase() || "";
-        
-        return (
-            fullName.includes(term) ||
-            sn.includes(term) ||
-            nic.includes(term) ||
-            designation.includes(term) ||
-            serviceLevel.includes(term) ||
-            contact.includes(term)
-        );
-    });
-};
-
-// Helper function to sort employees by S/N
-const sortEmployeesBySN = (employees) => {
-    return [...employees].sort((a, b) => {
-        const snA = a.employeeNo?.toString() || "";
-        const snB = b.employeeNo?.toString() || "";
-        return snA.localeCompare(snB, undefined, { numeric: true });
-    });
-};
+import EmployeeForm from "../components/EmployeeForm";
+import EmployeeListItem from "../components/EmployeeListItem";
+import EmployeeListFilterPanel from "../components/EmployeeListFilterPanel";
+import {
+    EmployeeListEmpty,
+    EmployeeListError,
+    EmployeeListSkeleton
+} from "../components/EmployeeListStates";
+import {
+    filterActiveEmployees,
+    hasActiveEmployeeFilters,
+    sortEmployeesBySerialNo
+} from "../utils/employeeListFilters";
+import {
+    employeeFiltersToSearchParams,
+    parseEmployeeListSearchParams
+} from "../utils/dashboardNavigation";
 
 export default function EmployeePage() {
-
-    const [allEmployees, setAllEmployees] =
-        useState([]);
-
-    const [open, setOpen] =
-        useState(false);
-
-    const [selectedEmployee, setSelectedEmployee] =
-        useState(null);
-
-    const [searchKeyword, setSearchKeyword] =
-        useState("");
-
-    const [permanentStatusFilter, setPermanentStatusFilter] =
-        useState("ALL");
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [allEmployees, setAllEmployees] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
+    const [open, setOpen] = useState(false);
+    const [creatingEmployee, setCreatingEmployee] = useState(false);
+    const [searchKeyword, setSearchKeyword] = useState("");
+    const [permanentStatusFilter, setPermanentStatusFilter] = useState("ALL");
+    const [gradePromotionFilter, setGradePromotionFilter] = useState("ALL");
+    const [retiringWithinMonths, setRetiringWithinMonths] = useState("");
+    const [districtFilter, setDistrictFilter] = useState("");
+    const [officeFilter, setOfficeFilter] = useState("");
+    const [qualificationFilter, setQualificationFilter] = useState("");
+    const [departmentScope, setDepartmentScope] = useState("NWP");
 
     const navigate = useNavigate();
 
-    // Filter and sort employees based on search term and S/N
-    const employees = sortEmployeesBySN(
-        filterEmployees(allEmployees, searchKeyword, permanentStatusFilter)
+    useEffect(() => {
+        const parsed = parseEmployeeListSearchParams(searchParams);
+        setSearchKeyword(parsed.searchTerm);
+        setPermanentStatusFilter(parsed.permanentStatusFilter);
+        setGradePromotionFilter(parsed.gradePromotionFilter);
+        setRetiringWithinMonths(parsed.retiringWithinMonths);
+        setDistrictFilter(parsed.districtFilter);
+        setOfficeFilter(parsed.officeFilter);
+        setQualificationFilter(parsed.qualificationFilter);
+        setDepartmentScope(parsed.departmentScope);
+    }, [searchParams]);
+
+    const filterState = {
+        searchTerm: searchKeyword,
+        permanentStatusFilter,
+        gradePromotionFilter,
+        retiringWithinMonths,
+        districtFilter,
+        officeFilter,
+        qualificationFilter
+    };
+
+    const syncFiltersToUrl = useCallback((nextFilters) => {
+        const params = employeeFiltersToSearchParams({
+            ...filterState,
+            departmentScope,
+            ...nextFilters
+        });
+        setSearchParams(params, { replace: true });
+    }, [departmentScope, filterState, setSearchParams]);
+
+    const employees = sortEmployeesBySerialNo(
+        filterActiveEmployees(allEmployees, filterState)
     );
 
+    const filtersActive = hasActiveEmployeeFilters(filterState);
+
+    const loadEmployees = useCallback(async () => {
+        setLoading(true);
+        setLoadError("");
+
+        try {
+            const data = await getActiveEmployees(departmentScope);
+            setAllEmployees(Array.isArray(data) ? data : []);
+        } catch (error) {
+            console.error(error);
+            setAllEmployees([]);
+            setLoadError(getApiErrorMessage(error));
+            toast.error(getApiErrorMessage(error));
+        } finally {
+            setLoading(false);
+        }
+    }, [departmentScope]);
+
     useEffect(() => {
-
         loadEmployees();
+    }, [loadEmployees]);
 
-    }, []);
+    const handleCreate = async (data, photoOptions) => {
+        if (creatingEmployee) {
+            return;
+        }
 
-    const loadEmployees = async () => {
-
+        setCreatingEmployee(true);
         try {
-
-            const data = await getActiveEmployees();
-
-            setAllEmployees(data);
-
+            const saved = await createEmployee(data);
+            await saveEmployeePhoto(saved.id, photoOptions);
+            toast.success("Employee created successfully");
+            setOpen(false);
+            loadEmployees();
         } catch (error) {
-
             console.error(error);
-
-            toast.error(
-                "Failed to load employees"
-            );
+            toast.error(getApiErrorMessage(error));
+        } finally {
+            setCreatingEmployee(false);
         }
     };
 
-    const handleCreate = async (data) => {
+    const clearFilters = () => {
+        setSearchParams(
+            departmentScope !== "NWP"
+                ? employeeFiltersToSearchParams({ departmentScope })
+                : new URLSearchParams(),
+            { replace: true }
+        );
+    };
 
-        try {
+    const clearFilterKey = (key) => {
+        const updates = {
+            permanentStatus: { permanentStatusFilter: "ALL" },
+            gradePromotion: { gradePromotionFilter: "ALL" },
+            retiringWithin: { retiringWithinMonths: "" },
+            district: { districtFilter: "", officeFilter: "" },
+            office: { officeFilter: "" },
+            qualification: { qualificationFilter: "" },
+            search: { searchTerm: "" }
+        }[key];
 
-            await createEmployee(data);
-
-            toast.success(
-                "Employee created successfully"
-            );
-
-            setOpen(false);
-
-            loadEmployees();
-
-        } catch (error) {
-
-            console.error(error);
-
-            toast.error(getApiErrorMessage(error));
+        if (updates) {
+            syncFiltersToUrl(updates);
         }
     };
 
-    const handleUpdate = async (data) => {
-
-        try {
-
-            await updateEmployee(
-                selectedEmployee.id,
-                data
-            );
-
-            toast.success(
-                "Employee updated successfully"
-            );
-
-            setOpen(false);
-
-            setSelectedEmployee(null);
-
-            loadEmployees();
-
-        } catch (error) {
-
-            console.error(error);
-
-            toast.error(getApiErrorMessage(error));
+    const openProfile = (employee) => {
+        if (!employee?.id) {
+            return;
         }
+        navigate(`/employees/${employee.id}`);
+    };
+
+    const resultSummary = loading
+        ? "Loading employees..."
+        : `Showing ${employees.length} of ${allEmployees.length} employee${allEmployees.length !== 1 ? "s" : ""}`;
+
+    const renderListContent = () => {
+        if (loading) {
+            return <EmployeeListSkeleton />;
+        }
+
+        if (loadError) {
+            return (
+                <EmployeeListError
+                    message={loadError}
+                    onRetry={loadEmployees}
+                />
+            );
+        }
+
+        if (employees.length === 0) {
+            return (
+                <EmployeeListEmpty
+                    variant={filtersActive ? "filtered" : "empty"}
+                    title={
+                        filtersActive
+                            ? "No employees match your search or filters"
+                            : departmentScope === "NWP"
+                                ? "No active employees in N.W.P. Engineering Department"
+                                : "No active employees in other departments"
+                    }
+                    description={
+                        filtersActive
+                            ? "Try adjusting your search or filter criteria"
+                            : "Add a new employee to get started"
+                    }
+                    action={
+                        !filtersActive ? (
+                            <Button
+                                variant="contained"
+                                startIcon={<AddIcon />}
+                                onClick={() => setOpen(true)}
+                            >
+                                Add Employee
+                            </Button>
+                        ) : (
+                            <Button
+                                variant="outlined"
+                                startIcon={<FilterListOffIcon />}
+                                onClick={clearFilters}
+                            >
+                                Clear Filters
+                            </Button>
+                        )
+                    }
+                />
+            );
+        }
+
+        return (
+            <Stack spacing={1.5}>
+                {employees.map((employee) => (
+                    <EmployeeListItem
+                        key={employee.id}
+                        employee={employee}
+                        variant="active"
+                        onClick={openProfile}
+                    />
+                ))}
+            </Stack>
+        );
     };
 
     return (
-
-        <Container sx={{ mt: 5 }}>
-
-            <Stack
-                direction={{ xs: "column", md: "row" }}
-                spacing={2}
-                sx={{ mb: 3, alignItems: "center" }}
-            >
-
-                <Button
-                    variant="contained"
-                    onClick={() => {
-
-                        setSelectedEmployee(null);
-
-                        setOpen(true);
-                    }}
+        <Container maxWidth="lg">
+            <Box sx={{ mb: 3 }}>
+                <Stack
+                    direction={{ xs: "column", sm: "row" }}
+                    spacing={2}
+                    sx={{ mb: 2, justifyContent: "space-between", alignItems: { sm: "center" } }}
                 >
-                    Add Employee
-                </Button>
+                    <Box>
+                        <Typography variant="h4" gutterBottom>
+                            Active Employees
+                        </Typography>
+                        <Typography variant="body1" color="text.secondary">
+                            Browse and filter active staff. Use the same filters
+                            available from the dashboard to find employees needing action.
+                        </Typography>
+                    </Box>
+                    <Button
+                        variant="contained"
+                        startIcon={<AddIcon />}
+                        onClick={() => setOpen(true)}
+                        sx={{ alignSelf: { xs: "flex-start", sm: "center" }, flexShrink: 0 }}
+                    >
+                        Add Employee
+                    </Button>
+                </Stack>
 
-                <TextField
-                    label="Search Active Employees"
-                    placeholder="Name, S/N, NIC, designation, service level, contact..."
-                    value={searchKeyword}
-                    onChange={(e) =>
-                        setSearchKeyword(
-                            e.target.value
-                        )
-                    }
-                    size="small"
-                    sx={{ minWidth: 300, flexGrow: 1 }}
-                    slotProps={{
-                        input: {
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <SearchIcon sx={{ color: "text.secondary" }} />
-                                </InputAdornment>
-                            ),
-                            endAdornment: searchKeyword ? (
-                                <InputAdornment position="end">
-                                    <IconButton
-                                        size="small"
-                                        onClick={() => setSearchKeyword("")}
-                                        edge="end"
-                                        aria-label="Clear search"
-                                    >
-                                        <ClearIcon fontSize="small" />
-                                    </IconButton>
-                                </InputAdornment>
-                            ) : null
-                        }
+                <Tabs
+                    value={departmentScope}
+                    onChange={(_, value) => {
+                        syncFiltersToUrl({ departmentScope: value });
                     }}
+                    sx={{ mb: 2 }}
+                >
+                    <Tab label="N.W.P. Engineering Department" value="NWP" />
+                    <Tab label="Other Departments" value="OTHER" />
+                </Tabs>
+
+                <EmployeeListFilterPanel
+                    filterState={filterState}
+                    onFilterChange={syncFiltersToUrl}
+                    onClearFilters={clearFilters}
+                    onClearFilterKey={clearFilterKey}
+                    filtersActive={filtersActive}
+                    resultSummary={resultSummary}
                 />
-
-                <TextField
-                    label="Permanent Status"
-                    select
-                    size="small"
-                    value={permanentStatusFilter}
-                    onChange={(e) => setPermanentStatusFilter(e.target.value)}
-                    sx={{ minWidth: 220 }}
-                >
-                    {PERMANENT_STATUS_OPTIONS.map((option) => (
-                        <MenuItem key={option.value} value={option.value}>
-                            {option.label}
-                        </MenuItem>
-                    ))}
-                </TextField>
-
-            </Stack>
-
-            <Box sx={{ mb: 2 }}>
-                <Typography variant="h4" gutterBottom>
-                    Active Employees
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                    Showing {employees.length} of {allEmployees.length} employee{allEmployees.length !== 1 ? "s" : ""}
-                </Typography>
             </Box>
 
-            {employees.length === 0 && searchKeyword ? (
-                <Paper sx={{ p: 3, textAlign: "center" }}>
-                    <Typography color="text.secondary" gutterBottom>
-                        No employees found
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                        Try a different search term
-                    </Typography>
-                </Paper>
-            ) : (
-            <TableContainer component={Paper}>
-
-                <Table>
-
-                    <TableHead>
-
-                        <TableRow>
-
-                            <TableCell>
-                                S/N
-                            </TableCell>
-
-                            <TableCell>
-                                Full Name
-                            </TableCell>
-
-                            <TableCell>
-                                NIC
-                            </TableCell>
-
-                            <TableCell>
-                                Grade
-                            </TableCell>
-
-                            <TableCell>
-                                Designation
-                            </TableCell>
-
-                            <TableCell>
-                                Service Level
-                            </TableCell>
-
-                            <TableCell>
-                                Service
-                            </TableCell>
-
-                            <TableCell>
-                                Status
-                            </TableCell>
-
-                            <TableCell>
-                                Permanent Status
-                            </TableCell>
-
-                            <TableCell>
-                                Actions
-                            </TableCell>
-
-                        </TableRow>
-
-                    </TableHead>
-
-                    <TableBody>
-
-                        {employees.map((employee) => (
-
-                            <TableRow
-                                key={employee.id}
-                            >
-
-                                <TableCell>
-                                    {employee.employeeNo}
-                                </TableCell>
-
-                                <TableCell>
-                                    {employee.fullName}
-                                </TableCell>
-
-                                <TableCell>
-                                    {employee.nic}
-                                </TableCell>
-
-                                <TableCell>
-                                    {employee.grade ?? "—"}
-                                </TableCell>
-
-                                <TableCell>
-                                    {employee.designation?.designationName ?? "—"}
-                                </TableCell>
-
-                                <TableCell>
-                                    {employee.serviceLevel?.levelName ?? "—"}
-                                </TableCell>
-
-                                <TableCell>
-                                    {employee.designation?.service?.serviceCode ?? "—"}
-                                </TableCell>
-
-                                <TableCell>
-                                    <EmployeeStatusChip
-                                        status={employee.status}
-                                    />
-                                </TableCell>
-
-                                <TableCell>
-                                    <PermanentStatusChip
-                                        status={employee.permanentStatus}
-                                    />
-                                </TableCell>
-
-                                <TableCell>
-                                    <Button
-                                        size="small"
-                                        onClick={() =>
-                                            navigate(
-                                                `/employees/${employee.id}`
-                                            )
-                                        }
-                                    >
-                                        View
-                                    </Button>
-
-                                    <Button
-                                        size="small"
-                                        onClick={() => {
-
-                                            setSelectedEmployee(employee);
-
-                                            setOpen(true);
-                                        }}
-                                    >
-                                        Edit
-                                    </Button>
-
-                                </TableCell>
-
-                            </TableRow>
-                        ))}
-
-                    </TableBody>
-
-                </Table>
-
-            </TableContainer>
-            )}
+            {renderListContent()}
 
             <EmployeeForm
                 open={open}
-                handleClose={() => {
-
-                    setOpen(false);
-
-                    setSelectedEmployee(null);
-                }}
-                handleSubmit={
-                    selectedEmployee
-                        ? handleUpdate
-                        : handleCreate
-                }
-                selectedEmployee={
-                    selectedEmployee
-                }
+                handleClose={() => setOpen(false)}
+                handleSubmit={handleCreate}
+                selectedEmployee={null}
+                saving={creatingEmployee}
             />
-
         </Container>
     );
 }

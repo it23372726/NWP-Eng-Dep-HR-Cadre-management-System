@@ -38,6 +38,12 @@ public interface EmployeeRepository
             EmployeeStatus status
     );
 
+    long countByDesignationIdAndStatusAndCurrentDepartment(
+            Long designationId,
+            EmployeeStatus status,
+            String currentDepartment
+    );
+
     @Query("""
             SELECT e
             FROM Employee e
@@ -73,11 +79,14 @@ public interface EmployeeRepository
             FROM Employee e
             WHERE e.status = :status
               AND e.dateOfBirth IS NOT NULL
-              AND YEAR(CURRENT_DATE) - YEAR(e.dateOfBirth) >= 58
+              AND e.dateOfBirth >= :minDateOfBirth
+              AND e.dateOfBirth <= :maxDateOfBirth
             ORDER BY e.dateOfBirth DESC
             """)
     List<Employee> findRetiringSoon(
-            @Param("status") EmployeeStatus status
+            @Param("status") EmployeeStatus status,
+            @Param("minDateOfBirth") LocalDate minDateOfBirth,
+            @Param("maxDateOfBirth") LocalDate maxDateOfBirth
     );
 
     @Query("""
@@ -91,5 +100,10 @@ public interface EmployeeRepository
     List<Employee> findBirthdaysInMonth(
             @Param("status") EmployeeStatus status,
             @Param("month") int month
+    );
+
+    long countByCurrentOfficeIgnoreCaseAndStatus(
+            String currentOffice,
+            EmployeeStatus status
     );
 }

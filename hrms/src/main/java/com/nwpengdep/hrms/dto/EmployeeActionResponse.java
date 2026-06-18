@@ -1,5 +1,6 @@
 package com.nwpengdep.hrms.dto;
 
+import com.nwpengdep.hrms.entity.District;
 import com.nwpengdep.hrms.entity.EmployeeActionType;
 import lombok.*;
 
@@ -35,6 +36,22 @@ public class EmployeeActionResponse {
 
     private String transferredTo;
 
+    private String department;
+
+    private String office;
+
+    private String fromDepartment;
+
+    private String fromOffice;
+
+    private String toDepartment;
+
+    private String toOffice;
+
+    private District district;
+
+    private Long linkedActionId;
+
     private String reason;
 
     private String remarks;
@@ -42,4 +59,6 @@ public class EmployeeActionResponse {
     private LocalDateTime createdAt;
 
     private Boolean canModify;
+
+    private Boolean autoCreated;
 }

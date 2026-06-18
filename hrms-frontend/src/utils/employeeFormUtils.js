@@ -5,9 +5,25 @@ import {
     FIXED_GRADE2_REQUIREMENTS,
     FIXED_PERMANENT_REQUIREMENTS,
     isRequirementCompleted,
+    NWP_ENGINEERING_DEPARTMENT,
     REQUIREMENT_STATUS,
+    normalizeDistrictLabel,
+    toApiDistrict,
     validateDesignationAssignment
 } from "../constants/hrms";
+import {
+    getCareerHistoryEventMinDate,
+    PROBATION_YEARS
+} from "./gradeAchievementDates";
+import { validateCareerHistoryChronology, validateTimelineDate } from "./timelineDates";
+import { parseLegacyMonthDay } from "./monthDayDate";
+
+const formatServiceYearDate = (date) =>
+    date ? new Date(`${date}T00:00:00`).toLocaleDateString("en-GB") : "—";
+
+const toApiDate = (value) => (value ? value : null);
+
+const toApiOptionalDate = (value) => (value ? value : null);
 
 export const emptyForm = {
     employeeNo: "",
@@ -16,6 +32,7 @@ export const emptyForm = {
     nic: "",
     dateOfBirth: "",
     gender: "",
+    maritalStatus: "",
     grade: "None",
     dateOfFirstAppointment: "",
     incremantDate: "",
@@ -27,6 +44,9 @@ export const emptyForm = {
     enteredDateToNWPCouncil: "",
     permanentAddress: "",
     residentDistrict: "",
+    privateVehicleUsedForGovWork: "No",
+    privateVehicleDescription: "",
+    privateVehiclePermissionDate: "",
     contactNo: "",
     serviceLevelId: "",
     employmentType: "PERMANENT",
@@ -105,20 +125,28 @@ export function mapEmployeeToForm(employee) {
         nic: employee.nic ?? "",
         dateOfBirth: employee.dateOfBirth ?? "",
         gender: employee.gender ?? "",
+        maritalStatus: employee.maritalStatus ?? "",
         grade: employee.grade ?? "None",
         dateOfFirstAppointment: employee.dateOfFirstAppointment ?? "",
-        incremantDate: employee.incremantDate ?? "",
+        incremantDate: parseLegacyMonthDay(employee.incremantDate ?? ""),
         enteredDateToAllIslandService:
             employee.enteredDateToAllIslandService ?? "",
         reportedDateToPresentWorkingPlace:
             employee.reportedDateToPresentWorkingPlace ?? "",
         currentWorkingPlace: employee.currentWorkingPlace ?? "",
-        currentDistrictOfWorking: employee.currentDistrictOfWorking ?? "",
+        currentDistrictOfWorking: normalizeDistrictLabel(
+            employee.currentDistrictOfWorking
+        ),
         appointmentDateToPresentClassGrade:
             employee.appointmentDateToPresentClassGrade ?? "",
         enteredDateToNWPCouncil: employee.enteredDateToNWPCouncil ?? "",
         permanentAddress: employee.permanentAddress ?? "",
         residentDistrict: employee.residentDistrict ?? "",
+        privateVehicleUsedForGovWork: employee.privateVehicleUsedForGovWork === true
+            ? "Yes"
+            : "No",
+        privateVehicleDescription: employee.privateVehicleDescription ?? "",
+        privateVehiclePermissionDate: employee.privateVehiclePermissionDate ?? "",
         contactNo: employee.contactNo ?? "",
         serviceLevelId: employee.serviceLevel?.id ?? "",
         employmentType: employee.employmentType ?? "PERMANENT",
@@ -146,6 +174,28 @@ export function mapEmployeeToForm(employee) {
 
     appendCustomRequirementFields(form, employee, employee.designation);
     return form;
+}
+
+export function validatePrivateVehicleFields(formData) {
+    if (formData.privateVehicleUsedForGovWork === "Yes") {
+        if (!formData.privateVehicleDescription?.trim()) {
+            return "Vehicle description is required when using a private vehicle for government work.";
+        }
+        if (!formData.privateVehiclePermissionDate) {
+            return "Permission date is required when using a private vehicle for government work.";
+        }
+    }
+
+    return null;
+}
+
+export function buildRevokePrivateVehiclePayload(employee) {
+    const formData = mapEmployeeToForm(employee);
+    formData.privateVehicleUsedForGovWork = "No";
+    formData.privateVehicleDescription = "";
+    formData.privateVehiclePermissionDate = "";
+
+    return buildEmployeePayload(formData, employee.designation, employee);
 }
 
 export const applyGradeDerivedRequirements = (formData) => {
@@ -199,8 +249,15 @@ export const applyTimelineToFormData = (formData, events, designation) => {
         serviceLevelId: state.serviceLevelId ?? "",
         dateOfFirstAppointment: state.firstAppointmentDate ?? "",
         alreadyConfirmedPermanent: state.permanentConfirmed,
-        permanentConfirmationDate: state.permanentConfirmationDate ?? ""
+        permanentConfirmationDate: state.permanentConfirmationDate ?? "",
+        currentDepartment: state.currentDepartment ?? "",
+        currentOffice: state.currentOffice ?? "",
+        currentDistrictOfWorking: state.currentDistrictOfWorking ?? ""
     };
+
+    if (state.currentDepartment && state.currentOffice) {
+        next.currentWorkingPlace = `${state.currentDepartment} — ${state.currentOffice}`;
+    }
 
     if (state.firstAppointmentDate && !next.enteredDateToNWPCouncil) {
         next.enteredDateToNWPCouncil = state.firstAppointmentDate;
@@ -345,36 +402,49 @@ export const buildEmployeePayload = (
         showQualificationSection = false
     } = options;
 
+    const district = toApiDistrict(formData.currentDistrictOfWorking);
+
     return {
         employeeNo: formData.employeeNo,
         fullName: formData.fullName,
         designationId: Number(formData.designationId),
         nic: formData.nic,
-        dateOfBirth: formData.dateOfBirth,
+        dateOfBirth: toApiDate(formData.dateOfBirth),
         gender: formData.gender,
+        maritalStatus: formData.maritalStatus || null,
         grade: formData.grade,
-        dateOfFirstAppointment: formData.dateOfFirstAppointment,
+        dateOfFirstAppointment: toApiDate(formData.dateOfFirstAppointment),
         incremantDate: formData.incremantDate || null,
         enteredDateToAllIslandService:
-            formData.enteredDateToAllIslandService || null,
-        reportedDateToPresentWorkingPlace:
-            formData.reportedDateToPresentWorkingPlace,
+            toApiOptionalDate(formData.enteredDateToAllIslandService),
+        reportedDateToPresentWorkingPlace: toApiDate(
+            formData.reportedDateToPresentWorkingPlace
+        ),
         currentWorkingPlace: formData.currentWorkingPlace,
-        currentDistrictOfWorking: formData.currentDistrictOfWorking,
+        ...(district ? { currentDistrictOfWorking: district } : {}),
         appointmentDateToPresentClassGrade:
             showPermanentConfirmationSection
-                ? formData.permanentConfirmationDate || null
+                ? toApiOptionalDate(formData.permanentConfirmationDate)
                 : showQualificationSection
                     ? null
-                    : formData.appointmentDateToPresentClassGrade || null,
-        enteredDateToNWPCouncil: formData.enteredDateToNWPCouncil,
+                    : toApiOptionalDate(formData.appointmentDateToPresentClassGrade),
+        enteredDateToNWPCouncil: toApiDate(formData.enteredDateToNWPCouncil),
         permanentAddress: formData.permanentAddress,
         residentDistrict: formData.residentDistrict || null,
+        privateVehicleUsedForGovWork: formData.privateVehicleUsedForGovWork === "Yes",
+        privateVehicleDescription: formData.privateVehicleUsedForGovWork === "Yes"
+            ? formData.privateVehicleDescription?.trim() || null
+            : null,
+        privateVehiclePermissionDate: formData.privateVehicleUsedForGovWork === "Yes"
+            ? toApiOptionalDate(formData.privateVehiclePermissionDate)
+            : null,
         contactNo: formData.contactNo,
         serviceLevelId: Number(formData.serviceLevelId),
         employmentType: formData.employmentType,
         alreadyConfirmedPermanent: formData.alreadyConfirmedPermanent,
-        permanentConfirmationDate: formData.permanentConfirmationDate || null,
+        permanentConfirmationDate: toApiOptionalDate(
+            formData.permanentConfirmationDate
+        ),
         grade2RequiredYears: null,
         grade1RequiredYears: null,
         requirements: buildRequirements(formData, designation, employee)
@@ -401,11 +471,18 @@ export const buildPermanentCreatePayload = (
         timelineForm.enteredDateToNWPCouncil
         || state.firstAppointmentDate
         || timelineForm.dateOfFirstAppointment;
+    const reportedDate =
+        timelineForm.reportedDateToPresentWorkingPlace
+        || state.firstAppointmentDate
+        || councilDate;
 
     const payload = buildEmployeePayload(
         {
             ...timelineForm,
             enteredDateToNWPCouncil: councilDate,
+            reportedDateToPresentWorkingPlace: reportedDate,
+            dateOfFirstAppointment:
+                state.firstAppointmentDate || timelineForm.dateOfFirstAppointment,
             appointmentDateToPresentClassGrade:
                 timelineForm.permanentConfirmationDate
                 || timelineForm.appointmentDateToPresentClassGrade
@@ -421,7 +498,7 @@ export const buildPermanentCreatePayload = (
         entryType: "NEW_EMPLOYEE",
         transferredFrom: null,
         remarks: null,
-        careerHistory: historyEvents
+        careerHistory: prepareCareerHistoryForSave(historyEvents)
     };
 };
 
@@ -467,6 +544,36 @@ const inferServiceLevelId = (designationId, designations, fallbackId) => {
     return designation?.serviceLevel?.id ?? fallbackId ?? "";
 };
 
+const districtValue = (district) => toApiDistrict(district);
+
+const backfillNwpDistrict = (event, employee) => {
+    const department = event.department || employee?.currentDepartment;
+    if (department !== NWP_ENGINEERING_DEPARTMENT) {
+        return event;
+    }
+
+    const fallbackDistrict = districtValue(employee?.currentDistrictOfWorking);
+    if (!fallbackDistrict) {
+        return event;
+    }
+
+    const next = { ...event };
+
+    if (!next.district) {
+        next.district = fallbackDistrict;
+    }
+
+    if (
+        next.actionType === "TRANSFER_OUT"
+        && !next.toDistrict
+        && (next.toDepartment || department) === NWP_ENGINEERING_DEPARTMENT
+    ) {
+        next.toDistrict = fallbackDistrict;
+    }
+
+    return next;
+};
+
 const mapActionToCareerEvent = (action, designations, serviceLevelFallback) => {
     const base = {
         actionDate: action.actionDate ?? "",
@@ -487,7 +594,10 @@ const mapActionToCareerEvent = (action, designations, serviceLevelFallback) => {
                     action.newDesignationId,
                     designations,
                     serviceLevelFallback
-                )
+                ),
+                department: action.department ?? "",
+                office: action.office ?? "",
+                district: districtValue(action.district)
             };
 
         case "PERMANENT_CONFIRMATION":
@@ -510,22 +620,44 @@ const mapActionToCareerEvent = (action, designations, serviceLevelFallback) => {
                 )
             };
 
+        case "TRANSFER_OUT":
+            return {
+                ...base,
+                actionType: "TRANSFER_OUT",
+                toDepartment: action.toDepartment ?? action.transferredTo ?? "",
+                toOffice: action.toOffice ?? "",
+                toDistrict: districtValue(action.district)
+            };
+
         case "TRANSFER_IN":
             return {
                 ...base,
                 actionType: "TRANSFER_IN",
                 designationId: action.newDesignationId ?? "",
+                grade: action.newGrade ?? "",
                 serviceLevelId: inferServiceLevelId(
                     action.newDesignationId,
                     designations,
                     serviceLevelFallback
-                )
+                ),
+                department: action.department ?? "",
+                office: action.office ?? "",
+                district: districtValue(action.district),
+                transferredFrom:
+                    action.transferredFrom ?? action.fromDepartment ?? "",
+                autoCreated: Boolean(
+                    action.autoCreated ?? action.linkedActionId
+                ),
+                linkedActionId: action.linkedActionId ?? null
             };
 
-        case "TRANSFER_OUT":
+        case "OFFICE_CHANGE":
             return {
                 ...base,
-                actionType: "TRANSFER_OUT"
+                actionType: "OFFICE_CHANGE",
+                department: action.department ?? "",
+                office: action.office ?? "",
+                district: districtValue(action.district)
             };
 
         case "RETIREMENT_OR_RESIGNATION":
@@ -556,12 +688,16 @@ export const mapActionsToCareerHistory = (actions, designations, employee) => {
                         ? employee.grade
                         : "III",
                 serviceLevelId: employee?.serviceLevel?.id ?? "",
+                department: employee?.currentDepartment ?? "",
+                office: employee?.currentOffice ?? "",
+                district: districtValue(employee?.currentDistrictOfWorking),
                 remarks: ""
             }
         ];
     }
 
-    const chronological = [...actions].sort((left, right) => {
+    const chronological = [...actions]
+        .sort((left, right) => {
         const dateCompare = (left.actionDate || "").localeCompare(
             right.actionDate || ""
         );
@@ -576,11 +712,23 @@ export const mapActionsToCareerHistory = (actions, designations, employee) => {
     let serviceLevelFallback = employee?.serviceLevel?.id ?? "";
 
     return chronological.map((action) => {
-        const event = mapActionToCareerEvent(
-            action,
-            designations,
-            serviceLevelFallback
+        const event = backfillNwpDistrict(
+            mapActionToCareerEvent(
+                action,
+                designations,
+                serviceLevelFallback
+            ),
+            employee
         );
+
+        if (
+            event.actionType === "NEW_APPOINTMENT"
+            && !event.department
+            && employee?.currentDepartment
+        ) {
+            event.department = employee.currentDepartment;
+            event.office = employee.currentOffice ?? "";
+        }
 
         if (event.serviceLevelId) {
             serviceLevelFallback = event.serviceLevelId;
@@ -589,6 +737,74 @@ export const mapActionsToCareerHistory = (actions, designations, employee) => {
         return event;
     });
 };
+
+const NON_WORKPLACE_EVENT_TYPES = new Set([
+    "PERMANENT_CONFIRMATION",
+    "PROMOTION",
+    "ASSIGNMENT_GRADE_UPDATE",
+    "RETIREMENT_OR_RESIGNATION",
+    "DEATH",
+    "DISMISSAL"
+]);
+
+const normalizeCareerHistoryEvent = (event) => {
+    const normalized = { ...event };
+    const district = districtValue(event.district);
+    const toDistrict = districtValue(event.toDistrict);
+
+    if (NON_WORKPLACE_EVENT_TYPES.has(event.actionType)) {
+        delete normalized.department;
+        delete normalized.office;
+        delete normalized.district;
+        delete normalized.toDepartment;
+        delete normalized.toOffice;
+        delete normalized.toDistrict;
+        return normalized;
+    }
+
+    if (district) {
+        normalized.district = district;
+    } else {
+        delete normalized.district;
+    }
+
+    if (toDistrict) {
+        normalized.toDistrict = toDistrict;
+    } else {
+        delete normalized.toDistrict;
+    }
+
+    return normalized;
+};
+
+export const prepareCareerHistoryForSave = (events) =>
+    (events ?? [])
+        .filter(
+            (event) => !(event.actionType === "TRANSFER_IN" && event.autoCreated)
+        )
+        .map(normalizeCareerHistoryEvent);
+
+export const buildTransferInCompanionEvent = ({
+    actionDate,
+    toDepartment,
+    toOffice,
+    toDistrict,
+    fromDepartment,
+    timelineState,
+    remarks
+}) => ({
+    actionType: "TRANSFER_IN",
+    actionDate,
+    designationId: timelineState?.designationId ?? null,
+    grade: timelineState?.grade || "III",
+    serviceLevelId: timelineState?.serviceLevelId ?? null,
+    department: toDepartment,
+    office: toOffice?.trim() ?? "",
+    district: districtValue(toDistrict),
+    transferredFrom: fromDepartment ?? null,
+    autoCreated: true,
+    remarks: remarks?.trim() || null
+});
 
 export const buildPermanentUpdatePayload = (
     formData,
@@ -611,11 +827,18 @@ export const buildPermanentUpdatePayload = (
         timelineForm.enteredDateToNWPCouncil
         || state.firstAppointmentDate
         || timelineForm.dateOfFirstAppointment;
+    const reportedDate =
+        timelineForm.reportedDateToPresentWorkingPlace
+        || state.firstAppointmentDate
+        || councilDate;
 
     const payload = buildEmployeePayload(
         {
             ...timelineForm,
             enteredDateToNWPCouncil: councilDate,
+            reportedDateToPresentWorkingPlace: reportedDate,
+            dateOfFirstAppointment:
+                state.firstAppointmentDate || timelineForm.dateOfFirstAppointment,
             appointmentDateToPresentClassGrade:
                 timelineForm.permanentConfirmationDate
                 || timelineForm.appointmentDateToPresentClassGrade
@@ -628,7 +851,7 @@ export const buildPermanentUpdatePayload = (
 
     return {
         ...payload,
-        careerHistory: historyEvents
+        careerHistory: prepareCareerHistoryForSave(historyEvents)
     };
 };
 
@@ -707,9 +930,52 @@ export const validateCareerHistoryEventAssignment = ({
 const ASSIGNMENT_VALIDATION_EVENTS = new Set([
     "NEW_APPOINTMENT",
     "PROMOTION",
-    "ASSIGNMENT_GRADE_UPDATE",
-    "TRANSFER_IN"
+    "ASSIGNMENT_GRADE_UPDATE"
 ]);
+
+export const validateCareerHistoryServiceYears = ({
+    actionType,
+    actionDate,
+    grade,
+    timelineState,
+    designations,
+    designationId
+}) => {
+    if (!actionType || !actionDate) {
+        return null;
+    }
+
+    const resolvedDesignationId =
+        designationId ?? timelineState?.designationId;
+    const designation = resolvedDesignationId
+        ? designations.find((item) => item.id === Number(resolvedDesignationId))
+        : null;
+
+    const minDate = getCareerHistoryEventMinDate({
+        actionType,
+        grade,
+        timelineState,
+        designation
+    });
+
+    if (!minDate || actionDate >= minDate) {
+        return null;
+    }
+
+    if (actionType === "PERMANENT_CONFIRMATION") {
+        return `Confirmation date cannot be earlier than ${formatServiceYearDate(minDate)} (end of the ${PROBATION_YEARS}-year probation period).`;
+    }
+
+    if (timelineState?.grade === "III" && grade === "II") {
+        return `Effective date cannot be earlier than ${formatServiceYearDate(minDate)} (Grade II service period from first appointment).`;
+    }
+
+    if (timelineState?.grade === "II" && grade === "I") {
+        return `Effective date cannot be earlier than ${formatServiceYearDate(minDate)} (Grade I service period from Grade II achievement).`;
+    }
+
+    return null;
+};
 
 const applyEventToTimelineState = (state, event) => {
     const next = { ...state };
@@ -718,9 +984,24 @@ const applyEventToTimelineState = (state, event) => {
         case "NEW_APPOINTMENT":
             next.designationId = event.designationId;
             next.grade = event.grade || "III";
+            next.firstAppointmentDate = event.actionDate;
             next.active = true;
+            if (event.department) {
+                next.currentDepartment = event.department;
+                next.currentOffice = event.office;
+                if (event.department === NWP_ENGINEERING_DEPARTMENT) {
+                    const district = districtValue(event.district);
+                    if (district) {
+                        next.currentDistrictOfWorking = district;
+                    }
+                } else {
+                    next.currentDistrictOfWorking = null;
+                }
+            }
             break;
         case "PERMANENT_CONFIRMATION":
+            next.permanentConfirmed = true;
+            next.permanentConfirmationDate = event.actionDate;
             break;
         case "PROMOTION":
         case "ASSIGNMENT_GRADE_UPDATE":
@@ -728,16 +1009,50 @@ const applyEventToTimelineState = (state, event) => {
                 next.designationId = event.designationId;
             }
             if (event.grade) {
+                if (next.grade === "III" && event.grade === "II") {
+                    next.grade2AchievedDate = event.actionDate;
+                }
                 next.grade = event.grade;
             }
             break;
         case "TRANSFER_IN":
-            if (event.designationId) {
-                next.designationId = event.designationId;
+        case "TRANSFER_OUT":
+            if (event.toDepartment) {
+                next.currentDepartment = event.toDepartment;
+                next.currentOffice = event.toOffice;
+                if (event.toDepartment === NWP_ENGINEERING_DEPARTMENT) {
+                    const district = districtValue(event.toDistrict);
+                    if (district) {
+                        next.currentDistrictOfWorking = district;
+                    }
+                } else {
+                    next.currentDistrictOfWorking = null;
+                }
+            } else if (event.department) {
+                next.currentDepartment = event.department;
+                next.currentOffice = event.office;
+                if (event.department === NWP_ENGINEERING_DEPARTMENT) {
+                    const district = districtValue(event.district);
+                    if (district) {
+                        next.currentDistrictOfWorking = district;
+                    }
+                } else {
+                    next.currentDistrictOfWorking = null;
+                }
             }
             next.active = true;
             break;
-        case "TRANSFER_OUT":
+        case "OFFICE_CHANGE":
+            if (event.office) {
+                next.currentOffice = event.office;
+            }
+            if (event.department) {
+                next.currentDepartment = event.department;
+            }
+            if (event.district) {
+                next.currentDistrictOfWorking = districtValue(event.district);
+            }
+            break;
         case "RETIREMENT_OR_RESIGNATION":
         case "DISMISSAL":
             next.active = false;
@@ -758,6 +1073,7 @@ const applyEventToTimelineState = (state, event) => {
 
 export const validateCareerHistoryDraftEvent = ({
     actionType,
+    actionDate,
     designationId,
     grade,
     serviceLevelId,
@@ -770,7 +1086,7 @@ export const validateCareerHistoryDraftEvent = ({
     }
 
     if (actionType === "PROMOTION") {
-        return validateCareerHistoryEventAssignment({
+        const assignmentError = validateCareerHistoryEventAssignment({
             designationId,
             grade,
             serviceLevelId,
@@ -778,10 +1094,13 @@ export const validateCareerHistoryDraftEvent = ({
             designations,
             serviceLevels
         });
+        if (assignmentError) {
+            return assignmentError;
+        }
     }
 
     if (actionType === "ASSIGNMENT_GRADE_UPDATE") {
-        return validateCareerHistoryEventAssignment({
+        const assignmentError = validateCareerHistoryEventAssignment({
             designationId: timelineState?.designationId,
             grade,
             serviceLevelId,
@@ -789,9 +1108,48 @@ export const validateCareerHistoryDraftEvent = ({
             designations,
             serviceLevels
         });
+        if (assignmentError) {
+            return assignmentError;
+        }
     }
 
-    return null;
+    if (actionType === "TRANSFER_OUT") {
+        if (!timelineState?.currentDepartment || !timelineState?.currentOffice) {
+            return "Current department and office must be set before transfer out";
+        }
+        return null;
+    }
+
+    if (actionType === "OFFICE_CHANGE") {
+        if (!timelineState?.currentDepartment) {
+            return "Current department must be set before office change";
+        }
+        return null;
+    }
+
+    if (actionType === "TRANSFER_IN") {
+        return "Transfer in is created automatically when recording a transfer out";
+    }
+
+    const chronologyError = validateTimelineDate(
+        actionDate,
+        timelineState?.lastDate
+    );
+    if (chronologyError) {
+        return chronologyError;
+    }
+
+    return validateCareerHistoryServiceYears({
+        actionType,
+        actionDate,
+        grade,
+        timelineState,
+        designations,
+        designationId:
+            actionType === "PROMOTION"
+                ? designationId
+                : timelineState?.designationId
+    });
 };
 
 export const validateCareerHistoryTimeline = (
@@ -803,15 +1161,49 @@ export const validateCareerHistoryTimeline = (
         return null;
     }
 
+    const chronologyError = validateCareerHistoryChronology(events);
+    if (chronologyError) {
+        return chronologyError;
+    }
+
     let timelineState = {
         designationId: null,
         grade: null,
         serviceLevelId: null,
+        currentDepartment: null,
+        currentOffice: null,
+        currentDistrictOfWorking: null,
+        firstAppointmentDate: null,
+        grade2AchievedDate: null,
         active: false
     };
 
     for (let index = 0; index < events.length; index += 1) {
         const event = events[index];
+
+        if (event.actionType === "TRANSFER_IN" && event.autoCreated) {
+            timelineState = applyEventToTimelineState(timelineState, event);
+            continue;
+        }
+
+        const serviceYearsError = validateCareerHistoryServiceYears({
+            actionType: event.actionType,
+            actionDate: event.actionDate,
+            grade: event.grade,
+            timelineState,
+            designations,
+            designationId:
+                event.actionType === "PROMOTION"
+                    ? event.designationId
+                    : timelineState.designationId
+        });
+
+        if (serviceYearsError) {
+            const label =
+                ACTION_TYPE_LABELS[event.actionType] || event.actionType;
+            return `Event #${index + 1} (${label}): ${serviceYearsError}`;
+        }
+
         timelineState = applyEventToTimelineState(timelineState, event);
 
         if (

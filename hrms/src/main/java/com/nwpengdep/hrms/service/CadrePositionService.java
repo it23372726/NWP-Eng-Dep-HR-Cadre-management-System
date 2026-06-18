@@ -2,6 +2,7 @@ package com.nwpengdep.hrms.service;
 
 import com.nwpengdep.hrms.dto.CadrePositionRequest;
 import com.nwpengdep.hrms.dto.VacancyReportResponse;
+import com.nwpengdep.hrms.constants.DepartmentConstants;
 import com.nwpengdep.hrms.entity.CadrePosition;
 import com.nwpengdep.hrms.entity.Designation;
 import com.nwpengdep.hrms.entity.EmployeeStatus;
@@ -78,9 +79,10 @@ public class CadrePositionService {
 
         for (CadrePosition cadre : cadres) {
             Designation designation = cadre.getDesignation();
-            long currentCount = employeeRepository.countByDesignationIdAndStatus(
+            long currentCount = employeeRepository.countByDesignationIdAndStatusAndCurrentDepartment(
                     designation.getId(),
-                    EmployeeStatus.ACTIVE
+                    EmployeeStatus.ACTIVE,
+                    DepartmentConstants.NWP_ENGINEERING
             );
             long approved = cadre.getApprovedCount() != null
                     ? cadre.getApprovedCount().longValue()

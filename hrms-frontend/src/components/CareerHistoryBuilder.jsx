@@ -17,17 +17,32 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import { useState } from "react";
 
 import { ACTION_TYPE_LABELS } from "../constants/hrms";
+import DepartmentOfficeFields, {
+    DEPARTMENT_OPTIONS,
+    ReadonlyWorkplaceFields,
+    resolveDepartmentValue
+} from "./workplace/DepartmentOfficeFields";
+import { NWP_ENGINEERING_DEPARTMENT } from "../constants/hrms";
 import { createFormFieldProps } from "../utils/formLayout";
 import {
     getServiceLevelsForDesignation,
+    buildTransferInCompanionEvent,
     validateCareerHistoryDraftEvent,
     validateCareerHistoryEventAssignment
 } from "../utils/employeeFormUtils";
+import {
+    getCareerHistoryEventMinDate,
+    PROBATION_YEARS
+} from "../utils/gradeAchievementDates";
+import {
+    combineMinDates,
+    timelineMinDateHelperText,
+    validateTimelineDate
+} from "../utils/timelineDates";
 
 const GRADE_SEQUENCE = ["III", "II", "I", "Supra", "Special"];
 
 const TERMINAL_TYPES = [
-    "TRANSFER_OUT",
     "RETIREMENT_OR_RESIGNATION",
     "DEATH",
     "DISMISSAL"
@@ -37,6 +52,10 @@ const emptyFirstAppointment = {
     actionDate: "",
     designationId: "",
     serviceLevelId: "",
+    departmentType: DEPARTMENT_OPTIONS.NWP,
+    otherDepartmentName: "",
+    district: "",
+    office: "",
     remarks: ""
 };
 
@@ -46,8 +65,14 @@ const emptyEventDraft = {
     designationId: "",
     grade: "",
     serviceLevelId: "",
-    transferredFrom: "",
-    transferredTo: "",
+    departmentType: DEPARTMENT_OPTIONS.NWP,
+    otherDepartmentName: "",
+    office: "",
+    district: "",
+    toDepartmentType: DEPARTMENT_OPTIONS.NWP,
+    toOtherDepartmentName: "",
+    toDistrict: "",
+    toOffice: "",
     reason: "",
     remarks: ""
 };
@@ -59,6 +84,21 @@ const formatDisplayDate = (date) => {
     return new Date(`${date}T00:00:00`).toLocaleDateString("en-GB");
 };
 
+const eventDistrictLabel = (district) => district?.label ?? district ?? null;
+
+const applyNwpDistrict = (department, district, currentDistrictOfWorking) => {
+    if (department === NWP_ENGINEERING_DEPARTMENT) {
+        const nextDistrict = eventDistrictLabel(district);
+        return nextDistrict || currentDistrictOfWorking;
+    }
+
+    if (department) {
+        return null;
+    }
+
+    return currentDistrictOfWorking;
+};
+
 /**
  * Walks the timeline and derives the employee state after the last event.
  * Mirrors the backend replay/validator logic so the rest of the form can be
@@ -68,9 +108,13 @@ export const deriveTimelineState = (events) => {
     let designationId = null;
     let grade = null;
     let serviceLevelId = null;
+    let currentDepartment = null;
+    let currentOffice = null;
+    let currentDistrictOfWorking = null;
     let active = false;
     let permanentConfirmed = false;
     let permanentConfirmationDate = null;
+    let grade2AchievedDate = null;
     let deathRecorded = false;
     let lastDate = null;
     let firstAppointmentDate = null;
@@ -82,6 +126,15 @@ export const deriveTimelineState = (events) => {
                 grade = event.grade || "III";
                 firstAppointmentDate = event.actionDate;
                 active = true;
+                if (event.department) {
+                    currentDepartment = event.department;
+                    currentOffice = event.office;
+                    currentDistrictOfWorking = applyNwpDistrict(
+                        event.department,
+                        event.district,
+                        currentDistrictOfWorking
+                    );
+                }
                 break;
             case "PERMANENT_CONFIRMATION":
                 permanentConfirmed = true;
@@ -93,16 +146,44 @@ export const deriveTimelineState = (events) => {
                     designationId = event.designationId;
                 }
                 if (event.grade) {
+                    if (grade === "III" && event.grade === "II") {
+                        grade2AchievedDate = event.actionDate;
+                    }
                     grade = event.grade;
                 }
                 break;
             case "TRANSFER_IN":
-                if (event.designationId) {
-                    designationId = event.designationId;
+            case "TRANSFER_OUT":
+                if (event.toDepartment) {
+                    currentDepartment = event.toDepartment;
+                    currentOffice = event.toOffice;
+                    currentDistrictOfWorking = applyNwpDistrict(
+                        event.toDepartment,
+                        event.toDistrict,
+                        currentDistrictOfWorking
+                    );
+                } else if (event.department) {
+                    currentDepartment = event.department;
+                    currentOffice = event.office;
+                    currentDistrictOfWorking = applyNwpDistrict(
+                        event.department,
+                        event.district,
+                        currentDistrictOfWorking
+                    );
                 }
                 active = true;
                 break;
-            case "TRANSFER_OUT":
+            case "OFFICE_CHANGE":
+                if (event.office) {
+                    currentOffice = event.office;
+                }
+                if (event.department) {
+                    currentDepartment = event.department;
+                }
+                if (event.district) {
+                    currentDistrictOfWorking = eventDistrictLabel(event.district);
+                }
+                break;
             case "RETIREMENT_OR_RESIGNATION":
             case "DISMISSAL":
                 active = false;
@@ -125,9 +206,13 @@ export const deriveTimelineState = (events) => {
         designationId,
         grade,
         serviceLevelId,
+        currentDepartment,
+        currentOffice,
+        currentDistrictOfWorking,
         active,
         permanentConfirmed,
         permanentConfirmationDate,
+        grade2AchievedDate,
         deathRecorded,
         lastDate,
         firstAppointmentDate
@@ -158,6 +243,16 @@ const eventSummary = (event, designations, serviceLevels) => {
     );
     if (level) {
         parts.push(level.levelName);
+    }
+    if (event.department && event.office) {
+        parts.push(`${event.department} — ${event.office}`);
+    } else if (event.department) {
+        parts.push(event.department);
+    }
+    if (event.toDepartment && event.toOffice) {
+        parts.push(`To: ${event.toDepartment} — ${event.toOffice}`);
+    } else if (event.toDepartment) {
+        parts.push(`To: ${event.toDepartment}`);
     }
     if (event.transferredFrom) {
         parts.push(`From: ${event.transferredFrom}`);
@@ -216,13 +311,13 @@ export default function CareerHistoryBuilder({
             return [];
         }
         if (!state.active) {
-            return ["TRANSFER_IN"];
+            return [];
         }
         const types = [];
         if (state.grade === "III" && !state.permanentConfirmed) {
             types.push("PERMANENT_CONFIRMATION");
         }
-        types.push("PROMOTION", "ASSIGNMENT_GRADE_UPDATE");
+        types.push("PROMOTION", "ASSIGNMENT_GRADE_UPDATE", "TRANSFER_OUT", "OFFICE_CHANGE");
         types.push(...TERMINAL_TYPES);
         return types;
     })();
@@ -262,6 +357,7 @@ export default function CareerHistoryBuilder({
 
     const eventDraftAssignmentError = validateCareerHistoryDraftEvent({
         actionType: eventDraft.actionType,
+        actionDate: eventDraft.actionDate,
         designationId: eventDraft.designationId,
         grade: eventDraft.grade,
         serviceLevelId: eventDraft.serviceLevelId,
@@ -269,6 +365,63 @@ export default function CareerHistoryBuilder({
         designations,
         serviceLevels
     });
+
+    const eventDraftDesignationForMinDate =
+        eventDraftDesignation || currentDesignation;
+    const previousEventDate = state.lastDate;
+    const serviceMinDate = getCareerHistoryEventMinDate({
+        actionType: eventDraft.actionType,
+        grade: eventDraft.grade,
+        timelineState: state,
+        designation: eventDraftDesignationForMinDate
+    });
+    const eventDraftMinDate = combineMinDates(serviceMinDate, previousEventDate);
+    const eventDraftChronologyError = validateTimelineDate(
+        eventDraft.actionDate,
+        previousEventDate
+    );
+    const eventDraftDateTooEarly = Boolean(
+        eventDraftMinDate
+        && eventDraft.actionDate
+        && eventDraft.actionDate < eventDraftMinDate
+    );
+    const eventDraftDateHelperText = (() => {
+        if (eventDraftDateTooEarly) {
+            if (eventDraftChronologyError) {
+                return eventDraftChronologyError;
+            }
+            if (eventDraft.actionType === "PERMANENT_CONFIRMATION") {
+                return `Confirmation date cannot be earlier than ${formatDisplayDate(eventDraftMinDate)} (${PROBATION_YEARS}-year probation).`;
+            }
+            if (state.grade === "III" && eventDraft.grade === "II") {
+                return `Effective date cannot be earlier than ${formatDisplayDate(eventDraftMinDate)} (Grade II service period).`;
+            }
+            if (state.grade === "II" && eventDraft.grade === "I") {
+                return `Effective date cannot be earlier than ${formatDisplayDate(eventDraftMinDate)} (Grade I service period).`;
+            }
+            return timelineMinDateHelperText(eventDraftMinDate, { tooEarly: true });
+        }
+        if (eventDraftMinDate) {
+            if (serviceMinDate && serviceMinDate === eventDraftMinDate) {
+                if (eventDraft.actionType === "PERMANENT_CONFIRMATION") {
+                    return `Earliest allowed: ${formatDisplayDate(eventDraftMinDate)} (${PROBATION_YEARS}-year probation).`;
+                }
+                if (state.grade === "III" && eventDraft.grade === "II") {
+                    return `Earliest allowed: ${formatDisplayDate(eventDraftMinDate)} (Grade II service period).`;
+                }
+                if (state.grade === "II" && eventDraft.grade === "I") {
+                    return `Earliest allowed: ${formatDisplayDate(eventDraftMinDate)} (Grade I service period).`;
+                }
+            }
+            return timelineMinDateHelperText(eventDraftMinDate);
+        }
+        return undefined;
+    })();
+    const canAddEvent = Boolean(
+        eventDraft.actionType
+        && eventDraft.actionDate
+        && !eventDraftDateTooEarly
+    );
 
     const handleFirstDraftChange = (e) => {
         const { name, value } = e.target;
@@ -338,6 +491,29 @@ export default function CareerHistoryBuilder({
             return;
         }
 
+        if (!firstDraft.office?.trim()) {
+            setError("First appointment office is required");
+            return;
+        }
+        const department = resolveDepartmentValue(
+            firstDraft.departmentType,
+            firstDraft.otherDepartmentName
+        );
+        if (!department) {
+            setError("First appointment department is required");
+            return;
+        }
+        if (firstDraft.departmentType === DEPARTMENT_OPTIONS.OTHER
+            && !firstDraft.otherDepartmentName?.trim()) {
+            setError("Other department name is required");
+            return;
+        }
+
+        if (firstDraft.departmentType === DEPARTMENT_OPTIONS.NWP && !firstDraft.district) {
+            setError("Working district is required for N.W.P. Engineering Department");
+            return;
+        }
+
         onChange([
             {
                 actionType: "NEW_APPOINTMENT",
@@ -345,6 +521,11 @@ export default function CareerHistoryBuilder({
                 designationId: Number(firstDraft.designationId),
                 grade: "III",
                 serviceLevelId: Number(firstDraft.serviceLevelId),
+                department,
+                office: firstDraft.office.trim(),
+                district: firstDraft.departmentType === DEPARTMENT_OPTIONS.NWP
+                    ? firstDraft.district
+                    : null,
                 remarks: firstDraft.remarks?.trim() || null
             }
         ]);
@@ -362,8 +543,14 @@ export default function CareerHistoryBuilder({
         if (eventDraft.actionDate > todayIso()) {
             return "Event date cannot be in the future";
         }
-        if (state.lastDate && eventDraft.actionDate < state.lastDate) {
-            return `Event date cannot be before the previous event (${formatDisplayDate(state.lastDate)})`;
+        if (state.lastDate) {
+            const chronologyError = validateTimelineDate(
+                eventDraft.actionDate,
+                state.lastDate
+            );
+            if (chronologyError) {
+                return chronologyError;
+            }
         }
 
         switch (eventDraft.actionType) {
@@ -380,9 +567,39 @@ export default function CareerHistoryBuilder({
                     return "Grade update requires the new grade";
                 }
                 break;
-            case "TRANSFER_OUT":
-                if (!eventDraft.transferredTo?.trim()) {
-                    return "Transfer out requires where the employee was transferred to";
+            case "TRANSFER_OUT": {
+                const toDepartment = resolveDepartmentValue(
+                    eventDraft.toDepartmentType,
+                    eventDraft.toOtherDepartmentName
+                );
+                if (!toDepartment || !eventDraft.toOffice?.trim()) {
+                    return "Transfer out requires destination department and office";
+                }
+                if (toDepartment === NWP_ENGINEERING_DEPARTMENT && !eventDraft.toDistrict) {
+                    return "Transfer to N.W.P. Engineering Department requires a working district";
+                }
+                if (state.currentDepartment
+                    && state.currentDepartment.toLowerCase() === toDepartment.toLowerCase()) {
+                    return "Transfer out requires a different department";
+                }
+                break;
+            }
+            case "OFFICE_CHANGE":
+                if (!eventDraft.office?.trim()) {
+                    return "Office change requires the new office";
+                }
+                if (state.currentDepartment === NWP_ENGINEERING_DEPARTMENT) {
+                    if (!eventDraft.district) {
+                        return "Office change requires the working district";
+                    }
+                    if (state.currentOffice
+                        && state.currentOffice.toLowerCase() === eventDraft.office.trim().toLowerCase()
+                        && state.currentDistrictOfWorking === eventDraft.district) {
+                        return "Change the office, working district, or both";
+                    }
+                } else if (state.currentOffice
+                    && state.currentOffice.toLowerCase() === eventDraft.office.trim().toLowerCase()) {
+                    return "New office must be different from the current office";
                 }
                 break;
             case "DISMISSAL":
@@ -396,6 +613,7 @@ export default function CareerHistoryBuilder({
 
         const assignmentError = validateCareerHistoryDraftEvent({
             actionType: eventDraft.actionType,
+            actionDate: eventDraft.actionDate,
             designationId: eventDraft.designationId,
             grade: eventDraft.grade,
             serviceLevelId: eventDraft.serviceLevelId,
@@ -408,6 +626,18 @@ export default function CareerHistoryBuilder({
             return assignmentError;
         }
 
+        if (eventDraft.actionType === "TRANSFER_OUT") {
+            if (!state.currentDepartment || !state.currentOffice) {
+                return "Current department and office must be set before transfer out";
+            }
+        } else if (eventDraft.actionType !== "OFFICE_CHANGE") {
+            if (!state.currentDepartment || !state.currentOffice) {
+                return "Current department and office must be set from prior events";
+            }
+        } else if (!state.currentDepartment) {
+            return "Current department must be set before office change";
+        }
+
         return "";
     };
 
@@ -417,6 +647,11 @@ export default function CareerHistoryBuilder({
             setError(draftError);
             return;
         }
+
+        const toDepartment = resolveDepartmentValue(
+            eventDraft.toDepartmentType,
+            eventDraft.toOtherDepartmentName
+        );
 
         const event = {
             actionType: eventDraft.actionType,
@@ -428,21 +663,65 @@ export default function CareerHistoryBuilder({
             serviceLevelId: eventDraft.serviceLevelId
                 ? Number(eventDraft.serviceLevelId)
                 : null,
-            transferredFrom: eventDraft.transferredFrom?.trim() || null,
-            transferredTo: eventDraft.transferredTo?.trim() || null,
+            ...(eventDraft.actionType === "OFFICE_CHANGE"
+                ? {
+                    department: state.currentDepartment,
+                    office: eventDraft.office.trim(),
+                    district: state.currentDepartment === NWP_ENGINEERING_DEPARTMENT
+                        ? eventDraft.district
+                        : null
+                }
+                : {}),
+            ...(eventDraft.actionType === "TRANSFER_OUT"
+                ? {
+                    toDepartment,
+                    toOffice: eventDraft.toOffice.trim(),
+                    toDistrict: toDepartment === NWP_ENGINEERING_DEPARTMENT
+                        ? eventDraft.toDistrict
+                        : null
+                }
+                : {}),
             reason: eventDraft.reason?.trim() || null,
             remarks: eventDraft.remarks?.trim() || null
         };
 
-        onChange([...events, event]);
+        if (eventDraft.actionType === "TRANSFER_OUT") {
+            const transferInEvent = buildTransferInCompanionEvent({
+                actionDate: eventDraft.actionDate,
+                toDepartment,
+                toOffice: eventDraft.toOffice,
+                toDistrict: eventDraft.toDistrict,
+                fromDepartment: state.currentDepartment,
+                timelineState: state,
+                remarks: eventDraft.remarks
+            });
+            onChange([...events, event, transferInEvent]);
+        } else {
+            onChange([...events, event]);
+        }
         setEventDraft(emptyEventDraft);
         setError("");
     };
 
     const removeLastEvent = () => {
-        onChange(events.slice(0, -1));
+        const nextEvents = [...events];
+
+        while (
+            nextEvents.length > 0
+            && nextEvents[nextEvents.length - 1].autoCreated
+        ) {
+            nextEvents.pop();
+        }
+
+        if (nextEvents.length > 0) {
+            nextEvents.pop();
+        }
+
+        onChange(nextEvents);
         setError("");
     };
+
+    const lastRemovableIndex = events.findLastIndex((event) => !event.autoCreated);
 
     const { fieldProps, dateFieldProps, selectFieldProps } =
         createFormFieldProps(() => {});
@@ -453,8 +732,8 @@ export default function CareerHistoryBuilder({
         draftType === "PROMOTION" || draftType === "ASSIGNMENT_GRADE_UPDATE";
     const showServiceLevelField =
         draftType === "PROMOTION" || draftType === "ASSIGNMENT_GRADE_UPDATE";
-    const showTransferredFrom = draftType === "TRANSFER_IN";
-    const showTransferredTo = draftType === "TRANSFER_OUT";
+    const showTransferDestination = draftType === "TRANSFER_OUT";
+    const showOfficeChangeField = draftType === "OFFICE_CHANGE";
     const showReason = draftType === "DISMISSAL";
 
     return (
@@ -485,6 +764,13 @@ export default function CareerHistoryBuilder({
                                 }
                                 label={`${index + 1}. ${ACTION_TYPE_LABELS[event.actionType] || event.actionType}`}
                             />
+                            {event.autoCreated && (
+                                <Chip
+                                    size="small"
+                                    variant="outlined"
+                                    label="Auto-created"
+                                />
+                            )}
                             <Box sx={{ flexGrow: 1, minWidth: 0 }}>
                                 <Typography variant="body2" fontWeight={600}>
                                     {formatDisplayDate(event.actionDate)}
@@ -501,7 +787,7 @@ export default function CareerHistoryBuilder({
                                     ) || event.remarks || "—"}
                                 </Typography>
                             </Box>
-                            {index === events.length - 1 && (
+                            {index === lastRemovableIndex && lastRemovableIndex >= 0 && (
                                 <Tooltip title="Remove this event">
                                     <IconButton
                                         size="small"
@@ -575,6 +861,36 @@ export default function CareerHistoryBuilder({
                                 ))}
                             </TextField>
                         </Grid>
+                        <DepartmentOfficeFields
+                            departmentType={firstDraft.departmentType}
+                            otherDepartmentName={firstDraft.otherDepartmentName}
+                            district={firstDraft.district}
+                            office={firstDraft.office}
+                            onDepartmentTypeChange={(value) =>
+                                setFirstDraft((prev) => ({
+                                    ...prev,
+                                    departmentType: value,
+                                    district: "",
+                                    office: ""
+                                }))
+                            }
+                            onOtherDepartmentNameChange={(value) =>
+                                setFirstDraft((prev) => ({
+                                    ...prev,
+                                    otherDepartmentName: value
+                                }))
+                            }
+                            onDistrictChange={(value) =>
+                                setFirstDraft((prev) => ({
+                                    ...prev,
+                                    district: value,
+                                    office: ""
+                                }))
+                            }
+                            onOfficeChange={(value) =>
+                                setFirstDraft((prev) => ({ ...prev, office: value }))
+                            }
+                        />
                         <Grid size={{ xs: 12, sm: 8 }}>
                             <TextField
                                 {...fieldProps}
@@ -630,6 +946,13 @@ export default function CareerHistoryBuilder({
                                 label="Event Date"
                                 name="actionDate"
                                 value={eventDraft.actionDate}
+                                error={eventDraftDateTooEarly}
+                                helperText={eventDraftDateHelperText}
+                                slotProps={{
+                                    htmlInput: eventDraftMinDate
+                                        ? { min: eventDraftMinDate }
+                                        : undefined
+                                }}
                             />
                         </Grid>
                         {showDesignationField && (
@@ -709,29 +1032,84 @@ export default function CareerHistoryBuilder({
                                 </TextField>
                             </Grid>
                         )}
-                        {showTransferredFrom && (
-                            <Grid size={{ xs: 12, sm: 4 }}>
-                                <TextField
-                                    {...fieldProps}
-                                    onChange={handleEventDraftChange}
-                                    label="Transferred From"
-                                    name="transferredFrom"
-                                    value={eventDraft.transferredFrom}
-                                    placeholder="e.g. Irrigation Department"
+                        {showTransferDestination && (
+                            <>
+                                <ReadonlyWorkplaceFields
+                                    department={state.currentDepartment}
+                                    office={state.currentOffice}
+                                    district={state.currentDistrictOfWorking}
                                 />
-                            </Grid>
+                                <DepartmentOfficeFields
+                                    departmentType={eventDraft.toDepartmentType}
+                                    otherDepartmentName={eventDraft.toOtherDepartmentName}
+                                    district={eventDraft.toDistrict}
+                                    office={eventDraft.toOffice}
+                                    onDepartmentTypeChange={(value) =>
+                                        setEventDraft((prev) => ({
+                                            ...prev,
+                                            toDepartmentType: value,
+                                            toDistrict: "",
+                                            toOffice: ""
+                                        }))
+                                    }
+                                    onOtherDepartmentNameChange={(value) =>
+                                        setEventDraft((prev) => ({
+                                            ...prev,
+                                            toOtherDepartmentName: value
+                                        }))
+                                    }
+                                    onDistrictChange={(value) =>
+                                        setEventDraft((prev) => ({
+                                            ...prev,
+                                            toDistrict: value,
+                                            toOffice: ""
+                                        }))
+                                    }
+                                    onOfficeChange={(value) =>
+                                        setEventDraft((prev) => ({ ...prev, toOffice: value }))
+                                    }
+                                    departmentLabel="Transfer To — Department"
+                                    officeLabel="Transfer To — Office"
+                                />
+                            </>
                         )}
-                        {showTransferredTo && (
-                            <Grid size={{ xs: 12, sm: 4 }}>
-                                <TextField
-                                    {...fieldProps}
-                                    onChange={handleEventDraftChange}
-                                    label="Transferred To"
-                                    name="transferredTo"
-                                    value={eventDraft.transferredTo}
-                                    placeholder="e.g. Irrigation Department"
+                        {showOfficeChangeField && (
+                            <>
+                                <ReadonlyWorkplaceFields
+                                    department={state.currentDepartment}
+                                    office={state.currentOffice}
+                                    district={state.currentDistrictOfWorking}
                                 />
-                            </Grid>
+                                <DepartmentOfficeFields
+                                    departmentType={
+                                        state.currentDepartment === NWP_ENGINEERING_DEPARTMENT
+                                            ? DEPARTMENT_OPTIONS.NWP
+                                            : DEPARTMENT_OPTIONS.OTHER
+                                    }
+                                    otherDepartmentName={
+                                        state.currentDepartment === NWP_ENGINEERING_DEPARTMENT
+                                            ? ""
+                                            : state.currentDepartment || ""
+                                    }
+                                    district={eventDraft.district}
+                                    office={eventDraft.office}
+                                    onDepartmentTypeChange={() => {}}
+                                    onOtherDepartmentNameChange={() => {}}
+                                    onDistrictChange={(value) =>
+                                        setEventDraft((prev) => ({
+                                            ...prev,
+                                            district: value,
+                                            office: ""
+                                        }))
+                                    }
+                                    onOfficeChange={(value) =>
+                                        setEventDraft((prev) => ({ ...prev, office: value }))
+                                    }
+                                    departmentReadOnly
+                                    showDepartment={state.currentDepartment === NWP_ENGINEERING_DEPARTMENT}
+                                    officeLabel="New Office"
+                                />
+                            </>
                         )}
                         {showReason && (
                             <Grid size={{ xs: 12, sm: 4 }}>
@@ -760,6 +1138,7 @@ export default function CareerHistoryBuilder({
                             <Button
                                 variant="outlined"
                                 onClick={addEvent}
+                                disabled={!canAddEvent}
                                 fullWidth
                             >
                                 Add Event

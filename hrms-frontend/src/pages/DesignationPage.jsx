@@ -1,5 +1,4 @@
 import {
-
     Table,
     TableBody,
     TableCell,
@@ -11,342 +10,354 @@ import {
     Container,
     Button,
     TextField,
-    Stack
-
+    Stack,
+    Box,
+    IconButton,
+    Tooltip,
+    Chip,
+    InputAdornment,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Alert
 } from "@mui/material";
-
 import {
-    useEffect,
-    useState
-} from "react";
-
+    Add as AddIcon,
+    Edit as EditIcon,
+    Delete as DeleteIcon,
+    Search as SearchIcon,
+    Clear as ClearIcon
+} from "@mui/icons-material";
+import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 
 import {
-
     getDesignations,
     createDesignation,
     updateDesignation,
     deleteDesignation,
     searchDesignations
-
 } from "../services/designationService";
+import DesignationForm from "../components/DesignationForm";
+import { getApiErrorMessage } from "../constants/hrms";
 
-import DesignationForm
-from "../components/DesignationForm";
+function GradeChips({ grades }) {
+    if (!grades?.length) {
+        return (
+            <Typography variant="body2" color="text.secondary">
+                —
+            </Typography>
+        );
+    }
+
+    return (
+        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+            {grades.map((grade) => (
+                <Chip
+                    key={grade}
+                    label={grade}
+                    size="small"
+                    variant="outlined"
+                    sx={{ fontSize: "0.75rem" }}
+                />
+            ))}
+        </Stack>
+    );
+}
 
 export default function DesignationPage() {
-
-    const [designations, setDesignations] =
-        useState([]);
-
-    const [open, setOpen] =
-        useState(false);
-
-    const [selectedDesignation,
-        setSelectedDesignation] =
-        useState(null);
-
-    const [searchKeyword,
-        setSearchKeyword] =
-        useState("");
+    const [designations, setDesignations] = useState([]);
+    const [open, setOpen] = useState(false);
+    const [selectedDesignation, setSelectedDesignation] = useState(null);
+    const [searchKeyword, setSearchKeyword] = useState("");
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [designationToDelete, setDesignationToDelete] = useState(null);
+    const [deleting, setDeleting] = useState(false);
 
     useEffect(() => {
-
         loadDesignations();
-
     }, []);
 
     useEffect(() => {
-
         const debounce = setTimeout(async () => {
-
             if (!searchKeyword.trim()) {
-
                 loadDesignations();
-
                 return;
             }
 
             try {
-
-                const data =
-                    await searchDesignations(
-                        searchKeyword
-                    );
-
+                const data = await searchDesignations(searchKeyword);
                 setDesignations(data);
-
             } catch (error) {
-
                 console.error(error);
             }
-
         }, 300);
 
-        return () =>
-            clearTimeout(debounce);
-
+        return () => clearTimeout(debounce);
     }, [searchKeyword]);
 
     const loadDesignations = async () => {
-
         try {
-
-            const data =
-                await getDesignations();
-
+            const data = await getDesignations();
             setDesignations(data);
-
         } catch (error) {
-
-            toast.error(
-                "Failed to load designations"
-            );
+            toast.error(getApiErrorMessage(error));
         }
     };
 
     const handleCreate = async (data) => {
-
         try {
-
             await createDesignation(data);
-
-            toast.success(
-                "Designation created"
-            );
-
+            toast.success("Designation created");
             setOpen(false);
-
             loadDesignations();
-
         } catch (error) {
-
-            toast.error(
-                "Failed to create designation"
-            );
+            toast.error(getApiErrorMessage(error));
         }
     };
 
     const handleUpdate = async (data) => {
-
         try {
-
-            await updateDesignation(
-                selectedDesignation.id,
-                data
-            );
-
-            toast.success(
-                "Designation updated"
-            );
-
+            await updateDesignation(selectedDesignation.id, data);
+            toast.success("Designation updated");
             setOpen(false);
-
             setSelectedDesignation(null);
-
             loadDesignations();
-
         } catch (error) {
-
-            toast.error(
-                "Failed to update designation"
-            );
+            toast.error(getApiErrorMessage(error));
         }
     };
 
-    const handleDelete = async (id) => {
+    const handleDeleteClick = (designation) => {
+        setDesignationToDelete(designation);
+        setDeleteDialogOpen(true);
+    };
 
-        if (
-            window.confirm(
-                "Delete this designation?"
-            )
-        ) {
-
-            try {
-
-                await deleteDesignation(id);
-
-                toast.success(
-                    "Designation deleted"
-                );
-
-                loadDesignations();
-
-            } catch (error) {
-
-                toast.error(
-                    "Failed to delete designation"
-                );
-            }
+    const handleDeleteConfirm = async () => {
+        setDeleting(true);
+        try {
+            await deleteDesignation(designationToDelete.id);
+            toast.success("Designation deleted");
+            setDeleteDialogOpen(false);
+            setDesignationToDelete(null);
+            loadDesignations();
+        } catch (error) {
+            toast.error(getApiErrorMessage(error));
+        } finally {
+            setDeleting(false);
         }
+    };
+
+    const openCreateDialog = () => {
+        setSelectedDesignation(null);
+        setOpen(true);
+    };
+
+    const openEditDialog = (designation) => {
+        setSelectedDesignation(designation);
+        setOpen(true);
+    };
+
+    const closeFormDialog = () => {
+        setOpen(false);
+        setSelectedDesignation(null);
     };
 
     return (
-
-        <Container>
-
-            <Stack
-                direction="row"
-                spacing={2}
-                sx={{ mb: 3 }}
-            >
-
-                <Button
-                    variant="contained"
-                    onClick={() => {
-
-                        setSelectedDesignation(null);
-
-                        setOpen(true);
-                    }}
+        <Container maxWidth="lg">
+            <Box sx={{ mb: 3 }}>
+                <Stack
+                    direction={{ xs: "column", sm: "row" }}
+                    spacing={2}
+                    sx={{ mb: 2, justifyContent: "space-between", alignItems: { sm: "center" } }}
                 >
-                    Add Designation
-                </Button>
+                    <Box>
+                        <Typography variant="h4" gutterBottom>
+                            Designations
+                        </Typography>
+                        <Typography variant="body1" color="text.secondary">
+                            Define job designations, allowed grades, and qualification rules
+                            for employee assignments and promotions.
+                        </Typography>
+                    </Box>
+                    <Button
+                        variant="contained"
+                        startIcon={<AddIcon />}
+                        onClick={openCreateDialog}
+                        sx={{ alignSelf: { xs: "flex-start", sm: "center" }, flexShrink: 0 }}
+                    >
+                        Add Designation
+                    </Button>
+                </Stack>
 
                 <TextField
-                    label="Search Designation"
+                    label="Search designations"
+                    placeholder="Name, service, service level, salary code..."
                     value={searchKeyword}
-                    onChange={(e) =>
-                        setSearchKeyword(
-                            e.target.value
-                        )
-                    }
+                    onChange={(e) => setSearchKeyword(e.target.value)}
+                    size="small"
+                    fullWidth
+                    sx={{ maxWidth: 480 }}
+                    slotProps={{
+                        input: {
+                            startAdornment: (
+                                <InputAdornment position="start">
+                                    <SearchIcon sx={{ color: "text.secondary" }} />
+                                </InputAdornment>
+                            ),
+                            endAdornment: searchKeyword ? (
+                                <InputAdornment position="end">
+                                    <IconButton
+                                        size="small"
+                                        onClick={() => setSearchKeyword("")}
+                                        edge="end"
+                                        aria-label="Clear search"
+                                    >
+                                        <ClearIcon fontSize="small" />
+                                    </IconButton>
+                                </InputAdornment>
+                            ) : null
+                        }
+                    }}
                 />
 
-            </Stack>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
+                    Showing {designations.length} designation{designations.length !== 1 ? "s" : ""}
+                </Typography>
+            </Box>
 
-            <Typography
-                variant="h4"
-                gutterBottom
-            >
-                Designations
-            </Typography>
-
-            <TableContainer
-                component={Paper}
-            >
-
-                <Table>
-
-                    <TableHead>
-
-                        <TableRow>
-
-                            <TableCell>
-                                Designation Name
-                            </TableCell>
-
-                            <TableCell>
-                                Service
-                            </TableCell>
-
-                            <TableCell>
-                                Service Level
-                            </TableCell>
-
-                            <TableCell>
-                                Allowed Grades
-                            </TableCell>
-
-                            <TableCell>
-                                Salary Code
-                            </TableCell>
-
-                            <TableCell>
-                                Actions
-                            </TableCell>
-
-                        </TableRow>
-
-                    </TableHead>
-
-                    <TableBody>
-
-                        {designations.map(
-                            (designation) => (
-
-                            <TableRow
-                                key={designation.id}
-                            >
-
-                                <TableCell>
-                                    {designation.designationName}
-                                </TableCell>
-
-                                <TableCell>
-                                    {designation.service?.serviceCode ?? "—"}
-                                </TableCell>
-
-                                <TableCell>
-                                    {designation.serviceLevel?.levelName ?? "—"}
-                                </TableCell>
-
-                                <TableCell>
-                                    {(designation.allowedGrades || []).join(", ") || "—"}
-                                </TableCell>
-
-                                <TableCell>
-                                    {designation.salaryCode || "—"}
-                                </TableCell>
-
-                                <TableCell>
-
-                                    <Button
-                                        size="small"
-                                        onClick={() => {
-
-                                            setSelectedDesignation(
-                                                designation
-                                            );
-
-                                            setOpen(true);
-                                        }}
-                                    >
-                                        Edit
-                                    </Button>
-
-                                    <Button
-                                        size="small"
-                                        color="error"
-                                        onClick={() =>
-                                            handleDelete(
-                                                designation.id
-                                            )
-                                        }
-                                    >
-                                        Delete
-                                    </Button>
-
-                                </TableCell>
-
+            {designations.length === 0 ? (
+                <Paper variant="outlined" sx={{ p: 4, textAlign: "center" }}>
+                    <Typography color="text.secondary" gutterBottom>
+                        {searchKeyword.trim()
+                            ? "No designations match your search"
+                            : "No designations configured yet"}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        {searchKeyword.trim()
+                            ? "Try a different search term"
+                            : "Create your first designation to get started"}
+                    </Typography>
+                    {!searchKeyword.trim() && (
+                        <Button
+                            variant="contained"
+                            startIcon={<AddIcon />}
+                            onClick={openCreateDialog}
+                        >
+                            Add Designation
+                        </Button>
+                    )}
+                </Paper>
+            ) : (
+                <TableContainer component={Paper} variant="outlined">
+                    <Table>
+                        <TableHead>
+                            <TableRow>
+                                <TableCell>Designation</TableCell>
+                                <TableCell>Service</TableCell>
+                                <TableCell>Service Level</TableCell>
+                                <TableCell>Allowed Grades</TableCell>
+                                <TableCell>Salary Code</TableCell>
+                                <TableCell align="right">Actions</TableCell>
                             </TableRow>
-                        ))}
+                        </TableHead>
 
-                    </TableBody>
-
-                </Table>
-
-            </TableContainer>
+                        <TableBody>
+                            {designations.map((designation) => (
+                                <TableRow
+                                    key={designation.id}
+                                    hover
+                                    sx={{ "&:last-child td": { borderBottom: 0 } }}
+                                >
+                                    <TableCell>
+                                        <Typography variant="body2" fontWeight={500}>
+                                            {designation.designationName}
+                                        </Typography>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Typography variant="body2" color="text.secondary">
+                                            {designation.service?.serviceCode ?? "—"}
+                                        </Typography>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Typography variant="body2" color="text.secondary">
+                                            {designation.serviceLevel?.levelName ?? "—"}
+                                        </Typography>
+                                    </TableCell>
+                                    <TableCell>
+                                        <GradeChips grades={designation.allowedGrades} />
+                                    </TableCell>
+                                    <TableCell>
+                                        <Typography variant="body2" color="text.secondary">
+                                            {designation.salaryCode || "—"}
+                                        </Typography>
+                                    </TableCell>
+                                    <TableCell align="right">
+                                        <Tooltip title="Edit designation">
+                                            <IconButton
+                                                size="small"
+                                                onClick={() => openEditDialog(designation)}
+                                            >
+                                                <EditIcon fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
+                                        <Tooltip title="Delete designation">
+                                            <IconButton
+                                                size="small"
+                                                color="error"
+                                                onClick={() => handleDeleteClick(designation)}
+                                            >
+                                                <DeleteIcon fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </TableContainer>
+            )}
 
             <DesignationForm
                 open={open}
-                handleClose={() => {
-
-                    setOpen(false);
-
-                    setSelectedDesignation(null);
-                }}
-                handleSubmit={
-                    selectedDesignation
-                        ? handleUpdate
-                        : handleCreate
-                }
-                selectedDesignation={
-                    selectedDesignation
-                }
+                handleClose={closeFormDialog}
+                handleSubmit={selectedDesignation ? handleUpdate : handleCreate}
+                selectedDesignation={selectedDesignation}
             />
 
+            <Dialog
+                open={deleteDialogOpen}
+                onClose={() => !deleting && setDeleteDialogOpen(false)}
+            >
+                <DialogTitle>Delete Designation</DialogTitle>
+                <DialogContent>
+                    <Alert severity="warning" sx={{ mb: 2 }}>
+                        Deleting a designation may affect cadre positions and employee records
+                        linked to it.
+                    </Alert>
+                    <Typography>
+                        Are you sure you want to delete "
+                        {designationToDelete?.designationName}"?
+                    </Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button
+                        onClick={() => setDeleteDialogOpen(false)}
+                        disabled={deleting}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleDeleteConfirm}
+                        color="error"
+                        variant="contained"
+                        disabled={deleting}
+                    >
+                        {deleting ? "Deleting..." : "Delete"}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Container>
     );
 }

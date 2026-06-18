@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import {
     Paper,
     Table,
@@ -25,6 +26,7 @@ const getMonthColor = (months) => {
 };
 
 export default function RetirementWatchListTable({ data, loading }) {
+    const navigate = useNavigate();
     if (loading) {
         return (
             <Paper sx={{ p: 3, borderRadius: 2 }}>
@@ -48,7 +50,7 @@ export default function RetirementWatchListTable({ data, loading }) {
     return (
         <Paper sx={{ p: 3, borderRadius: 2 }}>
             <Typography variant="h6" sx={{ mb: 3, fontWeight: 700 }}>
-                Employees Retiring Within 12 Months
+                Employees Retiring Within 24 Months
             </Typography>
             <TableContainer>
                 <Table>
@@ -57,14 +59,19 @@ export default function RetirementWatchListTable({ data, loading }) {
                             <TableCell sx={{ fontWeight: 700 }}>Name</TableCell>
                             <TableCell sx={{ fontWeight: 700 }}>Designation</TableCell>
                             <TableCell sx={{ fontWeight: 700 }}>Date of Birth</TableCell>
-                            <TableCell align="center" sx={{ fontWeight: 700 }}>Retirement Date</TableCell>
+                            <TableCell align="center" sx={{ fontWeight: 700 }}>Expected Retirement Date</TableCell>
                             <TableCell align="center" sx={{ fontWeight: 700 }}>Months Remaining</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
                         {data.map((row, index) => (
                             <TableRow key={index} hover sx={{ bgcolor: row.remainingMonths <= 6 ? "#FFF3E0" : "transparent" }}>
-                                <TableCell>{row.employeeName}</TableCell>
+                                <TableCell
+                                    sx={{ cursor: "pointer", color: "primary.main" }}
+                                    onClick={() => navigate(`/employees/${row.employeeId}`)}
+                                >
+                                    {row.employeeName}
+                                </TableCell>
                                 <TableCell>{row.designation}</TableCell>
                                 <TableCell>{formatDate(row.dateOfBirth)}</TableCell>
                                 <TableCell align="center">{formatDate(row.retirementDate)}</TableCell>

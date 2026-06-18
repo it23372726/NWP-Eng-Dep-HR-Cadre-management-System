@@ -35,6 +35,9 @@ public class EmployeeRequest {
     @NotBlank(message = "Gender is required")
     private String gender;
 
+    @NotBlank(message = "Marital status is required")
+    private String maritalStatus;
+
     private Grade grade;
 
     @NotNull(message = "Date of first appointment is required")
@@ -50,7 +53,6 @@ public class EmployeeRequest {
     @NotBlank(message = "Current working place is required")
     private String currentWorkingPlace;
 
-    @NotNull(message = "Current district of working is required")
     private District currentDistrictOfWorking;
 
     private LocalDate appointmentDateToPresentClassGrade;
@@ -62,6 +64,12 @@ public class EmployeeRequest {
     private String permanentAddress;
 
     private String residentDistrict;
+
+    private Boolean privateVehicleUsedForGovWork;
+
+    private String privateVehicleDescription;
+
+    private LocalDate privateVehiclePermissionDate;
 
     @NotBlank(message = "Contact number is required")
     private String contactNo;

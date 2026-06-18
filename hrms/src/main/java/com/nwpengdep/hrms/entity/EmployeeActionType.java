@@ -9,5 +9,6 @@ public enum EmployeeActionType {
     PERMANENT_CONFIRMATION,
     RETIREMENT_OR_RESIGNATION,
     DEATH,
-    DISMISSAL
+    DISMISSAL,
+    OFFICE_CHANGE
 }

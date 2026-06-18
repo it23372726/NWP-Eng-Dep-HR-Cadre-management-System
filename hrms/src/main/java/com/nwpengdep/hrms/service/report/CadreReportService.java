@@ -1,5 +1,6 @@
 package com.nwpengdep.hrms.service.report;
 
+import com.nwpengdep.hrms.constants.DepartmentConstants;
 import com.nwpengdep.hrms.dto.CadreReportRequest;
 import com.nwpengdep.hrms.dto.CadreReportResponse;
 import com.nwpengdep.hrms.dto.CadreReportRowResponse;
@@ -46,17 +47,21 @@ public class CadreReportService {
                         (a, b) -> b
                 ));
 
+        String nwpDepartment = DepartmentConstants.NWP_ENGINEERING;
+
         Map<Long, Long> transferInMap = toCountMap(
-                employeeActionRepository.countGroupedByNewDesignation(
+                employeeActionRepository.countGroupedByNewDesignationAndDepartment(
                         EmployeeActionType.TRANSFER_IN,
+                        nwpDepartment,
                         request.getStartDate(),
                         request.getEndDate()
                 )
         );
 
         Map<Long, Long> transferOutMap = toCountMap(
-                employeeActionRepository.countGroupedByOldDesignation(
+                employeeActionRepository.countGroupedByOldDesignationAndFromDepartment(
                         EmployeeActionType.TRANSFER_OUT,
+                        nwpDepartment,
                         request.getStartDate(),
                         request.getEndDate()
                 )
@@ -79,24 +84,27 @@ public class CadreReportService {
         );
 
         Map<Long, Long> promotionsOutMap = toCountMap(
-                employeeActionRepository.countGroupedByOldDesignation(
+                employeeActionRepository.countGroupedByOldDesignationAndDepartment(
                         EmployeeActionType.PROMOTION,
+                        nwpDepartment,
                         request.getStartDate(),
                         request.getEndDate()
                 )
         );
 
         Map<Long, Long> newAppointmentsMap = toCountMap(
-                employeeActionRepository.countGroupedByNewDesignation(
+                employeeActionRepository.countGroupedByNewDesignationAndDepartment(
                         EmployeeActionType.NEW_APPOINTMENT,
+                        nwpDepartment,
                         request.getStartDate(),
                         request.getEndDate()
                 )
         );
 
         Map<Long, Long> promotionNewAppointmentsMap = toCountMap(
-                employeeActionRepository.countGroupedByNewDesignation(
+                employeeActionRepository.countPromotionInByDepartment(
                         EmployeeActionType.PROMOTION,
+                        nwpDepartment,
                         request.getStartDate(),
                         request.getEndDate()
                 )

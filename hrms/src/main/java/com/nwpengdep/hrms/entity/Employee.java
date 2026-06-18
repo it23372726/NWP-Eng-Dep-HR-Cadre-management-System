@@ -37,6 +37,8 @@ public class Employee {
 
     private String gender;
 
+    private String maritalStatus;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Grade grade;
@@ -49,6 +51,10 @@ public class Employee {
 
     private String currentWorkingPlace;
 
+    private String currentDepartment;
+
+    private String currentOffice;
+
     @Enumerated(EnumType.STRING)
     private District currentDistrictOfWorking;
 
@@ -59,6 +65,15 @@ public class Employee {
     private String permanentAddress;
 
     private String residentDistrict;
+
+    private Boolean privateVehicleUsedForGovWork;
+
+    @Column(length = 512)
+    private String privateVehicleDescription;
+
+    private LocalDate privateVehiclePermissionDate;
+
+    private LocalDate vehiclePermitCollectedDate;
 
     private String incremantDate;
 
@@ -101,6 +116,9 @@ public class Employee {
     private List<EmployeeRequirement> requirements = new ArrayList<>();
 
     private String transferredFrom;
+
+    @Column(name = "profile_photo_path", length = 512)
+    private String profilePhotoPath;
 
     private LocalDateTime createdAt;
 

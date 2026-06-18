@@ -11,6 +11,8 @@ import { Toaster }
 from "react-hot-toast";
 
 import { CssBaseline, ThemeProvider } from "@mui/material";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { theme } from "./theme/theme";
 import { isTokenExpired, clearAuthData } from "./utils/tokenUtils";
 
@@ -28,10 +30,12 @@ ReactDOM.createRoot(
 
         <Toaster position="top-right" />
 
-        <ThemeProvider theme={theme}>
-            <CssBaseline />
-            <App />
-        </ThemeProvider>
+        <LocalizationProvider dateAdapter={AdapterDayjs}>
+            <ThemeProvider theme={theme}>
+                <CssBaseline />
+                <App />
+            </ThemeProvider>
+        </LocalizationProvider>
 
     </BrowserRouter>
 );

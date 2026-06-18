@@ -2,9 +2,6 @@ import { Paper, Typography, Skeleton, Box } from "@mui/material";
 import Grid from "@mui/material/Grid";
 import PeopleIcon from "@mui/icons-material/People";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
-import AssignmentIcon from "@mui/icons-material/Assignment";
-import GroupsIcon from "@mui/icons-material/Groups";
-import WarningIcon from "@mui/icons-material/Warning";
 import EventIcon from "@mui/icons-material/Event";
 
 const SummaryCard = ({ icon: Icon, title, value, subtitle, color, loading }) => {
@@ -81,43 +78,8 @@ export default function SummaryCards({ summary, loading }) {
             icon: EventIcon,
             title: "Retirement Watch",
             value: summary?.retirementWatch ?? 0,
-            subtitle: "Within 12 months",
+            subtitle: "Within 24 months",
             color: "#7C3AED"
-        },
-        {
-            icon: WarningIcon,
-            title: "Probation Employees",
-            value: summary?.probationEmployees ?? 0,
-            subtitle: "Active employees",
-            color: "#F59E0B"
-        },
-        {
-            icon: AssignmentIcon,
-            title: "Eligible For Permanent",
-            value: summary?.eligibleForPermanent ?? 0,
-            subtitle: "Awaiting confirmation",
-            color: "#0284C7"
-        },
-        {
-            icon: GroupsIcon,
-            title: "Permanent Employees",
-            value: summary?.permanentEmployees ?? 0,
-            subtitle: "Confirmed permanent",
-            color: "#16A34A"
-        },
-        {
-            icon: AssignmentIcon,
-            title: "Eligible For Grade II",
-            value: summary?.eligibleForGrade2 ?? 0,
-            subtitle: "Ready for Grade II",
-            color: "#2563EB"
-        },
-        {
-            icon: AssignmentIcon,
-            title: "Eligible For Grade I",
-            value: summary?.eligibleForGrade1 ?? 0,
-            subtitle: "Ready for Grade I",
-            color: "#4F46E5"
         },
         {
             icon: EventIcon,

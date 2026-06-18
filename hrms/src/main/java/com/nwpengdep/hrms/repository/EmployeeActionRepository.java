@@ -21,6 +21,32 @@ public interface EmployeeActionRepository
     @Query("""
             SELECT a
             FROM EmployeeAction a
+            WHERE a.employee.id = :employeeId
+              AND (a.deleted IS NULL OR a.deleted = false)
+            ORDER BY a.actionDate ASC, a.id ASC
+            """)
+    List<EmployeeAction> findActiveActionsByEmployeeIdOrderByActionDateAsc(
+            @Param("employeeId") Long employeeId
+    );
+
+    @Query("""
+            SELECT a
+            FROM EmployeeAction a
+            LEFT JOIN FETCH a.newDesignation nd
+            LEFT JOIN FETCH nd.serviceLevel
+            WHERE a.employee.id = :employeeId
+              AND (a.deleted IS NULL OR a.deleted = false)
+              AND a.actionType IN :actionTypes
+            ORDER BY a.actionDate ASC, a.id ASC
+            """)
+    List<EmployeeAction> findCareerActionsByEmployeeIdOrderByActionDateAsc(
+            @Param("employeeId") Long employeeId,
+            @Param("actionTypes") List<EmployeeActionType> actionTypes
+    );
+
+    @Query("""
+            SELECT a
+            FROM EmployeeAction a
             JOIN FETCH a.employee e
             LEFT JOIN FETCH a.oldDesignation
             LEFT JOIN FETCH a.newDesignation
@@ -63,6 +89,74 @@ public interface EmployeeActionRepository
     );
 
     @Query("""
+            SELECT a.newDesignation.id, COUNT(a)
+            FROM EmployeeAction a
+            WHERE a.actionType = :actionType
+              AND a.newDesignation IS NOT NULL
+              AND a.department = :department
+              AND a.actionDate BETWEEN :from AND :to
+              AND (a.deleted IS NULL OR a.deleted = false)
+            GROUP BY a.newDesignation.id
+            """)
+    List<Object[]> countGroupedByNewDesignationAndDepartment(
+            @Param("actionType") EmployeeActionType actionType,
+            @Param("department") String department,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to
+    );
+
+    @Query("""
+            SELECT a.oldDesignation.id, COUNT(a)
+            FROM EmployeeAction a
+            WHERE a.actionType = :actionType
+              AND a.oldDesignation IS NOT NULL
+              AND a.fromDepartment = :department
+              AND a.actionDate BETWEEN :from AND :to
+              AND (a.deleted IS NULL OR a.deleted = false)
+            GROUP BY a.oldDesignation.id
+            """)
+    List<Object[]> countGroupedByOldDesignationAndFromDepartment(
+            @Param("actionType") EmployeeActionType actionType,
+            @Param("department") String department,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to
+    );
+
+    @Query("""
+            SELECT a.oldDesignation.id, COUNT(a)
+            FROM EmployeeAction a
+            WHERE a.actionType = :actionType
+              AND a.oldDesignation IS NOT NULL
+              AND a.department = :department
+              AND a.actionDate BETWEEN :from AND :to
+              AND (a.deleted IS NULL OR a.deleted = false)
+            GROUP BY a.oldDesignation.id
+            """)
+    List<Object[]> countGroupedByOldDesignationAndDepartment(
+            @Param("actionType") EmployeeActionType actionType,
+            @Param("department") String department,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to
+    );
+
+    @Query("""
+            SELECT a.newDesignation.id, COUNT(a)
+            FROM EmployeeAction a
+            WHERE a.actionType = :actionType
+              AND a.newDesignation IS NOT NULL
+              AND a.department = :department
+              AND a.actionDate BETWEEN :from AND :to
+              AND (a.deleted IS NULL OR a.deleted = false)
+            GROUP BY a.newDesignation.id
+            """)
+    List<Object[]> countPromotionInByDepartment(
+            @Param("actionType") EmployeeActionType actionType,
+            @Param("department") String department,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to
+    );
+
+    @Query("""
             SELECT COUNT(a)
             FROM EmployeeAction a
             WHERE a.actionType = :actionType
@@ -90,6 +184,19 @@ public interface EmployeeActionRepository
             @Param("designationId") Long designationId,
             @Param("from") LocalDate from,
             @Param("to") LocalDate to
+    );
+
+    @Query("""
+            SELECT a
+            FROM EmployeeAction a
+            JOIN FETCH a.employee e
+            LEFT JOIN FETCH a.oldDesignation
+            LEFT JOIN FETCH a.newDesignation
+            WHERE (a.deleted IS NULL OR a.deleted = false)
+            ORDER BY a.actionDate DESC, a.createdAt DESC
+            """)
+    List<EmployeeAction> findRecentActions(
+            org.springframework.data.domain.Pageable pageable
     );
 
     @Transactional

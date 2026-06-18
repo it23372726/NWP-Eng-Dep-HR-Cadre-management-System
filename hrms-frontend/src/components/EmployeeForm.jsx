@@ -17,7 +17,8 @@ export default function EmployeeForm({
     handleClose,
     handleSubmit,
     selectedEmployee,
-    actionHistory
+    actionHistory,
+    saving = false
 }) {
     const formRef = useRef(null);
     const isEdit = Boolean(selectedEmployee);
@@ -67,9 +68,19 @@ export default function EmployeeForm({
             </DialogContent>
 
             <DialogActions sx={dialogActionsSx}>
-                <Button onClick={handleClose}>Cancel</Button>
-                <Button variant="contained" onClick={submitForm}>
-                    {isEdit ? "Save Changes" : "Add Employee"}
+                <Button onClick={handleClose} disabled={saving}>
+                    Cancel
+                </Button>
+                <Button
+                    variant="contained"
+                    onClick={submitForm}
+                    disabled={saving}
+                >
+                    {saving
+                        ? "Saving..."
+                        : isEdit
+                            ? "Save Changes"
+                            : "Add Employee"}
                 </Button>
             </DialogActions>
         </Dialog>

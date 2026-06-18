@@ -5,20 +5,24 @@ import java.time.LocalDate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.nwpengdep.hrms.constants.DepartmentConstants;
+import com.nwpengdep.hrms.dto.ActionWorkplaceFields;
 import com.nwpengdep.hrms.dto.DismissalRequest;
 import com.nwpengdep.hrms.dto.LifecycleActionRequest;
 import com.nwpengdep.hrms.dto.MakePermanentRequest;
 import com.nwpengdep.hrms.dto.NewAppointmentRequest;
+import com.nwpengdep.hrms.dto.OfficeChangeRequest;
 import com.nwpengdep.hrms.dto.PromotionRequest;
-import com.nwpengdep.hrms.dto.TransferInRequest;
 import com.nwpengdep.hrms.dto.TransferOutRequest;
 import com.nwpengdep.hrms.entity.Designation;
+import com.nwpengdep.hrms.entity.District;
 import com.nwpengdep.hrms.entity.Employee;
 import com.nwpengdep.hrms.entity.EmployeeActionType;
 import com.nwpengdep.hrms.entity.EmployeeCareerProgression;
 import com.nwpengdep.hrms.entity.EmployeePosting;
 import com.nwpengdep.hrms.entity.EmployeeRequirement;
 import com.nwpengdep.hrms.entity.EmployeeStatus;
+import com.nwpengdep.hrms.entity.EmploymentType;
 import com.nwpengdep.hrms.entity.Grade;
 import com.nwpengdep.hrms.entity.RequirementStatus;
 import com.nwpengdep.hrms.entity.RequirementType;
@@ -41,52 +45,110 @@ public class EmployeeLifecycleService {
     private final ServiceLevelService serviceLevelService;
     private final CareerProgressionService careerProgressionService;
     private final EmployeeRequirementSyncService requirementSyncService;
+    private final OfficeService officeService;
 
     @Transactional
     public Employee transferOut(Long employeeId, TransferOutRequest request) {
         Employee employee = requireActiveEmployee(employeeId);
 
-        closeCurrentPostings(employee, request.getTransferDate());
+        String fromDepartment = employee.getCurrentDepartment();
+        String fromOffice = employee.getCurrentOffice();
+        if (fromDepartment == null || fromDepartment.isBlank()) {
+            throw new RuntimeException("Employee current department is not set");
+        }
+        if (fromOffice == null || fromOffice.isBlank()) {
+            throw new RuntimeException("Employee current office is not set");
+        }
 
-        employee.setStatus(EmployeeStatus.INACTIVE);
-        employeeRepository.save(employee);
+        officeService.validateNwpWorkplaceIfNwp(
+                request.getToDepartment(),
+                request.getToOffice(),
+                request.getToDistrict()
+        );
 
-        employeeActionService.recordAction(
+        employeeActionService.recordPairedTransferOut(
                 employee,
-                EmployeeActionType.TRANSFER_OUT,
                 request.getTransferDate(),
                 employee.getDesignation(),
-                employee.getDesignation(),
-                null,
-                request.getTransferredTo().trim(),
-                null,
+                fromDepartment,
+                fromOffice,
+                request.getToDepartment(),
+                request.getToOffice(),
+                request.getToDistrict(),
                 request.getRemarks()
         );
 
-        return employee;
+        return employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
     }
 
     @Transactional
-    public Employee transferIn(Long employeeId, TransferInRequest request) {
-        Employee employee = employeeRepository.findById(employeeId)
-                .orElseThrow(() -> new RuntimeException("Employee not found"));
+    public Employee officeChange(Long employeeId, OfficeChangeRequest request) {
+        Employee employee = requireActiveEmployee(employeeId);
 
-        employee.setStatus(EmployeeStatus.ACTIVE);
-        employeeRepository.save(employee);
+        String currentDepartment = employee.getCurrentDepartment();
+        if (currentDepartment == null || currentDepartment.isBlank()) {
+            throw new RuntimeException("Employee current department is not set");
+        }
+
+        String newOffice = request.getOffice().trim();
+        District newDistrict = request.getDistrict();
+        if (DepartmentConstants.isNwpEngineering(currentDepartment)) {
+            if (newDistrict == null) {
+                throw new RuntimeException(
+                        "Working district is required for N.W.P. Engineering Department"
+                );
+            }
+            officeService.validateNwpWorkplace(newOffice, newDistrict);
+        }
+
+        boolean sameOffice = employee.getCurrentOffice() != null
+                && employee.getCurrentOffice().equalsIgnoreCase(newOffice);
+        boolean sameDistrict = DepartmentConstants.isNwpEngineering(currentDepartment)
+                && employee.getCurrentDistrictOfWorking() == newDistrict;
+        boolean noNwpChange = DepartmentConstants.isNwpEngineering(currentDepartment)
+                && sameOffice
+                && sameDistrict;
+
+        if (DepartmentConstants.isNwpEngineering(currentDepartment)) {
+            if (noNwpChange) {
+                throw new RuntimeException(
+                        "Office change requires a different office or working district"
+                );
+            }
+        } else if (sameOffice) {
+            throw new RuntimeException("Office change requires a different office");
+        }
 
         employeeActionService.recordAction(
                 employee,
-                EmployeeActionType.TRANSFER_IN,
+                EmployeeActionType.OFFICE_CHANGE,
                 request.getEffectiveDate(),
-                null,
                 employee.getDesignation(),
-                request.getTransferredFrom(),
+                employee.getDesignation(),
                 null,
                 null,
-                request.getRemarks()
+                null,
+                request.getRemarks(),
+                ActionWorkplaceFields.builder()
+                        .department(currentDepartment)
+                        .office(newOffice)
+                        .fromDepartment(currentDepartment)
+                        .fromOffice(employee.getCurrentOffice())
+                        .toDepartment(currentDepartment)
+                        .toOffice(newOffice)
+                        .district(
+                                DepartmentConstants.isNwpEngineering(currentDepartment)
+                                        ? newDistrict
+                                        : null
+                        )
+                        .build()
         );
 
-        return employee;
+        employeeActionService.recalculateEmployeeState(employeeId);
+
+        return employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
     }
 
     @Transactional
@@ -106,6 +168,12 @@ public class EmployeeLifecycleService {
 
         postingRepository.save(newPosting);
 
+        officeService.validateNwpWorkplaceIfNwp(
+                request.getDepartment(),
+                request.getOffice(),
+                request.getDistrict()
+        );
+
         employeeActionService.recordAction(
                 employee,
                 EmployeeActionType.NEW_APPOINTMENT,
@@ -115,10 +183,20 @@ public class EmployeeLifecycleService {
                 null,
                 null,
                 null,
-                request.getRemarks()
+                request.getRemarks(),
+                ActionWorkplaceFields.of(
+                        DepartmentConstants.normalize(request.getDepartment()),
+                        request.getOffice().trim(),
+                        DepartmentConstants.isNwpEngineering(request.getDepartment())
+                                ? request.getDistrict()
+                                : null
+                )
         );
 
-        return employee;
+        employeeActionService.recalculateEmployeeState(employeeId);
+
+        return employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
     }
 
     @Transactional
@@ -222,6 +300,8 @@ public class EmployeeLifecycleService {
                 ? EmployeeActionType.PROMOTION
                 : EmployeeActionType.ASSIGNMENT_GRADE_UPDATE;
 
+        ActionWorkplaceFields workplace = workplaceFromEmployee(employee);
+
         employeeActionService.recordActionWithGrades(
                 employee,
                 actionType,
@@ -233,7 +313,8 @@ public class EmployeeLifecycleService {
                 null,
                 null,
                 null,
-                request.getRemarks()
+                request.getRemarks(),
+                workplace
         );
 
         employeeActionService.recalculateEmployeeState(employeeId);
@@ -280,10 +361,14 @@ public class EmployeeLifecycleService {
                 null,
                 null,
                 request.getReason().trim(),
-                request.getRemarks()
+                request.getRemarks(),
+                workplaceFromEmployee(employee)
         );
 
-        return employee;
+        employeeActionService.recalculateEmployeeState(employeeId);
+
+        return employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
     }
 
     @Transactional
@@ -316,7 +401,8 @@ public class EmployeeLifecycleService {
                 null,
                 null,
                 null,
-                request.getRemarks()
+                request.getRemarks(),
+                workplaceFromEmployee(employee)
         );
 
         employeeActionService.recalculateEmployeeState(employeeId);
@@ -347,10 +433,27 @@ public class EmployeeLifecycleService {
                 null,
                 null,
                 reason,
-                request.getRemarks()
+                request.getRemarks(),
+                workplaceFromEmployee(employee)
         );
 
-        return employee;
+        employeeActionService.recalculateEmployeeState(employeeId);
+
+        return employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+    }
+
+    private ActionWorkplaceFields workplaceFromEmployee(Employee employee) {
+        if (employee.getCurrentDepartment() == null || employee.getCurrentDepartment().isBlank()) {
+            throw new RuntimeException("Employee current department is not set");
+        }
+        if (employee.getCurrentOffice() == null || employee.getCurrentOffice().isBlank()) {
+            throw new RuntimeException("Employee current office is not set");
+        }
+        return ActionWorkplaceFields.of(
+                DepartmentConstants.normalize(employee.getCurrentDepartment()),
+                employee.getCurrentOffice().trim()
+        );
     }
 
     private void validateConfirmationDate(
@@ -493,6 +596,12 @@ public class EmployeeLifecycleService {
                     return created;
                 });
 
+        if (requirement.getStatus() == RequirementStatus.COMPLETED
+                && status == RequirementStatus.PENDING
+                && !allowsRequirementDowngrade(employee, type)) {
+            return;
+        }
+
         requirement.setStatus(status);
         requirement.setRequirementName(
                 requirementName != null && !requirementName.isBlank()
@@ -513,5 +622,57 @@ public class EmployeeLifecycleService {
         String leftValue = left != null ? left.trim() : "";
         String rightValue = right != null ? right.trim() : "";
         return leftValue.equalsIgnoreCase(rightValue);
+    }
+
+    private boolean allowsRequirementDowngrade(
+            Employee employee,
+            RequirementType type
+    ) {
+        if (employee.getEmploymentType() != EmploymentType.PERMANENT) {
+            return false;
+        }
+
+        Grade grade = employee.getGrade() != null ? employee.getGrade() : Grade.NONE;
+        boolean confirmedPermanent = employee.getCareerProgression() != null
+                && employee.getCareerProgression().getPermanentConfirmationDate()
+                        != null;
+
+        if (isGrade1RequirementType(type)) {
+            return grade == Grade.II
+                    || grade == Grade.I
+                    || grade == Grade.SUPRA
+                    || grade == Grade.SPECIAL;
+        }
+
+        if (isGrade2RequirementType(type)) {
+            return grade == Grade.III && confirmedPermanent;
+        }
+
+        if (isPermanentRequirementType(type)) {
+            return grade == Grade.III && !confirmedPermanent;
+        }
+
+        return false;
+    }
+
+    private boolean isPermanentRequirementType(RequirementType type) {
+        return type == RequirementType.EB_GRADE_3
+                || type == RequirementType.GOVERNMENT_LANGUAGE_QUALIFICATION
+                || type == RequirementType.MEDICAL_REPORT
+                || type == RequirementType.OL_CERTIFICATE
+                || type == RequirementType.AL_CERTIFICATE
+                || type == RequirementType.DEGREE_CERTIFICATE
+                || type == RequirementType.BIRTH_CERTIFICATE
+                || type == RequirementType.CUSTOM_PERMANENT_REQUIREMENT;
+    }
+
+    private boolean isGrade2RequirementType(RequirementType type) {
+        return type == RequirementType.EB_GRADE_2
+                || type == RequirementType.CUSTOM_GRADE_2_REQUIREMENT;
+    }
+
+    private boolean isGrade1RequirementType(RequirementType type) {
+        return type == RequirementType.EB_GRADE_1
+                || type == RequirementType.CUSTOM_GRADE_1_REQUIREMENT;
     }
 }

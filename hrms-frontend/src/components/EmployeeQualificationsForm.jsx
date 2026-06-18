@@ -19,14 +19,11 @@ import { dialogActionsSx } from "../utils/formLayout";
 import {
     buildQualificationUpdatePayload,
     getQualificationUpdateContext,
+    isNamedRequirementCompleted,
+    isRequirementLocked,
     mapEmployeeToQualificationForm,
     requirementKey
 } from "../utils/employeeQualificationForm";
-import {
-    FIXED_GRADE1_REQUIREMENTS,
-    FIXED_GRADE2_REQUIREMENTS,
-    FIXED_PERMANENT_REQUIREMENTS
-} from "../constants/hrms";
 
 const FIXED_REQUIREMENT_FIELD_NAMES = {
     EB_GRADE_3: "ebGrade3Passed",
@@ -40,15 +37,6 @@ const FIXED_REQUIREMENT_FIELD_NAMES = {
     EB_GRADE_1: "ebGrade1Passed"
 };
 
-const isNamedRequirementCompleted = (employee, type, name) =>
-    (employee?.requirements || []).some(
-        (requirement) =>
-            requirement.requirementType === type
-            && requirement.status === "COMPLETED"
-            && (requirement.requirementName || "").toLowerCase()
-                === name.toLowerCase()
-);
-
 const normalizeRequirements = (requirements) => {
     if (!requirements) {
         return [];
@@ -59,12 +47,44 @@ const normalizeRequirements = (requirements) => {
     return Object.values(requirements);
 };
 
-function renderFixedRequirementCheckboxes(fixedRequirements, formData, handleChange) {
+const isFieldLocked = (fieldName, employee, sectionId) => {
+    const fixedType = Object.entries(FIXED_REQUIREMENT_FIELD_NAMES).find(
+        ([, value]) => value === fieldName
+    )?.[0];
+
+    if (fixedType) {
+        return isRequirementLocked(employee, fixedType, null, sectionId);
+    }
+
+    const separatorIndex = fieldName.indexOf(":");
+    if (separatorIndex === -1) {
+        return false;
+    }
+
+    const type = fieldName.slice(0, separatorIndex);
+    const name = fieldName.slice(separatorIndex + 1);
+    return isRequirementLocked(employee, type, name, sectionId);
+};
+
+function renderFixedRequirementCheckboxes(
+    fixedRequirements,
+    formData,
+    handleChange,
+    employee,
+    sectionId
+) {
     return fixedRequirements.map(({ requirementType, label }) => {
         const fieldName = FIXED_REQUIREMENT_FIELD_NAMES[requirementType];
         if (!fieldName) {
             return null;
         }
+
+        const locked = isRequirementLocked(
+            employee,
+            requirementType,
+            null,
+            sectionId
+        );
 
         return (
             <Grid key={requirementType} size={{ xs: 12, sm: 6, md: 4 }}>
@@ -74,9 +94,10 @@ function renderFixedRequirementCheckboxes(fixedRequirements, formData, handleCha
                             name={fieldName}
                             checked={Boolean(formData[fieldName])}
                             onChange={handleChange}
+                            disabled={locked}
                         />
                     }
-                    label={label}
+                    label={locked ? `${label} (Completed)` : label}
                 />
             </Grid>
         );
@@ -88,7 +109,8 @@ function renderCustomRequirementCheckboxes(
     designationRequirements,
     formData,
     employee,
-    handleChange
+    handleChange,
+    sectionId
 ) {
     return normalizeRequirements(designationRequirements).map((requirement) => {
         const key = requirementKey(
@@ -100,6 +122,12 @@ function renderCustomRequirementCheckboxes(
             requirementType,
             requirement.requirementName
         );
+        const locked = isRequirementLocked(
+            employee,
+            requirementType,
+            requirement.requirementName,
+            sectionId
+        );
 
         return (
             <Grid key={key} size={{ xs: 12, sm: 6, md: 4 }}>
@@ -109,13 +137,67 @@ function renderCustomRequirementCheckboxes(
                             name={key}
                             checked={Boolean(checked)}
                             onChange={handleChange}
+                            disabled={locked}
                         />
                     }
-                    label={requirement.requirementName}
+                    label={
+                        locked
+                            ? `${requirement.requirementName} (Completed)`
+                            : requirement.requirementName
+                    }
                 />
             </Grid>
         );
     });
+}
+
+function renderSectionContent(section, designation, formData, employee, handleChange) {
+    return (
+        <>
+            {section.showGrade2Years
+                && designation?.grade2RequiredYears != null && (
+                <Chip
+                    size="small"
+                    label={`Required service before Grade II: ${designation.grade2RequiredYears} year(s) from first appointment`}
+                    variant="outlined"
+                    sx={{ mb: 2 }}
+                />
+            )}
+            {section.showGrade1Years
+                && designation?.grade1RequiredYears != null && (
+                <Chip
+                    size="small"
+                    label={`Required service before Grade I: ${designation.grade1RequiredYears} year(s) in present Grade II class`}
+                    variant="outlined"
+                    sx={{ mb: 2 }}
+                />
+            )}
+            <Grid container spacing={1.5}>
+                {renderFixedRequirementCheckboxes(
+                    section.fixedRequirements,
+                    formData,
+                    handleChange,
+                    employee,
+                    section.id
+                )}
+                {renderCustomRequirementCheckboxes(
+                    section.customType,
+                    designation?.[section.customField],
+                    formData,
+                    employee,
+                    handleChange,
+                    section.id
+                )}
+            </Grid>
+            {section.customType
+                && normalizeRequirements(designation?.[section.customField]).length === 0 && (
+                <Alert severity="info" sx={{ mt: 1 }}>
+                    No custom requirements are configured for this designation
+                    in this section.
+                </Alert>
+            )}
+        </>
+    );
 }
 
 export default function EmployeeQualificationsForm({
@@ -136,6 +218,25 @@ export default function EmployeeQualificationsForm({
 
     const handleChange = (event) => {
         const { name, checked } = event.target;
+
+        const sectionId = context.sections.find((section) => {
+            const fixedType = Object.entries(FIXED_REQUIREMENT_FIELD_NAMES).find(
+                ([, value]) => value === name
+            )?.[0];
+
+            if (fixedType) {
+                return section.fixedRequirements.some(
+                    (requirement) => requirement.requirementType === fixedType
+                );
+            }
+
+            return name.startsWith(`${section.customType}:`);
+        })?.id;
+
+        if (!checked && isFieldLocked(name, employee, sectionId)) {
+            return;
+        }
+
         setFormData((current) => ({
             ...current,
             [name]: checked
@@ -148,99 +249,6 @@ export default function EmployeeQualificationsForm({
         }
 
         handleSubmit(buildQualificationUpdatePayload(employee, formData));
-    };
-
-    const renderSectionFields = () => {
-        if (context.section === "permanent") {
-            return (
-                <Grid container spacing={1.5}>
-                    {renderFixedRequirementCheckboxes(
-                        FIXED_PERMANENT_REQUIREMENTS,
-                        formData,
-                        handleChange
-                    )}
-                    {renderCustomRequirementCheckboxes(
-                        "CUSTOM_PERMANENT_REQUIREMENT",
-                        designation?.permanentRequirements,
-                        formData,
-                        employee,
-                        handleChange
-                    )}
-                </Grid>
-            );
-        }
-
-        if (context.section === "grade2") {
-            return (
-                <>
-                    {designation?.grade2RequiredYears != null && (
-                        <Chip
-                            size="small"
-                            label={`Required service before Grade II: ${designation.grade2RequiredYears} year(s) from first appointment`}
-                            variant="outlined"
-                            sx={{ mb: 2 }}
-                        />
-                    )}
-                    <Grid container spacing={1.5}>
-                        {renderFixedRequirementCheckboxes(
-                            FIXED_GRADE2_REQUIREMENTS,
-                            formData,
-                            handleChange
-                        )}
-                        {renderCustomRequirementCheckboxes(
-                            "CUSTOM_GRADE_2_REQUIREMENT",
-                            designation?.grade2Requirements,
-                            formData,
-                            employee,
-                            handleChange
-                        )}
-                    </Grid>
-                    {normalizeRequirements(designation?.grade2Requirements).length === 0 && (
-                        <Alert severity="info" sx={{ mt: 1 }}>
-                            No custom Grade II requirements are configured for this
-                            designation.
-                        </Alert>
-                    )}
-                </>
-            );
-        }
-
-        if (context.section === "grade1") {
-            return (
-                <>
-                    {designation?.grade1RequiredYears != null && (
-                        <Chip
-                            size="small"
-                            label={`Required service before Grade I: ${designation.grade1RequiredYears} year(s) in present Grade II class`}
-                            variant="outlined"
-                            sx={{ mb: 2 }}
-                        />
-                    )}
-                    <Grid container spacing={1.5}>
-                        {renderFixedRequirementCheckboxes(
-                            FIXED_GRADE1_REQUIREMENTS,
-                            formData,
-                            handleChange
-                        )}
-                        {renderCustomRequirementCheckboxes(
-                            "CUSTOM_GRADE_1_REQUIREMENT",
-                            designation?.grade1Requirements,
-                            formData,
-                            employee,
-                            handleChange
-                        )}
-                    </Grid>
-                    {normalizeRequirements(designation?.grade1Requirements).length === 0 && (
-                        <Alert severity="info" sx={{ mt: 1 }}>
-                            No custom Grade I requirements are configured for this
-                            designation.
-                        </Alert>
-                    )}
-                </>
-            );
-        }
-
-        return null;
     };
 
     return (
@@ -287,12 +295,23 @@ export default function EmployeeQualificationsForm({
                             />
                         </Stack>
 
-                        <FormSection
-                            title={context.title}
-                            description={context.description}
-                        >
-                            {renderSectionFields()}
-                        </FormSection>
+                        <Stack spacing={3}>
+                            {context.sections.map((section) => (
+                                <FormSection
+                                    key={section.id}
+                                    title={section.title}
+                                    description={section.description}
+                                >
+                                    {renderSectionContent(
+                                        section,
+                                        designation,
+                                        formData,
+                                        employee,
+                                        handleChange
+                                    )}
+                                </FormSection>
+                            ))}
+                        </Stack>
                     </>
                 )}
             </DialogContent>

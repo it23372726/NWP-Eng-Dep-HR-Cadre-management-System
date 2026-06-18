@@ -48,6 +48,23 @@ public class EmployeeAction {
 
     private String transferredTo;
 
+    private String department;
+
+    private String office;
+
+    private String fromDepartment;
+
+    private String fromOffice;
+
+    private String toDepartment;
+
+    private String toOffice;
+
+    @Enumerated(EnumType.STRING)
+    private District district;
+
+    private Long linkedActionId;
+
     private String reason;
 
     private String remarks;

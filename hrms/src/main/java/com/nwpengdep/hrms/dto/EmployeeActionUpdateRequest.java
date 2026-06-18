@@ -19,15 +19,18 @@ public class EmployeeActionUpdateRequest {
 
     private Long newDesignationId;
 
-    private String transferredFrom;
+    private String department;
 
-    private String transferredTo;
+    private String office;
+
+    private String toDepartment;
+
+    private String toOffice;
 
     private String reason;
 
     private String remarks;
 
-    // For promotion updates only
     private String grade;
 
     private Long serviceLevelId;

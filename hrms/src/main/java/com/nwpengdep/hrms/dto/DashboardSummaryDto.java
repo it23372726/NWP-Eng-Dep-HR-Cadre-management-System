@@ -33,5 +33,15 @@ public class DashboardSummaryDto {
 
     private Integer eligibleForGrade1;
 
+    private Integer eligibleGrade3To2;
+
+    private Integer eligibleGrade2To1;
+
     private Integer recentlyQualified;
+
+    private Integer missingQualifications;
+
+    private Integer promotionsThisYear;
+
+    private Integer newAppointmentsThisYear;
 }

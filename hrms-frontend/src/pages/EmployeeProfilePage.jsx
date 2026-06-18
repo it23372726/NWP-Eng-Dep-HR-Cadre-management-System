@@ -9,23 +9,26 @@ import {
     ListItemIcon,
     ListItemText,
     Tabs,
-    Tab
+    Tab,
+    CircularProgress
 } from "@mui/material";
+import FileDownloadIcon from "@mui/icons-material/FileDownload";
 
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 
-import { getEmployeeById, updateEmployee } from "../services/employeeService";
+import { getEmployeeById, saveEmployeePhoto, updateEmployee, getVehiclePermitStatus, recordVehiclePermitCollection, downloadEmployeeSummaryPdf } from "../services/employeeService";
+import { triggerDownload } from "../services/allEmployeeDetailsReportService";
 import { getDesignations } from "../services/designationService";
 import {
     getEmployeeActions,
     transferOutEmployee,
+    officeChangeEmployee,
     promoteEmployee,
     retireEmployee,
     markEmployeeDeath,
     dismissEmployee,
-    transferInEmployee,
     appointNewEmployee,
     makeEmployeePermanent,
     deleteEmployeePermanently
@@ -34,14 +37,17 @@ import {
 import EmployeeStatusChip from "../components/EmployeeStatusChip";
 import EmployeeActionHistoryTable from "../components/EmployeeActionHistoryTable";
 import EmployeeProfilePersonalTab from "../components/EmployeeProfilePersonalTab";
+import RevokePrivateVehicleDialog from "../components/RevokePrivateVehicleDialog";
+import RecordVehiclePermitDialog from "../components/RecordVehiclePermitDialog";
 import TransferOutDialog from "../components/lifecycle/TransferOutDialog";
-import TransferInDialog from "../components/lifecycle/TransferInDialog";
+import OfficeChangeDialog from "../components/lifecycle/OfficeChangeDialog";
 import NewAppointmentDialog from "../components/lifecycle/NewAppointmentDialog";
 import PromotionDialog from "../components/lifecycle/PromotionDialog";
 import SimpleLifecycleDialog from "../components/lifecycle/SimpleLifecycleDialog";
 import MakePermanentDialog from "../components/lifecycle/MakePermanentDialog";
 import DeleteEmployeeDialog from "../components/DeleteEmployeeDialog";
 import EmployeeForm from "../components/EmployeeForm";
+import EmployeeAvatar from "../components/EmployeeAvatar";
 import EmployeeQualificationsCard from "../components/EmployeeQualificationsCard";
 import EmployeeQualificationsForm from "../components/EmployeeQualificationsForm";
 import { getQualificationUpdateContext } from "../utils/employeeQualificationForm";
@@ -49,6 +55,9 @@ import {
     getApiErrorMessage,
     isRequirementCompleted
 } from "../constants/hrms";
+import { getLatestEventDate } from "../utils/timelineDates";
+import { buildRevokePrivateVehiclePayload } from "../utils/employeeFormUtils";
+import { isSeniorEmployee } from "../utils/vehiclePermit";
 
 const getThreeYearRequirementDate = (dateOfFirstAppointment) => {
     if (!dateOfFirstAppointment) {
@@ -93,7 +102,7 @@ export default function EmployeeProfilePage() {
     const [actionHistory, setActionHistory] = useState([]);
     const [designations, setDesignations] = useState([]);
     const [openTransferOut, setOpenTransferOut] = useState(false);
-    const [openTransferIn, setOpenTransferIn] = useState(false);
+    const [openOfficeChange, setOpenOfficeChange] = useState(false);
     const [openNewAppointment, setOpenNewAppointment] = useState(false);
     const [openPromote, setOpenPromote] = useState(false);
     const [openRetire, setOpenRetire] = useState(false);
@@ -103,8 +112,15 @@ export default function EmployeeProfilePage() {
     const [openDelete, setOpenDelete] = useState(false);
     const [openEdit, setOpenEdit] = useState(false);
     const [openQualifications, setOpenQualifications] = useState(false);
+    const [openRevokePrivateVehicle, setOpenRevokePrivateVehicle] = useState(false);
+    const [openRecordVehiclePermit, setOpenRecordVehiclePermit] = useState(false);
+    const [savingEmployee, setSavingEmployee] = useState(false);
+    const [revokingPrivateVehicle, setRevokingPrivateVehicle] = useState(false);
+    const [recordingVehiclePermit, setRecordingVehiclePermit] = useState(false);
+    const [vehiclePermitStatus, setVehiclePermitStatus] = useState(null);
     const [anchorEl, setAnchorEl] = useState(null);
     const [activeTab, setActiveTab] = useState(0);
+    const [downloadingSummaryPdf, setDownloadingSummaryPdf] = useState(false);
 
     const isActive = employee?.status === "ACTIVE";
 
@@ -123,6 +139,13 @@ export default function EmployeeProfilePage() {
             setEmployee(selectedEmployee);
             setActionHistory(actions);
             setDesignations(designationsData);
+
+            if (isSeniorEmployee(selectedEmployee)) {
+                const status = await getVehiclePermitStatus(id);
+                setVehiclePermitStatus(status);
+            } else {
+                setVehiclePermitStatus(null);
+            }
         } catch {
             toast.error("Failed to load profile");
         }
@@ -142,14 +165,39 @@ export default function EmployeeProfilePage() {
         }
     };
 
-    const handleUpdate = async (data) => {
+    const handleDownloadSummaryPdf = async () => {
+        if (downloadingSummaryPdf || !employee) {
+            return;
+        }
+
+        setDownloadingSummaryPdf(true);
+        try {
+            const blob = await downloadEmployeeSummaryPdf(employee.id);
+            const identifier = employee.employeeNo || employee.id;
+            triggerDownload(blob, `employee-summary-${identifier}.pdf`);
+        } catch (error) {
+            toast.error(getApiErrorMessage(error) || "Failed to download summary PDF");
+        } finally {
+            setDownloadingSummaryPdf(false);
+        }
+    };
+
+    const handleUpdate = async (data, photoOptions) => {
+        if (savingEmployee) {
+            return;
+        }
+
+        setSavingEmployee(true);
         try {
             await updateEmployee(employee.id, data);
+            await saveEmployeePhoto(employee.id, photoOptions);
             toast.success("Employee updated successfully");
             setOpenEdit(false);
             loadProfile();
         } catch (error) {
             toast.error(getApiErrorMessage(error));
+        } finally {
+            setSavingEmployee(false);
         }
     };
 
@@ -161,6 +209,46 @@ export default function EmployeeProfilePage() {
             loadProfile();
         } catch (error) {
             toast.error(getApiErrorMessage(error));
+        }
+    };
+
+    const handleRevokePrivateVehicle = async () => {
+        if (revokingPrivateVehicle) {
+            return;
+        }
+
+        setRevokingPrivateVehicle(true);
+        try {
+            await updateEmployee(
+                employee.id,
+                buildRevokePrivateVehiclePayload(employee)
+            );
+            toast.success("Private vehicle permission removed");
+            setOpenRevokePrivateVehicle(false);
+            loadProfile();
+        } catch (error) {
+            toast.error(getApiErrorMessage(error));
+        } finally {
+            setRevokingPrivateVehicle(false);
+        }
+    };
+
+    const handleRecordVehiclePermit = async (collectedDate) => {
+        if (recordingVehiclePermit) {
+            return;
+        }
+
+        setRecordingVehiclePermit(true);
+        try {
+            const status = await recordVehiclePermitCollection(employee.id, collectedDate);
+            setVehiclePermitStatus(status);
+            toast.success("Vehicle permit collection recorded");
+            setOpenRecordVehiclePermit(false);
+            loadProfile();
+        } catch (error) {
+            toast.error(getApiErrorMessage(error));
+        } finally {
+            setRecordingVehiclePermit(false);
         }
     };
 
@@ -181,6 +269,7 @@ export default function EmployeeProfilePage() {
     const threeYearDate = getThreeYearRequirementDate(
         employee.dateOfFirstAppointment
     );
+    const previousEventDate = getLatestEventDate(actionHistory);
     const qualificationContext = getQualificationUpdateContext(employee);
     const canUpdateQualifications =
         isActive && qualificationContext.canUpdate;
@@ -197,24 +286,41 @@ export default function EmployeeProfilePage() {
                     gap: 2
                 }}
             >
-                <Box>
-                    <Stack
-                        direction="row"
-                        spacing={1}
-                        sx={{ alignItems: "center" }}
-                    >
-                        <Typography variant="h4">
-                            {employee.fullName}
+                <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
+                    <EmployeeAvatar employee={employee} />
+                    <Box>
+                        <Stack
+                            direction="row"
+                            spacing={1}
+                            sx={{ alignItems: "center" }}
+                        >
+                            <Typography variant="h4">
+                                {employee.fullName}
+                            </Typography>
+                            <EmployeeStatusChip status={employee.status} />
+                        </Stack>
+                        <Typography color="text.secondary">
+                            {employee.employeeNo} · {employee.designation?.designationName}
                         </Typography>
-                        <EmployeeStatusChip status={employee.status} />
-                    </Stack>
-                    <Typography color="text.secondary">
-                        {employee.employeeNo} · {employee.designation?.designationName}
-                    </Typography>
-                </Box>
+                    </Box>
+                </Stack>
 
-                {isActive && (
-                    <Stack direction="row" spacing={1} flexWrap="wrap">
+                <Stack direction="row" spacing={1} flexWrap="wrap">
+                    <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={
+                            downloadingSummaryPdf
+                                ? <CircularProgress size={16} color="inherit" />
+                                : <FileDownloadIcon />
+                        }
+                        onClick={handleDownloadSummaryPdf}
+                        disabled={downloadingSummaryPdf}
+                    >
+                        Download Summary PDF
+                    </Button>
+                    {isActive && (
+                        <>
                         <Button
                             variant="outlined"
                             size="small"
@@ -265,21 +371,21 @@ export default function EmployeeProfilePage() {
                             </MenuItem>
                             <MenuItem
                                 onClick={() => {
-                                    setOpenTransferIn(true);
-                                    setAnchorEl(null);
-                                }}
-                            >
-                                <ListItemIcon sx={{ color: "info.main" }}>→</ListItemIcon>
-                                <ListItemText>Transfer In</ListItemText>
-                            </MenuItem>
-                            <MenuItem
-                                onClick={() => {
                                     setOpenTransferOut(true);
                                     setAnchorEl(null);
                                 }}
                             >
                                 <ListItemIcon sx={{ color: "warning.main" }}>←</ListItemIcon>
                                 <ListItemText>Transfer Out</ListItemText>
+                            </MenuItem>
+                            <MenuItem
+                                onClick={() => {
+                                    setOpenOfficeChange(true);
+                                    setAnchorEl(null);
+                                }}
+                            >
+                                <ListItemIcon sx={{ color: "info.main" }}>↔</ListItemIcon>
+                                <ListItemText>Office Change</ListItemText>
                             </MenuItem>
                             <MenuItem
                                 onClick={() => {
@@ -349,8 +455,9 @@ export default function EmployeeProfilePage() {
                                 <ListItemText sx={{ color: "error.main" }}>Delete Permanently</ListItemText>
                             </MenuItem>
                         </Menu>
-                    </Stack>
-                )}
+                        </>
+                    )}
+                </Stack>
             </Stack>
 
             <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 3 }}>
@@ -374,6 +481,17 @@ export default function EmployeeProfilePage() {
                     threeYearDate={threeYearDate}
                     canMakePermanent={canMakePermanent}
                     onMakePermanent={() => setOpenMakePermanent(true)}
+                    onRevokePrivateVehicle={
+                        isActive && employee.privateVehicleUsedForGovWork
+                            ? () => setOpenRevokePrivateVehicle(true)
+                            : null
+                    }
+                    vehiclePermitStatus={vehiclePermitStatus}
+                    onRecordVehiclePermit={
+                        isActive && vehiclePermitStatus?.canCollectNow
+                            ? () => setOpenRecordVehiclePermit(true)
+                            : null
+                    }
                 />
             )}
 
@@ -390,24 +508,21 @@ export default function EmployeeProfilePage() {
             )}
 
             {activeTab === 2 && (
-                <Box>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Most recent lifecycle events appear first. Only the latest action
-                        can be corrected or removed.
-                    </Typography>
-                    <EmployeeActionHistoryTable
-                        actions={actionHistory}
-                        designations={designations}
-                        employee={employee}
-                        onRefresh={loadProfile}
-                    />
-                </Box>
+                <EmployeeActionHistoryTable
+                    actions={actionHistory}
+                    designations={designations}
+                    employee={employee}
+                    onRefresh={loadProfile}
+                />
             )}
 
             <TransferOutDialog
                 open={openTransferOut}
                 onClose={() => setOpenTransferOut(false)}
                 employeeName={employee.fullName}
+                currentDepartment={employee.currentDepartment}
+                currentOffice={employee.currentOffice}
+                previousEventDate={previousEventDate}
                 onSubmit={(data) =>
                     handleLifecycle(
                         async () => {
@@ -419,10 +534,30 @@ export default function EmployeeProfilePage() {
                 }
             />
 
+            <OfficeChangeDialog
+                open={openOfficeChange}
+                onClose={() => setOpenOfficeChange(false)}
+                employeeName={employee.fullName}
+                currentDepartment={employee.currentDepartment}
+                currentOffice={employee.currentOffice}
+                currentDistrictOfWorking={employee.currentDistrictOfWorking}
+                previousEventDate={previousEventDate}
+                onSubmit={(data) =>
+                    handleLifecycle(
+                        async () => {
+                            await officeChangeEmployee(employee.id, data);
+                            setOpenOfficeChange(false);
+                        },
+                        "Office updated"
+                    )
+                }
+            />
+
             <PromotionDialog
                 open={openPromote}
                 onClose={() => setOpenPromote(false)}
                 employee={employee}
+                previousEventDate={previousEventDate}
                 onSubmit={(data) => {
                     const isPromotion =
                         data.newDesignationId !== employee.designation?.id;
@@ -445,6 +580,7 @@ export default function EmployeeProfilePage() {
                 title="Retirement / Resignation"
                 description="Employee will be marked inactive. History is preserved."
                 confirmLabel="Confirm Retirement"
+                previousEventDate={previousEventDate}
                 onSubmit={(data) =>
                     handleLifecycle(
                         async () => {
@@ -464,6 +600,7 @@ export default function EmployeeProfilePage() {
                 severity="error"
                 confirmLabel="Confirm"
                 confirmColor="error"
+                previousEventDate={previousEventDate}
                 onSubmit={(data) =>
                     handleLifecycle(
                         async () => {
@@ -484,6 +621,7 @@ export default function EmployeeProfilePage() {
                 confirmLabel="Confirm Dismissal"
                 confirmColor="error"
                 requireReason
+                previousEventDate={previousEventDate}
                 onSubmit={(data) =>
                     handleLifecycle(
                         async () => {
@@ -495,25 +633,14 @@ export default function EmployeeProfilePage() {
                 }
             />
 
-            <TransferInDialog
-                open={openTransferIn}
-                onClose={() => setOpenTransferIn(false)}
-                employeeName={employee.fullName}
-                onSubmit={(data) =>
-                    handleLifecycle(
-                        async () => {
-                            await transferInEmployee(employee.id, data);
-                            setOpenTransferIn(false);
-                        },
-                        "Employee transferred in"
-                    )
-                }
-            />
-
             <NewAppointmentDialog
                 open={openNewAppointment}
                 onClose={() => setOpenNewAppointment(false)}
                 employeeName={employee.fullName}
+                defaultDepartment={employee.currentDepartment}
+                defaultOffice={employee.currentOffice}
+                defaultDistrict={employee.currentDistrictOfWorking}
+                previousEventDate={previousEventDate}
                 onSubmit={(data) =>
                     handleLifecycle(
                         async () => {
@@ -530,6 +657,7 @@ export default function EmployeeProfilePage() {
                 onClose={() => setOpenMakePermanent(false)}
                 employeeName={employee.fullName}
                 minDate={threeYearDate}
+                previousEventDate={previousEventDate}
                 onSubmit={(data) =>
                     handleLifecycle(
                         async () => {
@@ -564,6 +692,7 @@ export default function EmployeeProfilePage() {
                 handleSubmit={handleUpdate}
                 selectedEmployee={employee}
                 actionHistory={actionHistory}
+                saving={savingEmployee}
             />
 
             <EmployeeQualificationsForm
@@ -571,6 +700,22 @@ export default function EmployeeProfilePage() {
                 handleClose={() => setOpenQualifications(false)}
                 handleSubmit={handleQualificationUpdate}
                 employee={employee}
+            />
+
+            <RevokePrivateVehicleDialog
+                open={openRevokePrivateVehicle}
+                onClose={() => setOpenRevokePrivateVehicle(false)}
+                onConfirm={handleRevokePrivateVehicle}
+                employeeName={employee.fullName}
+                saving={revokingPrivateVehicle}
+            />
+
+            <RecordVehiclePermitDialog
+                open={openRecordVehiclePermit}
+                onClose={() => setOpenRecordVehiclePermit(false)}
+                onConfirm={handleRecordVehiclePermit}
+                vehiclePermitStatus={vehiclePermitStatus}
+                saving={recordingVehiclePermit}
             />
         </Box>
     );

@@ -25,6 +25,7 @@ import { createFormFieldProps, dialogActionsSx } from "../../utils/formLayout";
 import {
     GRADES,
     isRequirementCompleted,
+    NWP_ENGINEERING_DEPARTMENT,
     REQUIREMENT_STATUS,
     validateDesignationAssignment
 } from "../../constants/hrms";
@@ -34,8 +35,7 @@ import {
     getGrade2EligibilityDate,
     getGrade3AchievedDate
 } from "../../utils/gradeAchievementDates";
-
-const today = () => new Date().toISOString().split("T")[0];
+import { combineMinDates, timelineMinDateHelperText } from "../../utils/timelineDates";
 
 const formatDisplayDate = (date) => {
     if (!date) return "—";
@@ -204,7 +204,8 @@ export default function PromotionDialog({
     open,
     onClose,
     onSubmit,
-    employee
+    employee,
+    previousEventDate
 }) {
     const [designations, setDesignations] = useState([]);
     const [serviceLevels, setServiceLevels] = useState([]);
@@ -214,7 +215,7 @@ export default function PromotionDialog({
         serviceLevelId: "",
         ebGrade2Passed: false,
         ebGrade1Passed: false,
-        promotionDate: today(),
+        promotionDate: "",
         remarks: ""
     });
     const [error, setError] = useState("");
@@ -244,7 +245,7 @@ export default function PromotionDialog({
                 serviceLevelId: String(employee.serviceLevel?.id ?? ""),
                 ebGrade2Passed: isRequirementCompleted(employee, "EB_GRADE_2"),
                 ebGrade1Passed: isRequirementCompleted(employee, "EB_GRADE_1"),
-                promotionDate: today(),
+                promotionDate: "",
                 remarks: ""
             };
 
@@ -390,11 +391,15 @@ export default function PromotionDialog({
         selectedDesignation
     );
 
-    const minEffectiveDate = isGrade2Promotion
+    const serviceMinEffectiveDate = isGrade2Promotion
         ? grade2EligibleDate
         : isGrade1Promotion
             ? grade1EligibleDate
             : null;
+    const minEffectiveDate = combineMinDates(
+        serviceMinEffectiveDate,
+        previousEventDate
+    );
     const effectiveDateTooEarly = Boolean(
         minEffectiveDate
         && form.promotionDate
@@ -530,17 +535,20 @@ export default function PromotionDialog({
             return;
         }
 
-        const minDate = employee?.grade === "III" && nextForm.grade === "II"
-            ? getGrade2EligibilityDate(
-                buildPromotionCandidate(nextForm, "grade2", designation),
-                designation
-            )
-            : employee?.grade === "II" && nextForm.grade === "I"
-                ? getGrade1EligibilityDate(
-                    buildPromotionCandidate(nextForm, "grade1", designation),
+        const minDate = combineMinDates(
+            employee?.grade === "III" && nextForm.grade === "II"
+                ? getGrade2EligibilityDate(
+                    buildPromotionCandidate(nextForm, "grade2", designation),
                     designation
                 )
-                : null;
+                : employee?.grade === "II" && nextForm.grade === "I"
+                    ? getGrade1EligibilityDate(
+                        buildPromotionCandidate(nextForm, "grade1", designation),
+                        designation
+                    )
+                    : null,
+            previousEventDate
+        );
 
         if (
             minDate
@@ -548,8 +556,8 @@ export default function PromotionDialog({
             && nextForm.promotionDate < minDate
         ) {
             setError(
-                `Effective date cannot be earlier than ${formatDisplayDate(minDate)}. `
-                + "The required service period is not completed by the selected date."
+                timelineMinDateHelperText(minDate, { tooEarly: true })
+                || `Effective date cannot be earlier than ${formatDisplayDate(minDate)}.`
             );
             return;
         }
@@ -735,6 +743,9 @@ export default function PromotionDialog({
         && !effectiveDateTooEarly
         && hasAssignmentChange;
 
+    const inNwpDepartment =
+        employee?.currentDepartment === NWP_ENGINEERING_DEPARTMENT;
+
     const serviceLabel = employee?.designation?.service
         ? `${employee.designation.service.serviceCode} — ${employee.designation.service.description}`
         : "—";
@@ -882,6 +893,16 @@ export default function PromotionDialog({
                             </TextField>
                         </Grid>
 
+                        {!inNwpDepartment && (
+                            <Grid size={{ xs: 12 }}>
+                                <Alert severity="info">
+                                    This promotion will be recorded but will not
+                                    appear in the Cadre report because the employee
+                                    is not in {NWP_ENGINEERING_DEPARTMENT}.
+                                </Alert>
+                            </Grid>
+                        )}
+
                         <Grid size={{ xs: 12, sm: 6 }}>
                             <TextField
                                 {...dateFieldProps}
@@ -892,6 +913,7 @@ export default function PromotionDialog({
                                 }
                                 name="promotionDate"
                                 value={form.promotionDate}
+                                required
                                 slotProps={{
                                     ...dateFieldProps.slotProps,
                                     htmlInput: minEffectiveDate
@@ -901,9 +923,12 @@ export default function PromotionDialog({
                                 error={effectiveDateTooEarly}
                                 helperText={
                                     effectiveDateTooEarly
-                                        ? `Cannot be earlier than ${formatDisplayDate(minEffectiveDate)} (required service period not completed).`
+                                        ? timelineMinDateHelperText(
+                                            minEffectiveDate,
+                                            { tooEarly: true }
+                                        )
                                         : minEffectiveDate
-                                            ? `Earliest allowed date: ${formatDisplayDate(minEffectiveDate)}. Becomes the new present class / grade date.`
+                                            ? `${timelineMinDateHelperText(minEffectiveDate)} Becomes the new present class / grade date.`
                                             : gradeChanged
                                                 ? "Becomes the new present class / grade date."
                                                 : "Date this assignment change takes effect."

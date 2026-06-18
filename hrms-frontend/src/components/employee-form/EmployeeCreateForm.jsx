@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 
 import { Alert } from "@mui/material";
 
@@ -12,7 +12,8 @@ import {
     buildNonPermanentCreatePayload,
     buildPermanentCreatePayload,
     emptyForm,
-    validateCareerHistoryTimeline
+    validateCareerHistoryTimeline,
+    validatePrivateVehicleFields
 } from "../../utils/employeeFormUtils";
 import { validateDesignationAssignment } from "../../constants/hrms";
 import CareerHistoryBuilder, {
@@ -23,6 +24,7 @@ import EmployeeEmploymentTypeSection, {
     EmployeeNonPermanentPositionSection
 } from "./EmployeeEmploymentTypeSection";
 import EmployeePersonalSection from "./EmployeePersonalSection";
+import EmployeePhotoUpload from "./EmployeePhotoUpload";
 import EmployeeQualificationsSection from "./EmployeeQualificationsSection";
 import EmployeeWorkplaceSection from "./EmployeeWorkplaceSection";
 
@@ -36,6 +38,11 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
     const [historyEvents, setHistoryEvents] = useState([]);
     const [assignmentError, setAssignmentError] = useState("");
     const [submitError, setSubmitError] = useState("");
+    const photoOptionsRef = useRef({ photoFile: null, removePhoto: false });
+
+    const handlePhotoChange = useCallback((options) => {
+        photoOptionsRef.current = options;
+    }, []);
 
     useEffect(() => {
         if (open) {
@@ -43,6 +50,7 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
             setHistoryEvents([]);
             setAssignmentError("");
             setSubmitError("");
+            photoOptionsRef.current = { photoFile: null, removePhoto: false };
         }
     }, [open]);
 
@@ -107,6 +115,11 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
             }
         }
 
+        if (name === "privateVehicleUsedForGovWork" && value === "No") {
+            nextFormData.privateVehicleDescription = "";
+            nextFormData.privateVehiclePermissionDate = "";
+        }
+
         nextFormData = applyGradeDerivedRequirements(nextFormData);
 
         if (name === "designationId") {
@@ -153,6 +166,12 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
     const submitForm = () => {
         setSubmitError("");
 
+        const privateVehicleError = validatePrivateVehicleFields(formData);
+        if (privateVehicleError) {
+            setSubmitError(privateVehicleError);
+            return false;
+        }
+
         if (isPermanent) {
             if (!hasHistory) {
                 setSubmitError(
@@ -185,7 +204,8 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
                     formData,
                     historyEvents,
                     selectedDesignation
-                )
+                ),
+                photoOptionsRef.current
             );
             return true;
         }
@@ -196,7 +216,8 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
         }
 
         handleSubmit(
-            buildNonPermanentCreatePayload(formData, selectedDesignation, null)
+            buildNonPermanentCreatePayload(formData, selectedDesignation, null),
+            photoOptionsRef.current
         );
         return true;
     };
@@ -218,6 +239,12 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
                 fieldProps={fieldProps}
                 dateFieldProps={dateFieldProps}
                 selectFieldProps={selectFieldProps}
+                photoSlot={(
+                    <EmployeePhotoUpload
+                        open={open}
+                        onChange={handlePhotoChange}
+                    />
+                )}
             />
 
             {isPermanent ? (
@@ -242,6 +269,8 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
                                 dateFieldProps={dateFieldProps}
                                 selectFieldProps={selectFieldProps}
                                 variant="permanent"
+                                readOnlyWorkplace
+                                onIncrementDateChange={handleChange}
                             />
 
                             <EmployeeQualificationsSection
@@ -274,6 +303,19 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
                         dateFieldProps={dateFieldProps}
                         selectFieldProps={selectFieldProps}
                         variant="nonPermanent"
+                        onDistrictChange={(value) =>
+                            setFormData((prev) => ({
+                                ...prev,
+                                currentDistrictOfWorking: value,
+                                currentWorkingPlace: ""
+                            }))
+                        }
+                        onOfficeChange={(value) =>
+                            setFormData((prev) => ({
+                                ...prev,
+                                currentWorkingPlace: value
+                            }))
+                        }
                     />
                 </>
             )}

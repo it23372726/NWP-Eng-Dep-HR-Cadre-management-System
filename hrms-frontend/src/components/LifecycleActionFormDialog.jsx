@@ -9,7 +9,8 @@ import {
     Grid,
     Alert,
     Chip,
-    Stack
+    Stack,
+    Typography
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
@@ -23,8 +24,11 @@ import {
 } from "../constants/hrms";
 import { createFormFieldProps, dialogActionsSx } from "../utils/formLayout";
 import { getMinimumPromotionEffectiveDate } from "../utils/gradeAchievementDates";
-
-const today = () => new Date().toISOString().split("T")[0];
+import {
+    combineMinDates,
+    getPreviousEventDateForEdit,
+    timelineMinDateHelperText
+} from "../utils/timelineDates";
 
 const formatDisplayDate = (date) =>
     date ? new Date(`${date}T00:00:00`).toLocaleDateString("en-GB") : "—";
@@ -44,6 +48,7 @@ export default function LifecycleActionFormDialog({
     action,
     employee,
     designations,
+    actionHistory,
     onSuccess
 }) {
     const [serviceLevels, setServiceLevels] = useState([]);
@@ -51,7 +56,7 @@ export default function LifecycleActionFormDialog({
         newDesignationId: "",
         grade: "",
         serviceLevelId: "",
-        actionDate: today(),
+        actionDate: "",
         remarks: ""
     });
     const [error, setError] = useState("");
@@ -70,23 +75,24 @@ export default function LifecycleActionFormDialog({
         getServiceLevels().then((levelData) => {
             setServiceLevels(levelData);
 
-            const initialForm = {
+            const serviceLevelId = action.serviceLevelId
+                ?? (action.canModify ? employee?.serviceLevel?.id : null);
+
+            setForm({
                 newDesignationId: String(action.newDesignationId || ""),
                 grade: action.newGrade || "",
-                serviceLevelId: "",
-                actionDate: action.actionDate || today(),
+                serviceLevelId: serviceLevelId ? String(serviceLevelId) : "",
+                actionDate: action.actionDate || "",
                 remarks: action.remarks || ""
-            };
-
-            setForm(initialForm);
+            });
         });
-    }, [open, action]);
+    }, [open, action, employee]);
 
     const designation = designations?.find(
         (d) => d.id === Number(form.newDesignationId)
     );
 
-    const minimumEffectiveDate = isPromotionLike
+    const serviceMinimumEffectiveDate = isPromotionLike
         ? getMinimumPromotionEffectiveDate(
             employee,
             action?.oldGrade,
@@ -94,6 +100,11 @@ export default function LifecycleActionFormDialog({
             designation || employee?.designation
         )
         : null;
+    const previousEventDate = getPreviousEventDateForEdit(actionHistory, action?.id);
+    const minimumEffectiveDate = combineMinDates(
+        serviceMinimumEffectiveDate,
+        previousEventDate
+    );
     const actionDateTooEarly = Boolean(
         minimumEffectiveDate
         && form.actionDate
@@ -101,39 +112,44 @@ export default function LifecycleActionFormDialog({
     );
 
     const runValidation = (nextForm) => {
-        if (!isPromotionLike) {
-            setError("");
-            return;
+        if (isPromotionLike) {
+            const nextDesignation = designations?.find(
+                (d) => d.id === Number(nextForm.newDesignationId)
+            );
+
+            const validationError = validateDesignationAssignment(
+                buildValidationTarget(
+                    nextForm.grade,
+                    nextForm.serviceLevelId,
+                    serviceLevels
+                ),
+                nextDesignation
+            );
+
+            if (validationError) {
+                setError(validationError);
+                return;
+            }
         }
 
-        const nextDesignation = designations?.find(
-            (d) => d.id === Number(nextForm.newDesignationId)
-        );
-
-        const validationError = validateDesignationAssignment(
-            buildValidationTarget(
-                nextForm.grade,
-                nextForm.serviceLevelId,
-                serviceLevels
-            ),
-            nextDesignation
-        );
-
-        if (validationError) {
-            setError(validationError);
-            return;
-        }
-
-        const minDate = getMinimumPromotionEffectiveDate(
-            employee,
-            action?.oldGrade,
-            action?.newGrade || nextForm.grade,
-            nextDesignation || employee?.designation
+        const minDate = combineMinDates(
+            isPromotionLike
+                ? getMinimumPromotionEffectiveDate(
+                    employee,
+                    action?.oldGrade,
+                    action?.newGrade || nextForm.grade,
+                    designations?.find(
+                        (d) => d.id === Number(nextForm.newDesignationId)
+                    ) || employee?.designation
+                )
+                : null,
+            previousEventDate
         );
 
         if (minDate && nextForm.actionDate && nextForm.actionDate < minDate) {
             setError(
-                `Effective date cannot be earlier than ${formatDisplayDate(minDate)}.`
+                timelineMinDateHelperText(minDate, { tooEarly: true })
+                || `Effective date cannot be earlier than ${formatDisplayDate(minDate)}.`
             );
             return;
         }
@@ -146,8 +162,7 @@ export default function LifecycleActionFormDialog({
         setForm(next);
 
         if (
-            isPromotionLike
-            && [
+            [
                 "newDesignationId",
                 "grade",
                 "serviceLevelId",
@@ -186,20 +201,34 @@ export default function LifecycleActionFormDialog({
                     return;
                 }
 
-                const minDate = getMinimumPromotionEffectiveDate(
-                    employee,
-                    action?.oldGrade,
-                    action?.newGrade || form.grade,
-                    designation || employee?.designation
+                const minDate = combineMinDates(
+                    getMinimumPromotionEffectiveDate(
+                        employee,
+                        action?.oldGrade,
+                        action?.newGrade || form.grade,
+                        designation || employee?.designation
+                    ),
+                    previousEventDate
                 );
 
                 if (minDate && form.actionDate < minDate) {
                     setError(
-                        `Effective date cannot be earlier than ${formatDisplayDate(minDate)}.`
+                        timelineMinDateHelperText(minDate, { tooEarly: true })
+                        || `Effective date cannot be earlier than ${formatDisplayDate(minDate)}.`
                     );
                     setLoading(false);
                     return;
                 }
+            } else if (
+                previousEventDate
+                && form.actionDate
+                && form.actionDate < previousEventDate
+            ) {
+                setError(
+                    timelineMinDateHelperText(previousEventDate, { tooEarly: true })
+                );
+                setLoading(false);
+                return;
             }
 
             const updateData = {
@@ -245,29 +274,17 @@ export default function LifecycleActionFormDialog({
 
             <DialogContent dividers>
                 {isPromotionLike && (
-                    <Alert severity="info" sx={{ mb: 2 }}>
-                        Original designation cannot be changed. Only the target designation,
-                        grade, service level, and effective date can be modified.
-                    </Alert>
+                    <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ mb: 2 }}
+                    >
+                        From: {action?.oldDesignationName || "—"}
+                        {action?.oldGrade ? ` · Grade ${action.oldGrade}` : ""}
+                    </Typography>
                 )}
 
                 <Grid container spacing={2}>
-                {isPromotionLike && (
-                        <Grid size={{ xs: 12 }}>
-                            <TextField
-                                fullWidth
-                                label="From Designation (Original)"
-                                value={action?.oldDesignationName || "—"}
-                                disabled
-                                slotProps={{
-                                    input: {
-                                        readOnly: true
-                                    }
-                                }}
-                            />
-                        </Grid>
-                    )}
-
                     {isPromotionLike && (
                         <Grid size={{ xs: 12 }}>
                             <TextField
@@ -325,6 +342,7 @@ export default function LifecycleActionFormDialog({
                             label="Effective Date"
                             name="actionDate"
                             value={form.actionDate}
+                            required
                             slotProps={{
                                 ...dateFieldProps.slotProps,
                                 htmlInput: {
@@ -334,10 +352,11 @@ export default function LifecycleActionFormDialog({
                             error={actionDateTooEarly}
                             helperText={
                                 actionDateTooEarly
-                                    ? `Cannot be earlier than ${formatDisplayDate(minimumEffectiveDate)} (required service period not completed).`
-                                    : minimumEffectiveDate
-                                        ? `Earliest allowed date: ${formatDisplayDate(minimumEffectiveDate)}`
-                                        : undefined
+                                    ? timelineMinDateHelperText(
+                                        minimumEffectiveDate,
+                                        { tooEarly: true }
+                                    )
+                                    : timelineMinDateHelperText(minimumEffectiveDate)
                             }
                         />
                     </Grid>

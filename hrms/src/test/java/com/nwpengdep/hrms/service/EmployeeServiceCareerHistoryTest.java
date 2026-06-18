@@ -21,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 
+import com.nwpengdep.hrms.constants.DepartmentConstants;
 import com.nwpengdep.hrms.dto.CareerHistoryEventRequest;
 import com.nwpengdep.hrms.dto.EmployeeRequest;
 import com.nwpengdep.hrms.dto.EmployeeUpdateRequest;
@@ -80,8 +81,11 @@ class EmployeeServiceCareerHistoryTest {
                 requirementSyncService,
                 new CareerHistoryValidator(
                         designationRepository,
-                        new DesignationAssignmentValidator()
-                )
+                        new DesignationAssignmentValidator(),
+                        careerProgressionService,
+                        mock(OfficeService.class)
+                ),
+                mock(OfficeService.class)
         );
 
         ServiceType service = new ServiceType();
@@ -187,7 +191,8 @@ class EmployeeServiceCareerHistoryTest {
                 isNull(),
                 isNull(),
                 isNull(),
-                isNull()
+                isNull(),
+                any()
         );
         order.verify(employeeActionService).recordAction(
                 any(Employee.class),
@@ -198,7 +203,8 @@ class EmployeeServiceCareerHistoryTest {
                 isNull(),
                 isNull(),
                 isNull(),
-                isNull()
+                isNull(),
+                any()
         );
         order.verify(employeeActionService).recordActionWithGrades(
                 any(Employee.class),
@@ -211,7 +217,8 @@ class EmployeeServiceCareerHistoryTest {
                 isNull(),
                 isNull(),
                 isNull(),
-                isNull()
+                isNull(),
+                any()
         );
         order.verify(employeeActionService).recalculateEmployeeState(1L);
     }
@@ -262,7 +269,8 @@ class EmployeeServiceCareerHistoryTest {
                 isNull(),
                 isNull(),
                 isNull(),
-                isNull()
+                isNull(),
+                any()
         );
         order.verify(employeeActionService).recalculateEmployeeState(1L);
     }
@@ -379,6 +387,11 @@ class EmployeeServiceCareerHistoryTest {
         CareerHistoryEventRequest event = new CareerHistoryEventRequest();
         event.setActionType(type);
         event.setActionDate(LocalDate.parse(date));
+        if (type != EmployeeActionType.TRANSFER_OUT) {
+            event.setDepartment(DepartmentConstants.NWP_ENGINEERING);
+            event.setOffice("Main Office");
+            event.setDistrict(District.KURUNEGALA);
+        }
         return event;
     }
 }

@@ -6,85 +6,142 @@ export default function EmployeePersonalSection({
     formData,
     fieldProps,
     dateFieldProps,
-    selectFieldProps
+    selectFieldProps,
+    photoSlot
 }) {
+    const showPrivateVehicleDetails = formData.privateVehicleUsedForGovWork === "Yes";
+
     return (
-        <FormSection
-            title="Personal details"
-            description="Official identification and personal information."
-        >
-            <Grid container spacing={2}>
-                <Grid size={{ xs: 12, sm: 4 }}>
-                    <TextField
-                        {...fieldProps}
-                        label="S/N"
-                        name="employeeNo"
-                        value={formData.employeeNo}
-                    />
+        <>
+            <FormSection
+                title="Personal details"
+                description="Official identification and personal information."
+            >
+                {photoSlot}
+                <Grid container spacing={2}>
+                    <Grid size={{ xs: 12, sm: 4 }}>
+                        <TextField
+                            {...fieldProps}
+                            label="S/N"
+                            name="employeeNo"
+                            value={formData.employeeNo}
+                        />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 4 }}>
+                        <TextField
+                            {...fieldProps}
+                            label="NIC No"
+                            name="nic"
+                            value={formData.nic}
+                        />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 4 }}>
+                        <TextField
+                            {...fieldProps}
+                            label="Contact No"
+                            name="contactNo"
+                            value={formData.contactNo}
+                        />
+                    </Grid>
+                    <Grid size={{ xs: 12 }}>
+                        <TextField
+                            {...fieldProps}
+                            label="Full Name"
+                            name="fullName"
+                            value={formData.fullName}
+                        />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 4 }}>
+                        <TextField
+                            {...dateFieldProps}
+                            label="Date of Birth"
+                            name="dateOfBirth"
+                            value={formData.dateOfBirth}
+                        />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 4 }}>
+                        <TextField
+                            {...selectFieldProps}
+                            label="Gender"
+                            name="gender"
+                            value={formData.gender}
+                        >
+                            <MenuItem value="Male">Male</MenuItem>
+                            <MenuItem value="Female">Female</MenuItem>
+                        </TextField>
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 4 }}>
+                        <TextField
+                            {...selectFieldProps}
+                            label="Marital Status"
+                            name="maritalStatus"
+                            value={formData.maritalStatus}
+                        >
+                            <MenuItem value="Married">Married</MenuItem>
+                            <MenuItem value="Unmarried">Unmarried</MenuItem>
+                        </TextField>
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 4 }}>
+                        <TextField
+                            {...fieldProps}
+                            label="Resident District"
+                            name="residentDistrict"
+                            value={formData.residentDistrict}
+                            placeholder="e.g. Kurunegala, Puttalam"
+                        />
+                    </Grid>
+                    <Grid size={{ xs: 12 }}>
+                        <TextField
+                            {...fieldProps}
+                            label="Permanent Address"
+                            name="permanentAddress"
+                            value={formData.permanentAddress}
+                            multiline
+                            minRows={2}
+                        />
+                    </Grid>
                 </Grid>
-                <Grid size={{ xs: 12, sm: 4 }}>
-                    <TextField
-                        {...fieldProps}
-                        label="NIC No"
-                        name="nic"
-                        value={formData.nic}
-                    />
+            </FormSection>
+
+            <FormSection
+                title="Private vehicle for government work"
+                description="Record whether this employee uses their own vehicle for official duties such as field visits. Permission must be obtained before fuel reimbursement."
+            >
+                <Grid container spacing={2}>
+                    <Grid size={{ xs: 12, sm: 4 }}>
+                        <TextField
+                            {...selectFieldProps}
+                            label="Uses private vehicle for government work"
+                            name="privateVehicleUsedForGovWork"
+                            value={formData.privateVehicleUsedForGovWork}
+                        >
+                            <MenuItem value="Yes">Yes</MenuItem>
+                            <MenuItem value="No">No</MenuItem>
+                        </TextField>
+                    </Grid>
+                    {showPrivateVehicleDetails && (
+                        <>
+                            <Grid size={{ xs: 12, sm: 8 }}>
+                                <TextField
+                                    {...fieldProps}
+                                    label="Vehicle"
+                                    name="privateVehicleDescription"
+                                    value={formData.privateVehicleDescription}
+                                    placeholder="e.g. Toyota Hilux – WP ABC-1234"
+                                />
+                            </Grid>
+                            <Grid size={{ xs: 12, sm: 4 }}>
+                                <TextField
+                                    {...dateFieldProps}
+                                    label="Permission date"
+                                    name="privateVehiclePermissionDate"
+                                    value={formData.privateVehiclePermissionDate}
+                                />
+                            </Grid>
+                        </>
+                    )}
                 </Grid>
-                <Grid size={{ xs: 12, sm: 4 }}>
-                    <TextField
-                        {...fieldProps}
-                        label="Contact No"
-                        name="contactNo"
-                        value={formData.contactNo}
-                    />
-                </Grid>
-                <Grid size={{ xs: 12 }}>
-                    <TextField
-                        {...fieldProps}
-                        label="Full Name"
-                        name="fullName"
-                        value={formData.fullName}
-                    />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 4 }}>
-                    <TextField
-                        {...dateFieldProps}
-                        label="Date of Birth"
-                        name="dateOfBirth"
-                        value={formData.dateOfBirth}
-                    />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 4 }}>
-                    <TextField
-                        {...selectFieldProps}
-                        label="Gender"
-                        name="gender"
-                        value={formData.gender}
-                    >
-                        <MenuItem value="Male">Male</MenuItem>
-                        <MenuItem value="Female">Female</MenuItem>
-                    </TextField>
-                </Grid>
-                <Grid size={{ xs: 12, sm: 4 }}>
-                    <TextField
-                        {...fieldProps}
-                        label="Resident District"
-                        name="residentDistrict"
-                        value={formData.residentDistrict}
-                        placeholder="e.g. Kurunegala, Puttalam"
-                    />
-                </Grid>
-                <Grid size={{ xs: 12 }}>
-                    <TextField
-                        {...fieldProps}
-                        label="Permanent Address"
-                        name="permanentAddress"
-                        value={formData.permanentAddress}
-                        multiline
-                        minRows={2}
-                    />
-                </Grid>
-            </Grid>
-        </FormSection>
+            </FormSection>
+        </>
     );
 }

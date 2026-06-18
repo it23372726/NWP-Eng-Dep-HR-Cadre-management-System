@@ -16,6 +16,16 @@ public class ComprehensiveDashboardDto {
 
     private List<EmployeeDistributionDto> serviceDistribution;
 
+    private List<EmployeeDistributionDto> designationDistribution;
+
+    private List<EmployeeDistributionDto> gradeDistribution;
+
+    private List<EmployeeDistributionDto> permanentStatusDistribution;
+
+    private List<DistrictWorkplaceDistributionDto> workplaceDistributionByDistrict;
+
+    private RetirementForecastDto retirementForecast;
+
     private List<CadreStatusDto> cadreStatus;
 
     private List<DistrictDistributionDto> districtDistribution;

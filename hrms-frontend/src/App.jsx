@@ -34,6 +34,9 @@ from "./pages/VacancyReportPage";
 import ServicePage
 from "./pages/ServicePage";
 
+import OfficePage
+from "./pages/OfficePage";
+
 
 import ServiceLevelPage
 from "./pages/ServiceLevelPage";
@@ -90,6 +93,11 @@ export default function App() {
                 <Route
                     path="/services"
                     element={<ServicePage />}
+                />
+
+                <Route
+                    path="/offices"
+                    element={<OfficePage />}
                 />
 
                 <Route

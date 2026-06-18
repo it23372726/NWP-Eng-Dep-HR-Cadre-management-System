@@ -15,8 +15,10 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.nwpengdep.hrms.constants.DepartmentConstants;
 import com.nwpengdep.hrms.dto.CareerHistoryEventRequest;
 import com.nwpengdep.hrms.entity.Designation;
+import com.nwpengdep.hrms.entity.District;
 import com.nwpengdep.hrms.entity.EmployeeActionType;
 import com.nwpengdep.hrms.entity.Grade;
 import com.nwpengdep.hrms.entity.ServiceLevel;
@@ -26,6 +28,7 @@ import com.nwpengdep.hrms.repository.DesignationRepository;
 class CareerHistoryValidatorTest {
 
     private DesignationRepository designationRepository;
+    private OfficeService officeService;
     private CareerHistoryValidator validator;
 
     private Designation engineerServiceA;
@@ -36,9 +39,12 @@ class CareerHistoryValidatorTest {
     @BeforeEach
     void setUp() {
         designationRepository = mock(DesignationRepository.class);
+        officeService = mock(OfficeService.class);
         validator = new CareerHistoryValidator(
                 designationRepository,
-                new DesignationAssignmentValidator()
+                new DesignationAssignmentValidator(),
+                new CareerProgressionService(),
+                officeService
         );
 
         ServiceType serviceA = serviceType(1L);
@@ -47,7 +53,11 @@ class CareerHistoryValidatorTest {
         primaryLevel = serviceLevel(10L, "Primary");
 
         engineerServiceA = designation(1L, serviceA, primaryLevel);
+        engineerServiceA.setGrade2RequiredYears(5);
+        engineerServiceA.setGrade1RequiredYears(4);
         seniorEngineerServiceA = designation(2L, serviceA, primaryLevel);
+        seniorEngineerServiceA.setGrade2RequiredYears(5);
+        seniorEngineerServiceA.setGrade1RequiredYears(4);
         clerkServiceB = designation(3L, serviceB, primaryLevel);
 
         lenient().when(designationRepository.findById(anyLong()))
@@ -200,18 +210,32 @@ class CareerHistoryValidatorTest {
     }
 
     @Test
-    void transferInAfterTransferOutAllowed() {
+    void transferOutRequiresDestinationDepartment() {
         CareerHistoryEventRequest transferOut =
                 event(EmployeeActionType.TRANSFER_OUT, "2020-01-01");
-        transferOut.setTransferredTo("Irrigation Department");
+        transferOut.setToDepartment("Western Province Engineering Department");
+        transferOut.setToOffice("Kurunegala Office");
 
         List<CareerHistoryEventRequest> events = List.of(
                 appointment("2015-01-01", 1L),
-                transferOut,
-                event(EmployeeActionType.TRANSFER_IN, "2022-01-01")
+                transferOut
         );
 
         assertDoesNotThrow(() -> validator.validate(events));
+    }
+
+    @Test
+    void manualTransferInRejected() {
+        List<CareerHistoryEventRequest> events = List.of(
+                appointment("2015-01-01", 1L),
+                event(EmployeeActionType.TRANSFER_IN, "2022-01-01")
+        );
+
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> validator.validate(events)
+        );
+        assertTrue(exception.getMessage().contains("automatically"));
     }
 
     @Test
@@ -258,6 +282,81 @@ class CareerHistoryValidatorTest {
         assertTrue(exception.getMessage().contains("service level"));
     }
 
+    @Test
+    void permanentConfirmationBeforeThreeYearsRejected() {
+        List<CareerHistoryEventRequest> events = List.of(
+                appointment("2015-01-01", 1L),
+                event(EmployeeActionType.PERMANENT_CONFIRMATION, "2016-01-01")
+        );
+
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> validator.validate(events)
+        );
+        assertTrue(exception.getMessage().contains("probation"));
+    }
+
+    @Test
+    void gradeTwoPromotionBeforeRequiredYearsRejected() {
+        List<CareerHistoryEventRequest> events = List.of(
+                appointment("2015-01-01", 1L),
+                event(EmployeeActionType.PERMANENT_CONFIRMATION, "2018-01-01"),
+                promotion("2018-06-01", 2L, Grade.II)
+        );
+
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> validator.validate(events)
+        );
+        assertTrue(exception.getMessage().contains("Grade II promotion"));
+    }
+
+    @Test
+    void gradeOnePromotionBeforeRequiredYearsRejected() {
+        List<CareerHistoryEventRequest> events = List.of(
+                appointment("2015-01-01", 1L),
+                event(EmployeeActionType.PERMANENT_CONFIRMATION, "2018-01-01"),
+                promotion("2020-01-01", 2L, Grade.II),
+                gradeUpdate("2022-01-01", Grade.I)
+        );
+
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> validator.validate(events)
+        );
+        assertTrue(exception.getMessage().contains("Grade I promotion"));
+    }
+
+    @Test
+    void gradePromotionsAfterRequiredYearsPass() {
+        List<CareerHistoryEventRequest> events = List.of(
+                appointment("2015-01-01", 1L),
+                event(EmployeeActionType.PERMANENT_CONFIRMATION, "2018-01-01"),
+                promotion("2020-01-01", 2L, Grade.II),
+                gradeUpdate("2024-01-01", Grade.I)
+        );
+
+        assertDoesNotThrow(() -> validator.validate(events));
+    }
+
+    @Test
+    void nwpAppointmentRequiresRegisteredOffice() {
+        CareerHistoryEventRequest appointment = appointment("2015-01-01", 1L);
+        appointment.setOffice("Unknown Office");
+        appointment.setDistrict(District.KURUNEGALA);
+
+        org.mockito.Mockito.doThrow(new RuntimeException("not registered"))
+                .when(officeService)
+                .validateNwpWorkplace("Unknown Office", District.KURUNEGALA);
+
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> validator.validate(List.of(appointment))
+        );
+
+        assertTrue(exception.getMessage().contains("not registered"));
+    }
+
     private CareerHistoryEventRequest appointment(String date, Long designationId) {
         CareerHistoryEventRequest event =
                 event(EmployeeActionType.NEW_APPOINTMENT, date);
@@ -288,6 +387,11 @@ class CareerHistoryValidatorTest {
         CareerHistoryEventRequest event = new CareerHistoryEventRequest();
         event.setActionType(type);
         event.setActionDate(LocalDate.parse(date));
+        if (type != EmployeeActionType.TRANSFER_OUT) {
+            event.setDepartment(DepartmentConstants.NWP_ENGINEERING);
+            event.setOffice("Main Office");
+            event.setDistrict(District.KURUNEGALA);
+        }
         return event;
     }
 

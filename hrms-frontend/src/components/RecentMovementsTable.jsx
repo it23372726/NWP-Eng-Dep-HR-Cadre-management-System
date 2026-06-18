@@ -14,6 +14,8 @@ import {
     Chip
 } from "@mui/material";
 
+import { ACTION_TYPE_LABELS } from "../constants/hrms";
+
 const formatDate = (date) => {
     if (!date) return "—";
     return new Date(date).toLocaleDateString("en-GB");
@@ -21,15 +23,24 @@ const formatDate = (date) => {
 
 const getActionColor = (action) => {
     const map = {
-        "PROMOTION": "success",
-        "TRANSFER_IN": "info",
-        "TRANSFER_OUT": "warning",
-        "NEW_APPOINTMENT": "success",
-        "RETIREMENT_OR_RESIGNATION": "error",
-        "DISMISSAL": "error",
-        "DEATH": "error"
+        PROMOTION: "success",
+        ASSIGNMENT_GRADE_UPDATE: "success",
+        TRANSFER_IN: "info",
+        TRANSFER_OUT: "warning",
+        OFFICE_CHANGE: "info",
+        NEW_APPOINTMENT: "success",
+        PERMANENT_CONFIRMATION: "secondary",
+        RETIREMENT_OR_RESIGNATION: "error",
+        DISMISSAL: "error",
+        DEATH: "error"
     };
     return map[action] || "default";
+};
+
+const formatActionLabel = (actionType) => {
+    return ACTION_TYPE_LABELS[actionType]
+        || actionType?.replace(/_/g, " ")
+        || "—";
 };
 
 export default function RecentMovementsTable({ data, loading }) {
@@ -49,7 +60,7 @@ export default function RecentMovementsTable({ data, loading }) {
     if (!data || data.length === 0) {
         return (
             <Paper sx={{ p: 3, borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ mb: 2 }}>Recent Employee Movements</Typography>
+                <Typography variant="h6" sx={{ mb: 2 }}>Recent Employee Actions</Typography>
                 <Alert severity="info">No recent movements</Alert>
             </Paper>
         );
@@ -58,7 +69,7 @@ export default function RecentMovementsTable({ data, loading }) {
     return (
         <Paper sx={{ p: 3, borderRadius: 2 }}>
             <Typography variant="h6" sx={{ mb: 3, fontWeight: 700 }}>
-                Recent Employee Movements
+                Recent Employee Actions
             </Typography>
             <TableContainer>
                 <Table>
@@ -82,7 +93,7 @@ export default function RecentMovementsTable({ data, loading }) {
                                 </TableCell>
                                 <TableCell>
                                     <Chip
-                                        label={row.actionType.replace(/_/g, " ")}
+                                        label={formatActionLabel(row.actionType)}
                                         size="small"
                                         color={getActionColor(row.actionType)}
                                         variant="outlined"

@@ -1,6 +1,8 @@
 package com.nwpengdep.hrms.service;
 
 import java.time.LocalDate;
+import java.time.DateTimeException;
+import java.time.MonthDay;
 import java.util.List;
 
 import org.springframework.data.domain.Page;
@@ -8,11 +10,14 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.nwpengdep.hrms.constants.DepartmentConstants;
+import com.nwpengdep.hrms.dto.ActionWorkplaceFields;
 import com.nwpengdep.hrms.dto.CareerHistoryEventRequest;
 import com.nwpengdep.hrms.dto.EmployeeRequest;
 import com.nwpengdep.hrms.dto.EmployeeRequirementRequest;
 import com.nwpengdep.hrms.dto.EmployeeUpdateRequest;
 import com.nwpengdep.hrms.entity.Designation;
+import com.nwpengdep.hrms.entity.District;
 import com.nwpengdep.hrms.entity.Employee;
 import com.nwpengdep.hrms.entity.EmployeeActionType;
 import com.nwpengdep.hrms.entity.EmployeeCareerProgression;
@@ -47,6 +52,7 @@ public class EmployeeService {
     private final CareerProgressionService careerProgressionService;
     private final EmployeeRequirementSyncService requirementSyncService;
     private final CareerHistoryValidator careerHistoryValidator;
+    private final OfficeService officeService;
 
     @Transactional
     public Employee createEmployee(EmployeeRequest request) {
@@ -92,6 +98,11 @@ public class EmployeeService {
 
         postingRepository.save(initialPosting);
 
+        officeService.validateNwpWorkplace(
+                request.getCurrentWorkingPlace().trim(),
+                request.getCurrentDistrictOfWorking()
+        );
+
         if (request.getEntryType() == EmployeeEntryType.TRANSFER_IN) {
             employee.setTransferredFrom(request.getTransferredFrom().trim());
             employeeRepository.save(employee);
@@ -105,7 +116,12 @@ public class EmployeeService {
                     request.getTransferredFrom().trim(),
                     null,
                     null,
-                    request.getRemarks()
+                    request.getRemarks(),
+                    ActionWorkplaceFields.of(
+                            DepartmentConstants.NWP_ENGINEERING,
+                            request.getCurrentWorkingPlace().trim(),
+                            request.getCurrentDistrictOfWorking()
+                    )
             );
         } else {
             employeeActionService.recordAction(
@@ -117,9 +133,16 @@ public class EmployeeService {
                     null,
                     null,
                     null,
-                    request.getRemarks()
+                    request.getRemarks(),
+                    ActionWorkplaceFields.of(
+                            DepartmentConstants.NWP_ENGINEERING,
+                            request.getCurrentWorkingPlace().trim(),
+                            request.getCurrentDistrictOfWorking()
+                    )
             );
         }
+
+        employeeActionService.recalculateEmployeeState(employee.getId());
 
         return employee;
     }
@@ -160,6 +183,11 @@ public class EmployeeService {
         Employee result = employeeRepository.findById(employee.getId())
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
+        syncRequirementsFromCareerHistory(result, events);
+        requirementSyncService.syncEmployeeRequirements(result);
+        careerProgressionService.recalculateEmployeeCareer(result);
+        result = employeeRepository.save(result);
+
         if (result.getDesignation() != null) {
             designationAssignmentValidator.validate(result, result.getDesignation());
         }
@@ -173,14 +201,24 @@ public class EmployeeService {
     ) {
         Designation currentDesignation = null;
         Grade currentGrade = null;
+        String currentDepartment = null;
+        String currentOffice = null;
 
         for (CareerHistoryEventRequest event : events) {
+            ActionWorkplaceFields workplace = resolveEventWorkplace(
+                    event,
+                    currentDepartment,
+                    currentOffice
+            );
+
             switch (event.getActionType()) {
                 case NEW_APPOINTMENT -> {
                     currentDesignation = resolveDesignation(event.getDesignationId());
                     currentGrade = event.getGrade() != null
                             ? event.getGrade()
                             : Grade.III;
+                    currentDepartment = workplace.getDepartment();
+                    currentOffice = workplace.getOffice();
                     employeeActionService.recordActionWithGrades(
                             employee,
                             EmployeeActionType.NEW_APPOINTMENT,
@@ -192,21 +230,27 @@ public class EmployeeService {
                             null,
                             null,
                             null,
-                            event.getRemarks()
+                            event.getRemarks(),
+                            workplace
                     );
                 }
 
-                case PERMANENT_CONFIRMATION -> employeeActionService.recordAction(
-                        employee,
-                        EmployeeActionType.PERMANENT_CONFIRMATION,
-                        event.getActionDate(),
-                        null,
-                        currentDesignation,
-                        null,
-                        null,
-                        null,
-                        event.getRemarks()
-                );
+                case PERMANENT_CONFIRMATION -> {
+                    employeeActionService.recordAction(
+                            employee,
+                            EmployeeActionType.PERMANENT_CONFIRMATION,
+                            event.getActionDate(),
+                            null,
+                            currentDesignation,
+                            null,
+                            null,
+                            null,
+                            event.getRemarks(),
+                            workplace
+                    );
+                    currentDepartment = workplace.getDepartment();
+                    currentOffice = workplace.getOffice();
+                }
 
                 case PROMOTION, ASSIGNMENT_GRADE_UPDATE -> {
                     Designation oldDesignation = currentDesignation;
@@ -235,42 +279,47 @@ public class EmployeeService {
                             null,
                             null,
                             null,
-                            event.getRemarks()
+                            event.getRemarks(),
+                            workplace
                     );
 
                     currentDesignation = newDesignation;
                     currentGrade = newGrade;
+                    currentDepartment = workplace.getDepartment();
+                    currentOffice = workplace.getOffice();
                 }
 
-                case TRANSFER_IN -> {
-                    if (event.getDesignationId() != null) {
-                        currentDesignation =
-                                resolveDesignation(event.getDesignationId());
-                    }
-                    employeeActionService.recordAction(
+                case TRANSFER_OUT -> {
+                    employeeActionService.recordPairedTransferOut(
                             employee,
-                            EmployeeActionType.TRANSFER_IN,
                             event.getActionDate(),
-                            null,
                             currentDesignation,
-                            trimToNull(event.getTransferredFrom()),
-                            null,
-                            null,
+                            currentDepartment,
+                            currentOffice,
+                            event.getToDepartment(),
+                            event.getToOffice(),
+                            event.getToDistrict(),
                             event.getRemarks()
                     );
+                    currentDepartment = DepartmentConstants.normalize(event.getToDepartment());
+                    currentOffice = event.getToOffice().trim();
                 }
 
-                case TRANSFER_OUT -> employeeActionService.recordAction(
-                        employee,
-                        EmployeeActionType.TRANSFER_OUT,
-                        event.getActionDate(),
-                        currentDesignation,
-                        currentDesignation,
-                        null,
-                        trimToNull(event.getTransferredTo()),
-                        null,
-                        event.getRemarks()
-                );
+                case OFFICE_CHANGE -> {
+                    employeeActionService.recordAction(
+                            employee,
+                            EmployeeActionType.OFFICE_CHANGE,
+                            event.getActionDate(),
+                            currentDesignation,
+                            currentDesignation,
+                            null,
+                            null,
+                            null,
+                            event.getRemarks(),
+                            workplace
+                    );
+                    currentOffice = workplace.getOffice();
+                }
 
                 case RETIREMENT_OR_RESIGNATION, DEATH ->
                         employeeActionService.recordAction(
@@ -282,7 +331,8 @@ public class EmployeeService {
                                 null,
                                 null,
                                 null,
-                                event.getRemarks()
+                                event.getRemarks(),
+                                workplace
                         );
 
                 case DISMISSAL -> employeeActionService.recordAction(
@@ -294,10 +344,111 @@ public class EmployeeService {
                         null,
                         null,
                         trimToNull(event.getReason()),
-                        event.getRemarks()
+                        event.getRemarks(),
+                        workplace
+                );
+
+                case TRANSFER_IN -> throw new RuntimeException(
+                        "Transfer in is created automatically when recording a transfer out"
                 );
             }
         }
+    }
+
+    private ActionWorkplaceFields resolveEventWorkplace(
+            CareerHistoryEventRequest event,
+            String currentDepartment,
+            String currentOffice
+    ) {
+        if (event.getActionType() == EmployeeActionType.TRANSFER_OUT) {
+            String toDepartment = DepartmentConstants.normalize(event.getToDepartment());
+            officeService.validateNwpWorkplaceIfNwp(
+                    toDepartment,
+                    event.getToOffice(),
+                    event.getToDistrict()
+            );
+            District district = DepartmentConstants.isNwpEngineering(toDepartment)
+                    ? event.getToDistrict()
+                    : null;
+            return ActionWorkplaceFields.builder()
+                    .department(toDepartment)
+                    .office(event.getToOffice().trim())
+                    .fromDepartment(currentDepartment)
+                    .fromOffice(currentOffice)
+                    .toDepartment(toDepartment)
+                    .toOffice(event.getToOffice().trim())
+                    .district(district)
+                    .build();
+        }
+
+        if (event.getActionType() == EmployeeActionType.OFFICE_CHANGE) {
+            if (currentDepartment == null) {
+                throw new RuntimeException("Office change requires a current department");
+            }
+            if (DepartmentConstants.isNwpEngineering(currentDepartment)) {
+                officeService.validateNwpWorkplace(
+                        event.getOffice().trim(),
+                        event.getDistrict()
+                );
+            }
+            return ActionWorkplaceFields.builder()
+                    .department(currentDepartment)
+                    .office(event.getOffice().trim())
+                    .fromDepartment(currentDepartment)
+                    .fromOffice(currentOffice)
+                    .toDepartment(currentDepartment)
+                    .toOffice(event.getOffice().trim())
+                    .district(
+                            DepartmentConstants.isNwpEngineering(currentDepartment)
+                                    ? event.getDistrict()
+                                    : null
+                    )
+                    .build();
+        }
+
+        if (event.getDepartment() == null || event.getDepartment().isBlank()) {
+            if (currentDepartment == null || currentDepartment.isBlank()) {
+                throw new RuntimeException(
+                        event.getActionType() + " requires a department"
+                );
+            }
+            if (currentOffice == null || currentOffice.isBlank()) {
+                throw new RuntimeException(
+                        event.getActionType() + " requires an office"
+                );
+            }
+            return ActionWorkplaceFields.of(
+                    DepartmentConstants.normalize(currentDepartment),
+                    currentOffice.trim()
+            );
+        }
+        if (event.getOffice() == null || event.getOffice().isBlank()) {
+            throw new RuntimeException(
+                    event.getActionType() + " requires an office"
+            );
+        }
+
+        String department = DepartmentConstants.normalize(event.getDepartment());
+        District effectiveDistrict = event.getDistrict();
+        if (DepartmentConstants.isNwpEngineering(department) && effectiveDistrict == null) {
+            effectiveDistrict = officeService
+                    .findDistrictByOfficeName(event.getOffice())
+                    .orElse(null);
+        }
+        officeService.validateNwpWorkplaceIfNwp(
+                department,
+                event.getOffice(),
+                effectiveDistrict
+        );
+        District district = DepartmentConstants.isNwpEngineering(department)
+                ? effectiveDistrict
+                : null;
+
+        return ActionWorkplaceFields.of(
+                department,
+                event.getOffice().trim(),
+                district
+        );
     }
 
     private Designation resolveFinalDesignation(
@@ -344,8 +495,84 @@ public class EmployeeService {
         return value != null && !value.isBlank() ? value.trim() : null;
     }
 
+    private void applyMaritalStatusIfProvided(
+            Employee employee,
+            String maritalStatus
+    ) {
+        if (maritalStatus != null && !maritalStatus.isBlank()) {
+            employee.setMaritalStatus(maritalStatus.trim());
+        }
+    }
+
+    private void applyPrivateVehicleFields(
+            Employee employee,
+            Boolean usedForGovWork,
+            String description,
+            LocalDate permissionDate
+    ) {
+        if (usedForGovWork == null) {
+            usedForGovWork = false;
+        }
+
+        if (Boolean.TRUE.equals(usedForGovWork)) {
+            String trimmedDescription = trimToNull(description);
+            if (trimmedDescription == null) {
+                throw new IllegalArgumentException(
+                        "Private vehicle description is required when the employee "
+                                + "uses a private vehicle for government work"
+                );
+            }
+            if (permissionDate == null) {
+                throw new IllegalArgumentException(
+                        "Private vehicle permission date is required when the employee "
+                                + "uses a private vehicle for government work"
+                );
+            }
+            employee.setPrivateVehicleUsedForGovWork(true);
+            employee.setPrivateVehicleDescription(trimmedDescription);
+            employee.setPrivateVehiclePermissionDate(permissionDate);
+            return;
+        }
+
+        employee.setPrivateVehicleUsedForGovWork(false);
+        employee.setPrivateVehicleDescription(null);
+        employee.setPrivateVehiclePermissionDate(null);
+    }
+
     public List<Employee> getActiveEmployees() {
-        return employeeRepository.findByStatus(EmployeeStatus.ACTIVE);
+        return getActiveEmployeesByScope("NWP");
+    }
+
+    public List<Employee> getActiveEmployeesByScope(String departmentScope) {
+        List<Employee> active = employeeRepository.findByStatus(EmployeeStatus.ACTIVE);
+        return filterByDepartmentScope(active, departmentScope);
+    }
+
+    private List<Employee> filterByDepartmentScope(
+            List<Employee> employees,
+            String departmentScope
+    ) {
+        if (departmentScope == null
+                || departmentScope.isBlank()
+                || "ALL".equalsIgnoreCase(departmentScope)) {
+            return employees;
+        }
+        if ("NWP".equalsIgnoreCase(departmentScope)) {
+            return employees.stream()
+                    .filter(employee -> DepartmentConstants.isNwpEngineering(
+                            employee.getCurrentDepartment()
+                    ))
+                    .toList();
+        }
+        if ("OTHER".equalsIgnoreCase(departmentScope)) {
+            return employees.stream()
+                    .filter(employee -> employee.getCurrentDepartment() != null
+                            && !DepartmentConstants.isNwpEngineering(
+                                    employee.getCurrentDepartment()
+                            ))
+                    .toList();
+        }
+        return employees;
     }
 
     public List<Employee> getInactiveEmployees() {
@@ -454,6 +681,7 @@ public class EmployeeService {
 
         Employee result = getEmployeeById(id);
         applyNonCareerFieldsFromUpdate(result, request, serviceLevel);
+        syncRequirementsFromCareerHistory(result, events);
         requirementSyncService.syncEmployeeRequirements(result);
         careerProgressionService.recalculateEmployeeCareer(result);
 
@@ -472,7 +700,7 @@ public class EmployeeService {
     ) {
         CareerHistoryEventRequest lastEvent = events.getLast();
         switch (lastEvent.getActionType()) {
-            case TRANSFER_OUT, RETIREMENT_OR_RESIGNATION, DEATH, DISMISSAL ->
+            case RETIREMENT_OR_RESIGNATION, DEATH, DISMISSAL ->
                     throw new RuntimeException(
                             "Active employees cannot have a terminal event "
                                     + "as the last career history entry"
@@ -492,7 +720,8 @@ public class EmployeeService {
         employee.setNic(request.getNic().trim());
         employee.setDateOfBirth(request.getDateOfBirth());
         employee.setGender(request.getGender());
-        employee.setIncremantDate(request.getIncremantDate());
+        applyMaritalStatusIfProvided(employee, request.getMaritalStatus());
+        applyIncremantDate(employee, request.getIncremantDate());
         employee.setEnteredDateToAllIslandService(
                 request.getEnteredDateToAllIslandService()
         );
@@ -500,12 +729,18 @@ public class EmployeeService {
                 request.getReportedDateToPresentWorkingPlace()
         );
         employee.setCurrentWorkingPlace(request.getCurrentWorkingPlace().trim());
-        employee.setCurrentDistrictOfWorking(
-                request.getCurrentDistrictOfWorking()
-        );
+        if (request.getCurrentDistrictOfWorking() != null) {
+            employee.setCurrentDistrictOfWorking(request.getCurrentDistrictOfWorking());
+        }
         employee.setEnteredDateToNWPCouncil(request.getEnteredDateToNWPCouncil());
         employee.setPermanentAddress(request.getPermanentAddress().trim());
         employee.setResidentDistrict(request.getResidentDistrict());
+        applyPrivateVehicleFields(
+                employee,
+                request.getPrivateVehicleUsedForGovWork(),
+                request.getPrivateVehicleDescription(),
+                request.getPrivateVehiclePermissionDate()
+        );
         employee.setContactNo(request.getContactNo().trim());
         employee.setServiceLevel(serviceLevel);
         employee.setEmploymentType(EmploymentType.PERMANENT);
@@ -526,7 +761,8 @@ public class EmployeeService {
                 request.getOtherGrade2RequirementCompleted(),
                 request.getGrade2RequiredYears(),
                 request.getGrade1RequiredYears(),
-                request.getRequirements()
+                request.getRequirements(),
+                request.getQualificationUpdateOnly()
         );
     }
 
@@ -566,9 +802,10 @@ public class EmployeeService {
         employee.setNic(request.getNic().trim());
         employee.setDateOfBirth(request.getDateOfBirth());
         employee.setGender(request.getGender());
+        applyMaritalStatusIfProvided(employee, request.getMaritalStatus());
         employee.setGrade(resolveGrade(request.getEmploymentType(), request.getGrade()));
         employee.setDateOfFirstAppointment(request.getDateOfFirstAppointment());
-        employee.setIncremantDate(request.getIncremantDate());
+        applyIncremantDate(employee, request.getIncremantDate());
         employee.setEnteredDateToAllIslandService(
                 request.getEnteredDateToAllIslandService()
         );
@@ -576,15 +813,21 @@ public class EmployeeService {
                 request.getReportedDateToPresentWorkingPlace()
         );
         employee.setCurrentWorkingPlace(request.getCurrentWorkingPlace().trim());
-        employee.setCurrentDistrictOfWorking(
-                request.getCurrentDistrictOfWorking()
-        );
+        if (request.getCurrentDistrictOfWorking() != null) {
+            employee.setCurrentDistrictOfWorking(request.getCurrentDistrictOfWorking());
+        }
         employee.setAppointmentDateToPresentClassGrade(
                 request.getAppointmentDateToPresentClassGrade()
         );
         employee.setEnteredDateToNWPCouncil(request.getEnteredDateToNWPCouncil());
         employee.setPermanentAddress(request.getPermanentAddress().trim());
         employee.setResidentDistrict(request.getResidentDistrict());
+        applyPrivateVehicleFields(
+                employee,
+                request.getPrivateVehicleUsedForGovWork(),
+                request.getPrivateVehicleDescription(),
+                request.getPrivateVehiclePermissionDate()
+        );
         employee.setContactNo(request.getContactNo().trim());
         employee.setServiceLevel(serviceLevel);
         employee.setEmploymentType(
@@ -609,7 +852,8 @@ public class EmployeeService {
                 request.getOtherGrade2RequirementCompleted(),
                 request.getGrade2RequiredYears(),
                 request.getGrade1RequiredYears(),
-                request.getRequirements()
+                request.getRequirements(),
+                request.getQualificationUpdateOnly()
         );
     }
 
@@ -625,9 +869,10 @@ public class EmployeeService {
         employee.setNic(request.getNic().trim());
         employee.setDateOfBirth(request.getDateOfBirth());
         employee.setGender(request.getGender());
+        applyMaritalStatusIfProvided(employee, request.getMaritalStatus());
         employee.setGrade(resolveGrade(request.getEmploymentType(), request.getGrade()));
         employee.setDateOfFirstAppointment(request.getDateOfFirstAppointment());
-        employee.setIncremantDate(request.getIncremantDate());
+        applyIncremantDate(employee, request.getIncremantDate());
         employee.setEnteredDateToAllIslandService(
                 request.getEnteredDateToAllIslandService()
         );
@@ -635,15 +880,21 @@ public class EmployeeService {
                 request.getReportedDateToPresentWorkingPlace()
         );
         employee.setCurrentWorkingPlace(request.getCurrentWorkingPlace().trim());
-        employee.setCurrentDistrictOfWorking(
-                request.getCurrentDistrictOfWorking()
-        );
+        if (request.getCurrentDistrictOfWorking() != null) {
+            employee.setCurrentDistrictOfWorking(request.getCurrentDistrictOfWorking());
+        }
         employee.setAppointmentDateToPresentClassGrade(
                 request.getAppointmentDateToPresentClassGrade()
         );
         employee.setEnteredDateToNWPCouncil(request.getEnteredDateToNWPCouncil());
         employee.setPermanentAddress(request.getPermanentAddress().trim());
         employee.setResidentDistrict(request.getResidentDistrict());
+        applyPrivateVehicleFields(
+                employee,
+                request.getPrivateVehicleUsedForGovWork(),
+                request.getPrivateVehicleDescription(),
+                request.getPrivateVehiclePermissionDate()
+        );
         employee.setContactNo(request.getContactNo().trim());
         employee.setServiceLevel(serviceLevel);
         employee.setEmploymentType(
@@ -668,7 +919,8 @@ public class EmployeeService {
                 request.getOtherGrade2RequirementCompleted(),
                 request.getGrade2RequiredYears(),
                 request.getGrade1RequiredYears(),
-                request.getRequirements()
+                request.getRequirements(),
+                null
         );
 
         return employee;
@@ -698,7 +950,8 @@ public class EmployeeService {
             Boolean otherGrade2RequirementCompleted,
             Integer grade2RequiredYears,
             Integer grade1RequiredYears,
-            List<EmployeeRequirementRequest> requirements
+            List<EmployeeRequirementRequest> requirements,
+            Boolean qualificationUpdateOnly
     ) {
         EmployeeCareerProgression careerProgression =
                 careerProgressionService.ensureCareerProgression(employee);
@@ -724,41 +977,43 @@ public class EmployeeService {
 
         requirementSyncService.syncEmployeeRequirements(employee);
 
-        boolean permanentGradeThreeAlreadyConfirmed =
-                employee.getEmploymentType() == EmploymentType.PERMANENT
-                        && employee.getGrade() == Grade.III
-                        && Boolean.TRUE.equals(alreadyConfirmedPermanent);
-        boolean permanentGradeTwoOrAbove =
-                employee.getEmploymentType() == EmploymentType.PERMANENT
-                        && (employee.getGrade() == Grade.II
-                            || employee.getGrade() == Grade.I
-                            || employee.getGrade() == Grade.SUPRA
-                            || employee.getGrade() == Grade.SPECIAL);
+        if (!Boolean.TRUE.equals(qualificationUpdateOnly)) {
+            boolean permanentGradeThreeAlreadyConfirmed =
+                    employee.getEmploymentType() == EmploymentType.PERMANENT
+                            && employee.getGrade() == Grade.III
+                            && Boolean.TRUE.equals(alreadyConfirmedPermanent);
+            boolean permanentGradeTwoOrAbove =
+                    employee.getEmploymentType() == EmploymentType.PERMANENT
+                            && (employee.getGrade() == Grade.II
+                                || employee.getGrade() == Grade.I
+                                || employee.getGrade() == Grade.SUPRA
+                                || employee.getGrade() == Grade.SPECIAL);
 
-        if (permanentGradeThreeAlreadyConfirmed || permanentGradeTwoOrAbove) {
-            markPermanentRequirementsCompleted(employee);
-        }
+            if (permanentGradeThreeAlreadyConfirmed || permanentGradeTwoOrAbove) {
+                markPermanentRequirementsCompleted(employee);
+            }
 
-        if (permanentGradeThreeAlreadyConfirmed || permanentGradeTwoOrAbove) {
-            LocalDate confirmedDate = permanentConfirmationDate != null
-                    ? permanentConfirmationDate
-                    : employee.getAppointmentDateToPresentClassGrade();
-            careerProgression.setPermanentConfirmationDate(confirmedDate);
-            careerProgression.setGrade3AchievedDate(confirmedDate);
-        } else if (careerProgression.getPermanentConfirmationDate() != null
-                && employee.getPermanentStatus() == PermanentStatus.PERMANENT) {
-            careerProgression.setPermanentConfirmationDate(null);
-        }
+            if (permanentGradeThreeAlreadyConfirmed || permanentGradeTwoOrAbove) {
+                LocalDate confirmedDate = permanentConfirmationDate != null
+                        ? permanentConfirmationDate
+                        : employee.getAppointmentDateToPresentClassGrade();
+                careerProgression.setPermanentConfirmationDate(confirmedDate);
+                careerProgression.setGrade3AchievedDate(confirmedDate);
+            } else if (careerProgression.getPermanentConfirmationDate() != null
+                    && employee.getPermanentStatus() == PermanentStatus.PERMANENT) {
+                careerProgression.setPermanentConfirmationDate(null);
+            }
 
-        if (permanentGradeTwoOrAbove) {
-            setRequirementCompleted(employee, RequirementType.EB_GRADE_2);
-            markCustomGrade2RequirementsCompleted(employee);
-        }
-        if (employee.getGrade() == Grade.I
-                || employee.getGrade() == Grade.SUPRA
-                || employee.getGrade() == Grade.SPECIAL) {
-            setRequirementCompleted(employee, RequirementType.EB_GRADE_1);
-            markCustomGrade1RequirementsCompleted(employee);
+            if (permanentGradeTwoOrAbove) {
+                setRequirementCompleted(employee, RequirementType.EB_GRADE_2);
+                markCustomGrade2RequirementsCompleted(employee);
+            }
+            if (employee.getGrade() == Grade.I
+                    || employee.getGrade() == Grade.SUPRA
+                    || employee.getGrade() == Grade.SPECIAL) {
+                setRequirementCompleted(employee, RequirementType.EB_GRADE_1);
+                markCustomGrade1RequirementsCompleted(employee);
+            }
         }
         careerProgression.setGrade2RequiredYears(
                 employee.getDesignation() != null
@@ -770,6 +1025,58 @@ public class EmployeeService {
                         ? employee.getDesignation().getGrade1RequiredYears()
                         : grade1RequiredYears
         );
+    }
+
+    private void syncRequirementsFromCareerHistory(
+            Employee employee,
+            List<CareerHistoryEventRequest> events
+    ) {
+        if (events == null || events.isEmpty()) {
+            return;
+        }
+
+        requirementSyncService.syncEmployeeRequirements(employee);
+
+        Grade currentGrade = null;
+        boolean permanentConfirmed = false;
+        boolean grade2Achieved = false;
+        boolean grade1Achieved = false;
+
+        for (CareerHistoryEventRequest event : events) {
+            switch (event.getActionType()) {
+                case NEW_APPOINTMENT ->
+                        currentGrade = event.getGrade() != null
+                                ? event.getGrade()
+                                : Grade.III;
+                case PERMANENT_CONFIRMATION -> permanentConfirmed = true;
+                case PROMOTION, ASSIGNMENT_GRADE_UPDATE -> {
+                    Grade oldGrade = currentGrade;
+                    if (event.getGrade() != null) {
+                        if (oldGrade == Grade.III && event.getGrade() == Grade.II) {
+                            grade2Achieved = true;
+                        }
+                        if (oldGrade == Grade.II && event.getGrade() == Grade.I) {
+                            grade1Achieved = true;
+                        }
+                        currentGrade = event.getGrade();
+                    }
+                }
+                default -> {
+                }
+            }
+        }
+
+        if (permanentConfirmed) {
+            markPermanentRequirementsCompleted(employee);
+        }
+        if (grade2Achieved) {
+            setRequirementCompleted(employee, RequirementType.EB_GRADE_2);
+            markCustomGrade2RequirementsCompleted(employee);
+        }
+        if (grade1Achieved) {
+            setRequirementCompleted(employee, RequirementType.EB_GRADE_1);
+            markCustomGrade1RequirementsCompleted(employee);
+        }
     }
 
     private void markPermanentRequirementsCompleted(Employee employee) {
@@ -972,6 +1279,12 @@ public class EmployeeService {
                     return created;
                 });
 
+        if (requirement.getStatus() == RequirementStatus.COMPLETED
+                && status == RequirementStatus.PENDING
+                && !allowsRequirementDowngrade(employee, type)) {
+            return;
+        }
+
         requirement.setStatus(status);
         requirement.setRequirementName(
                 requirementName != null && !requirementName.isBlank()
@@ -992,6 +1305,85 @@ public class EmployeeService {
         String leftValue = left != null ? left.trim() : "";
         String rightValue = right != null ? right.trim() : "";
         return leftValue.equalsIgnoreCase(rightValue);
+    }
+
+    private boolean allowsRequirementDowngrade(
+            Employee employee,
+            RequirementType type
+    ) {
+        if (employee.getEmploymentType() != EmploymentType.PERMANENT) {
+            return false;
+        }
+
+        Grade grade = employee.getGrade() != null ? employee.getGrade() : Grade.NONE;
+        boolean confirmedPermanent = employee.getCareerProgression() != null
+                && employee.getCareerProgression().getPermanentConfirmationDate()
+                        != null;
+
+        if (isGrade1RequirementType(type)) {
+            return grade == Grade.II
+                    || grade == Grade.I
+                    || grade == Grade.SUPRA
+                    || grade == Grade.SPECIAL;
+        }
+
+        if (isGrade2RequirementType(type)) {
+            return grade == Grade.III && confirmedPermanent;
+        }
+
+        if (isPermanentRequirementType(type)) {
+            return grade == Grade.III && !confirmedPermanent;
+        }
+
+        return false;
+    }
+
+    private boolean isPermanentRequirementType(RequirementType type) {
+        return type == RequirementType.EB_GRADE_3
+                || type == RequirementType.GOVERNMENT_LANGUAGE_QUALIFICATION
+                || type == RequirementType.MEDICAL_REPORT
+                || type == RequirementType.OL_CERTIFICATE
+                || type == RequirementType.AL_CERTIFICATE
+                || type == RequirementType.DEGREE_CERTIFICATE
+                || type == RequirementType.BIRTH_CERTIFICATE
+                || type == RequirementType.CUSTOM_PERMANENT_REQUIREMENT;
+    }
+
+    private boolean isGrade2RequirementType(RequirementType type) {
+        return type == RequirementType.EB_GRADE_2
+                || type == RequirementType.CUSTOM_GRADE_2_REQUIREMENT;
+    }
+
+    private boolean isGrade1RequirementType(RequirementType type) {
+        return type == RequirementType.EB_GRADE_1
+                || type == RequirementType.CUSTOM_GRADE_1_REQUIREMENT;
+    }
+
+    private void applyIncremantDate(Employee employee, String incremantDate) {
+        if (incremantDate == null || incremantDate.isBlank()) {
+            employee.setIncremantDate(null);
+            return;
+        }
+
+        if (!incremantDate.matches("\\d{2}-\\d{2}")) {
+            throw new IllegalArgumentException(
+                    "Increment date must use MM-DD format with a valid month and day."
+            );
+        }
+
+        String[] parts = incremantDate.split("-");
+        int month = Integer.parseInt(parts[0]);
+        int day = Integer.parseInt(parts[1]);
+
+        try {
+            MonthDay.of(month, day);
+        } catch (DateTimeException ex) {
+            throw new IllegalArgumentException(
+                    "Increment date must use MM-DD format with a valid month and day."
+            );
+        }
+
+        employee.setIncremantDate(incremantDate);
     }
 
     private Designation resolveDesignation(Long designationId) {

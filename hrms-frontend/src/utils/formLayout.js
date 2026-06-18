@@ -16,6 +16,17 @@ export function createFormFieldProps(handleChange) {
     const selectFieldProps = {
         ...fieldProps,
         select: true,
+        slotProps: {
+            select: {
+                MenuProps: {
+                    slotProps: {
+                        paper: {
+                            sx: { zIndex: 1500 }
+                        }
+                    }
+                }
+            }
+        },
         sx: {
             width: "100%",
             minWidth: 260,

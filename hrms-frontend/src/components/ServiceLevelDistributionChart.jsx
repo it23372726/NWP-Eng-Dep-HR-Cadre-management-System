@@ -1,16 +1,7 @@
 import { Paper, Typography, Box, Skeleton, Alert } from "@mui/material";
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
-const SERVICE_LEVEL_COLORS = {
-    "Primary": "#2563EB",
-    "Secondary": "#059669",
-    "Senior": "#D97706",
-    "Tertiary": "#7C3AED"
-};
-
-const getServiceLevelColor = (level) => {
-    return SERVICE_LEVEL_COLORS[level] || "#0F2A4A";
-};
+import { CHART_HEIGHT, getServiceLevelColor } from "../constants/dashboardTheme";
 
 // Custom tooltip with percentage - moved outside component to prevent recreation
 const CustomTooltip = ({ active, payload, totalEmployees }) => {
@@ -88,11 +79,11 @@ export default function ServiceLevelDistributionChart({ data, loading }) {
 
 
     return (
-        <Paper sx={{ p: 3, borderRadius: 2 }}>
+        <Paper sx={{ p: 3, borderRadius: 2, height: "100%" }}>
             <Typography variant="h6" sx={{ mb: 3, fontWeight: 700 }}>
                 Employees by Service Level
             </Typography>
-            <Box sx={{ width: "100%", height: 350 }}>
+            <Box sx={{ width: "100%", height: CHART_HEIGHT }}>
                 <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                         <Pie

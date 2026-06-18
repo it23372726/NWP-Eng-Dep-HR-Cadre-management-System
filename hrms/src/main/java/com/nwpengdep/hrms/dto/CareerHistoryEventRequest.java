@@ -2,6 +2,7 @@ package com.nwpengdep.hrms.dto;
 
 import java.time.LocalDate;
 
+import com.nwpengdep.hrms.entity.District;
 import com.nwpengdep.hrms.entity.EmployeeActionType;
 import com.nwpengdep.hrms.entity.Grade;
 
@@ -23,9 +24,17 @@ public class CareerHistoryEventRequest {
 
     private Long serviceLevelId;
 
-    private String transferredFrom;
+    private String department;
 
-    private String transferredTo;
+    private String office;
+
+    private String toDepartment;
+
+    private String toOffice;
+
+    private District district;
+
+    private District toDistrict;
 
     private String reason;
 

@@ -1,44 +1,37 @@
 import {
-    Alert,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    Paper,
-    Typography,
+    Box,
+    Button,
     Chip,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
     IconButton,
-    Tooltip
+    Paper,
+    Stack,
+    Tooltip,
+    Typography
 } from "@mui/material";
 import {
     Edit as EditIcon,
     Delete as DeleteIcon
 } from "@mui/icons-material";
+import { useState } from "react";
+import toast from "react-hot-toast";
 
 import {
     ACTION_TYPE_LABELS,
-    formatActionDetails,
+    getActionDetailLines,
     getApiErrorMessage
 } from "../constants/hrms";
-
-import LifecycleActionFormDialog from "./LifecycleActionFormDialog";
-import { useState } from "react";
 import { deleteEmployeeAction } from "../services/employeeLifecycleService";
-import toast from "react-hot-toast";
-import {
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    Button
-} from "@mui/material";
+import LifecycleActionFormDialog from "./LifecycleActionFormDialog";
 
 const actionColor = {
     NEW_APPOINTMENT: "primary",
     TRANSFER_IN: "info",
     TRANSFER_OUT: "warning",
+    OFFICE_CHANGE: "info",
     PROMOTION: "success",
     ASSIGNMENT_GRADE_UPDATE: "info",
     PERMANENT_CONFIRMATION: "success",
@@ -46,6 +39,162 @@ const actionColor = {
     DEATH: "default",
     DISMISSAL: "error"
 };
+
+const formatDisplayDate = (date) =>
+    date
+        ? new Date(`${date}T00:00:00`).toLocaleDateString("en-GB")
+        : "—";
+
+function filterVisibleActions(actions) {
+    return (actions ?? []).filter(
+        (action) => !(action.actionType === "TRANSFER_IN" && action.autoCreated)
+    );
+}
+
+function ActionDetailLines({ lines }) {
+    if (!lines.length) {
+        return null;
+    }
+
+    return (
+        <Stack spacing={0.5}>
+            {lines.map((line, index) => (
+                line.caption ? (
+                    <Typography
+                        key={`caption-${index}`}
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ fontStyle: "italic" }}
+                    >
+                        {line.value}
+                    </Typography>
+                ) : (
+                    <Typography key={`${line.label}-${index}`} variant="body2">
+                        {line.label && (
+                            <Typography
+                                component="span"
+                                variant="body2"
+                                color="text.secondary"
+                            >
+                                {line.label}:{" "}
+                            </Typography>
+                        )}
+                        {line.value}
+                    </Typography>
+                )
+            ))}
+        </Stack>
+    );
+}
+
+function TimelineCard({
+    action,
+    isLatest,
+    onEdit,
+    onDelete
+}) {
+    const color = actionColor[action.actionType] || "default";
+    const detailLines = getActionDetailLines(action);
+    const label = ACTION_TYPE_LABELS[action.actionType] || action.actionType;
+
+    return (
+        <Box sx={{ display: "flex", gap: 2 }}>
+            <Box
+                sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    pt: 0.75,
+                    flexShrink: 0
+                }}
+            >
+                <Box
+                    sx={{
+                        width: 12,
+                        height: 12,
+                        borderRadius: "50%",
+                        bgcolor: color === "default" ? "grey.500" : `${color}.main`,
+                        flexShrink: 0
+                    }}
+                />
+                <Box
+                    sx={{
+                        width: 2,
+                        flexGrow: 1,
+                        bgcolor: "divider",
+                        mt: 0.5,
+                        minHeight: 16
+                    }}
+                />
+            </Box>
+
+            <Paper
+                variant="outlined"
+                sx={{
+                    flexGrow: 1,
+                    p: 2,
+                    mb: 1.5,
+                    borderRadius: 2,
+                    borderColor: isLatest ? "primary.main" : "divider",
+                    bgcolor: isLatest ? "primary.50" : "background.paper"
+                }}
+            >
+                <Stack
+                    direction={{ xs: "column", sm: "row" }}
+                    spacing={1}
+                    sx={{
+                        alignItems: { sm: "center" },
+                        justifyContent: "space-between",
+                        mb: detailLines.length || action.remarks ? 1.25 : 0
+                    }}
+                >
+                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                        <Chip
+                            label={label}
+                            size="small"
+                            color={color}
+                            variant="outlined"
+                        />
+                        <Typography variant="body2" fontWeight={600}>
+                            {formatDisplayDate(action.actionDate)}
+                        </Typography>
+                    </Stack>
+
+                    {isLatest && (
+                        <Stack direction="row" spacing={0.5}>
+                            <Tooltip title="Edit latest action">
+                                <IconButton size="small" onClick={() => onEdit(action)}>
+                                    <EditIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Delete latest action">
+                                <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() => onDelete(action)}
+                                >
+                                    <DeleteIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        </Stack>
+                    )}
+                </Stack>
+
+                <ActionDetailLines lines={detailLines} />
+
+                {action.remarks && (
+                    <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ mt: detailLines.length ? 1 : 0 }}
+                    >
+                        Remarks: {action.remarks}
+                    </Typography>
+                )}
+            </Paper>
+        </Box>
+    );
+}
 
 export default function EmployeeActionHistoryTable({
     actions,
@@ -58,6 +207,10 @@ export default function EmployeeActionHistoryTable({
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [actionToDelete, setActionToDelete] = useState(null);
     const [deleting, setDeleting] = useState(false);
+
+    const visibleActions = filterVisibleActions(actions);
+    const latestActionId = visibleActions.find((action) => action.canModify)?.id
+        ?? visibleActions[0]?.id;
 
     const handleEditClick = (action) => {
         setSelectedAction(action);
@@ -87,94 +240,51 @@ export default function EmployeeActionHistoryTable({
         onRefresh();
     };
 
-    if (!actions?.length) {
+    if (!visibleActions.length) {
         return (
-            <Typography color="text.secondary" sx={{ py: 2 }}>
-                No lifecycle actions recorded yet.
-            </Typography>
+            <Paper
+                variant="outlined"
+                sx={{
+                    py: 5,
+                    px: 3,
+                    textAlign: "center",
+                    borderRadius: 2
+                }}
+            >
+                <Typography variant="body1" color="text.secondary">
+                    No lifecycle actions recorded yet.
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                    Use Employee Actions in the profile header to record appointments,
+                    transfers, promotions, and other lifecycle events.
+                </Typography>
+            </Paper>
         );
     }
 
-    const latestActionId = actions.find((action) => action.canModify)?.id
-        ?? actions[0]?.id;
-
     return (
         <>
-            <Alert severity="info" sx={{ mb: 2 }}>
-                Actions are listed with the most recent at the top. Only the latest
-                action can be edited or deleted to keep employee history consistent.
-            </Alert>
+            <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: "block", mb: 2 }}
+            >
+                Most recent first · only the latest action can be edited or deleted
+            </Typography>
 
-            <TableContainer component={Paper} variant="outlined">
-                <Table size="small">
-                    <TableHead>
-                        <TableRow>
-                            <TableCell>Action</TableCell>
-                            <TableCell>Date</TableCell>
-                            <TableCell>Details</TableCell>
-                            <TableCell>Remarks</TableCell>
-                            <TableCell align="right">Actions</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {actions.map((action) => (
-                            <TableRow key={action.id}>
-                                <TableCell>
-                                    <Chip
-                                        label={
-                                            ACTION_TYPE_LABELS[action.actionType]
-                                            || action.actionType
-                                        }
-                                        size="small"
-                                        color={
-                                            actionColor[action.actionType]
-                                            || "default"
-                                        }
-                                        variant="outlined"
-                                    />
-                                </TableCell>
-                                <TableCell>{action.actionDate}</TableCell>
-                                <TableCell>
-                                    {formatActionDetails(action)}
-                                </TableCell>
-                                <TableCell>
-                                    {action.remarks || "—"}
-                                </TableCell>
-                                <TableCell align="right">
-                                    {action.canModify ?? action.id === latestActionId ? (
-                                        <>
-                                            <Tooltip title="Edit latest action">
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={() => handleEditClick(action)}
-                                                >
-                                                    <EditIcon fontSize="small" />
-                                                </IconButton>
-                                            </Tooltip>
-                                            <Tooltip title="Delete latest action">
-                                                <IconButton
-                                                    size="small"
-                                                    color="error"
-                                                    onClick={() => handleDeleteClick(action)}
-                                                >
-                                                    <DeleteIcon fontSize="small" />
-                                                </IconButton>
-                                            </Tooltip>
-                                        </>
-                                    ) : (
-                                        <Typography
-                                            variant="caption"
-                                            color="text.secondary"
-                                        >
-                                            —
-                                        </Typography>
-                                    )}
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </TableContainer>
+            <Box>
+                {visibleActions.map((action) => (
+                    <TimelineCard
+                        key={action.id}
+                        action={action}
+                        isLatest={
+                            action.canModify ?? action.id === latestActionId
+                        }
+                        onEdit={handleEditClick}
+                        onDelete={handleDeleteClick}
+                    />
+                ))}
+            </Box>
 
             <LifecycleActionFormDialog
                 open={editDialogOpen}
@@ -182,14 +292,20 @@ export default function EmployeeActionHistoryTable({
                 action={selectedAction}
                 employee={employee}
                 designations={designations || []}
+                actionHistory={actions}
                 onSuccess={handleEditSuccess}
             />
 
-            <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
-                <DialogTitle>Confirm Delete</DialogTitle>
+            <Dialog
+                open={deleteDialogOpen}
+                onClose={() => setDeleteDialogOpen(false)}
+            >
+                <DialogTitle>
+                    Delete {ACTION_TYPE_LABELS[actionToDelete?.actionType] || "Action"}
+                </DialogTitle>
                 <DialogContent>
                     <Typography>
-                        Deleting this lifecycle action will recalculate employee history and cadre reports. Continue?
+                        This will recalculate employee history. Continue?
                     </Typography>
                 </DialogContent>
                 <DialogActions>

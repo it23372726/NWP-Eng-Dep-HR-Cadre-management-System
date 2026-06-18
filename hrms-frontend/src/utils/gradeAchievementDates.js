@@ -8,6 +8,69 @@ const addYears = (date, years) => {
     return next.toISOString().split("T")[0];
 };
 
+export const PROBATION_YEARS = 3;
+
+export const getPermanentConfirmationMinDate = (firstAppointmentDate) =>
+    addYears(firstAppointmentDate, PROBATION_YEARS);
+
+export function hasCompletedProbationYears(employee) {
+    const minDate = getPermanentConfirmationMinDate(
+        employee?.dateOfFirstAppointment
+    );
+    if (!minDate) {
+        return false;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today >= new Date(`${minDate}T00:00:00`);
+}
+
+export const getCareerHistoryGrade2MinDate = (timelineState, designation) => {
+    const baseDate = timelineState?.firstAppointmentDate;
+    const requiredYears = designation?.grade2RequiredYears;
+
+    return addYears(baseDate, requiredYears);
+};
+
+export const getCareerHistoryGrade1MinDate = (timelineState, designation) => {
+    const baseDate = timelineState?.grade2AchievedDate;
+    const requiredYears = designation?.grade1RequiredYears;
+
+    return addYears(baseDate, requiredYears);
+};
+
+export const getCareerHistoryEventMinDate = ({
+    actionType,
+    grade,
+    timelineState,
+    designation
+}) => {
+    if (actionType === "PERMANENT_CONFIRMATION") {
+        return getPermanentConfirmationMinDate(timelineState?.firstAppointmentDate);
+    }
+
+    const currentGrade = timelineState?.grade;
+
+    if (
+        (actionType === "PROMOTION" || actionType === "ASSIGNMENT_GRADE_UPDATE")
+        && currentGrade === "III"
+        && grade === "II"
+    ) {
+        return getCareerHistoryGrade2MinDate(timelineState, designation);
+    }
+
+    if (
+        (actionType === "PROMOTION" || actionType === "ASSIGNMENT_GRADE_UPDATE")
+        && currentGrade === "II"
+        && grade === "I"
+    ) {
+        return getCareerHistoryGrade1MinDate(timelineState, designation);
+    }
+
+    return null;
+};
+
 export const getGrade3AchievedDate = (employee) =>
     employee?.careerProgression?.grade3AchievedDate
     ?? employee?.careerProgression?.permanentConfirmationDate
