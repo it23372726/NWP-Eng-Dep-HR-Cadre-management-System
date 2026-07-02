@@ -14,7 +14,11 @@ import {
     FormControlLabel,
     Typography,
     Box,
-    Paper
+    Paper,
+    Radio,
+    RadioGroup,
+    FormControl,
+    FormLabel
 } from "@mui/material";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import { useEffect, useState } from "react";
@@ -22,20 +26,41 @@ import { getDesignationsByService } from "../../services/designationService";
 import { getServiceLevels } from "../../services/serviceLevelService";
 import FormSection from "../FormSection";
 import { createFormFieldProps, dialogActionsSx } from "../../utils/formLayout";
+import DateInput from "../DateInput";
 import {
     GRADES,
+    getServiceRules,
+    isOtherDesignation,
     isRequirementCompleted,
     NWP_ENGINEERING_DEPARTMENT,
+    OTHER_DESIGNATION_VALUE,
     REQUIREMENT_STATUS,
+    resolveEmployeeDesignationName,
+    serviceAllowsSpecial,
+    serviceAllowsSupra,
+    validateCustomDesignationAssignment,
     validateDesignationAssignment
 } from "../../constants/hrms";
 import {
+    getGrade1AchievedDate,
     getGrade1EligibilityDate,
     getGrade2AchievedDate,
     getGrade2EligibilityDate,
-    getGrade3AchievedDate
+    getGrade3AchievedDate,
+    getSpecialEligibilityDate,
+    getSupraEligibilityDate,
+    normalizeRequiredYears
 } from "../../utils/gradeAchievementDates";
 import { combineMinDates, timelineMinDateHelperText } from "../../utils/timelineDates";
+import DepartmentOfficeFields, {
+    DEPARTMENT_OPTIONS,
+    resolveDepartmentValue
+} from "../workplace/DepartmentOfficeFields";
+
+const PROMOTION_OUTCOME = {
+    STAYING: "staying",
+    TRANSFERRING_OUT: "transferringOut"
+};
 
 const formatDisplayDate = (date) => {
     if (!date) return "—";
@@ -185,10 +210,40 @@ const PROMOTION_GRADE_OPTIONS = {
     I: ["I"]
 };
 
-function getSelectableGrades(currentGrade, designationAllowedGrades) {
-    const designationGrades = designationAllowedGrades?.length
+function getTerminalPromotionGrade(serviceAllowedGrades = []) {
+    if (serviceAllowedGrades.includes("Supra")) {
+        return "Supra";
+    }
+    if (serviceAllowedGrades.includes("Special")) {
+        return "Special";
+    }
+    return null;
+}
+
+function getSelectableGrades(
+    currentGrade,
+    designationAllowedGrades,
+    serviceAllowedGrades
+) {
+    let designationGrades = designationAllowedGrades?.length
         ? designationAllowedGrades
         : GRADES.filter((grade) => grade !== "None");
+
+    if (serviceAllowedGrades?.length) {
+        designationGrades = designationGrades.filter((grade) =>
+            serviceAllowedGrades.includes(grade)
+        );
+    }
+
+    if (currentGrade === "I") {
+        const terminalGrade = getTerminalPromotionGrade(serviceAllowedGrades);
+        const progressionGrades = terminalGrade
+            ? ["I", terminalGrade]
+            : ["I"];
+        return designationGrades.filter((grade) =>
+            progressionGrades.includes(grade)
+        );
+    }
 
     const progressionGrades = PROMOTION_GRADE_OPTIONS[currentGrade];
     if (!progressionGrades) {
@@ -211,12 +266,20 @@ export default function PromotionDialog({
     const [serviceLevels, setServiceLevels] = useState([]);
     const [form, setForm] = useState({
         newDesignationId: "",
+        recordedDesignationName: "",
         grade: "",
         serviceLevelId: "",
         ebGrade2Passed: false,
         ebGrade1Passed: false,
+        supraExamPassed: false,
+        mastersDegreeCompleted: false,
         promotionDate: "",
-        remarks: ""
+        remarks: "",
+        promotionOutcome: PROMOTION_OUTCOME.STAYING,
+        toDepartmentType: DEPARTMENT_OPTIONS.OTHER,
+        toOtherDepartmentName: "",
+        toOffice: "",
+        toDistrict: ""
     });
     const [error, setError] = useState("");
 
@@ -225,7 +288,8 @@ export default function PromotionDialog({
             return;
         }
 
-        const currentServiceId = employee.designation?.service?.id;
+        const currentServiceId =
+            employee.designation?.service?.id ?? employee.service?.id;
         if (!currentServiceId) {
             setDesignations([]);
             setError("Current employee service is missing");
@@ -239,21 +303,33 @@ export default function PromotionDialog({
             setDesignations(designationData);
             setServiceLevels(levelData);
 
+            const initialDesignationId = employee.recordedDesignationName
+                ? OTHER_DESIGNATION_VALUE
+                : String(employee.designation?.id ?? "");
+
             const initialForm = {
-                newDesignationId: String(employee.designation?.id ?? ""),
+                newDesignationId: initialDesignationId,
+                recordedDesignationName: employee.recordedDesignationName ?? "",
                 grade: employee.grade ?? "",
                 serviceLevelId: String(employee.serviceLevel?.id ?? ""),
                 ebGrade2Passed: isRequirementCompleted(employee, "EB_GRADE_2"),
                 ebGrade1Passed: isRequirementCompleted(employee, "EB_GRADE_1"),
+                supraExamPassed: isRequirementCompleted(employee, "SUPRA_REQUIREMENT"),
+                mastersDegreeCompleted: isRequirementCompleted(employee, "MASTERS_DEGREE"),
                 promotionDate: "",
-                remarks: ""
+                remarks: "",
+                promotionOutcome: PROMOTION_OUTCOME.STAYING,
+                toDepartmentType: DEPARTMENT_OPTIONS.OTHER,
+                toOtherDepartmentName: "",
+                toOffice: "",
+                toDistrict: ""
             };
 
             normalizeRequirements(
                 designationData.find(
                     (designation) =>
                         designation.id === Number(initialForm.newDesignationId)
-                )?.grade2Requirements
+                )?.service?.grade2Requirements
             ).forEach((requirement) => {
                 initialForm[requirementKey(
                     "CUSTOM_GRADE_2_REQUIREMENT",
@@ -269,7 +345,7 @@ export default function PromotionDialog({
                 designationData.find(
                     (designation) =>
                         designation.id === Number(initialForm.newDesignationId)
-                )?.grade1Requirements
+                )?.service?.grade1Requirements
             ).forEach((requirement) => {
                 initialForm[requirementKey(
                     "CUSTOM_GRADE_1_REQUIREMENT",
@@ -300,20 +376,33 @@ export default function PromotionDialog({
         });
     }, [open, employee]);
 
-    const selectedDesignation = designations.find(
-        (designation) => designation.id === Number(form.newDesignationId)
-    );
+    const isOtherPromotion = isOtherDesignation(form.newDesignationId);
+    const employeeService = employee?.designation?.service ?? employee?.service;
+    const selectedDesignation = isOtherPromotion
+        ? null
+        : designations.find(
+            (designation) => designation.id === Number(form.newDesignationId)
+        );
+    const rulesSource = selectedDesignation
+        ?? (employeeService ? { service: employeeService } : null);
     const selectedServiceLevel = serviceLevels.find(
         (level) => level.id === Number(form.serviceLevelId)
     );
 
-    const isPromotion =
-        employee?.designation?.id
-        && Number(form.newDesignationId) !== employee.designation.id;
+    const isPromotion = isOtherPromotion
+        ? Boolean(form.recordedDesignationName?.trim())
+            && form.recordedDesignationName.trim().toLowerCase()
+                !== (employee?.recordedDesignationName || "").trim().toLowerCase()
+        : employee?.designation?.id
+            && Number(form.newDesignationId) !== employee.designation.id;
     const isGrade2Promotion =
         employee?.grade === "III" && form.grade === "II";
     const isGrade1Promotion =
         employee?.grade === "II" && form.grade === "I";
+    const isSupraPromotion =
+        employee?.grade === "I" && form.grade === "Supra";
+    const isSpecialPromotion =
+        employee?.grade === "I" && form.grade === "Special";
     const gradeChanged = employee?.grade !== form.grade;
     const serviceLevelChanged =
         employee?.serviceLevel?.id !== Number(form.serviceLevelId);
@@ -322,31 +411,61 @@ export default function PromotionDialog({
 
     const selectableGrades = getSelectableGrades(
         employee?.grade,
-        selectedDesignation?.allowedGrades
+        isOtherPromotion
+            ? employeeService?.allowedGrades
+            : selectedDesignation?.allowedGrades,
+        getServiceRules(rulesSource)?.allowedGrades
     );
 
     const buildPromotionCandidate = (sourceForm, promotionType, designation) => {
-        const filteredTypes = promotionType === "grade2"
-            ? ["EB_GRADE_2", "CUSTOM_GRADE_2_REQUIREMENT"]
-            : ["EB_GRADE_1", "CUSTOM_GRADE_1_REQUIREMENT"];
-
-        const customType = promotionType === "grade2"
-            ? "CUSTOM_GRADE_2_REQUIREMENT"
-            : "CUSTOM_GRADE_1_REQUIREMENT";
-        const customRequirements = promotionType === "grade2"
-            ? designation?.grade2Requirements
-            : designation?.grade1Requirements;
-        const fixedType = promotionType === "grade2" ? "EB_GRADE_2" : "EB_GRADE_1";
-        const fixedField = promotionType === "grade2"
-            ? "ebGrade2Passed"
-            : "ebGrade1Passed";
+        const rulesDesignation = designation ?? rulesSource;
+        const configByType = {
+            grade2: {
+                filteredTypes: ["EB_GRADE_2", "CUSTOM_GRADE_2_REQUIREMENT"],
+                customType: "CUSTOM_GRADE_2_REQUIREMENT",
+                customRequirements: getServiceRules(rulesDesignation)?.grade2Requirements,
+                fixedType: "EB_GRADE_2",
+                fixedField: "ebGrade2Passed"
+            },
+            grade1: {
+                filteredTypes: ["EB_GRADE_1", "CUSTOM_GRADE_1_REQUIREMENT"],
+                customType: "CUSTOM_GRADE_1_REQUIREMENT",
+                customRequirements: getServiceRules(rulesDesignation)?.grade1Requirements,
+                fixedType: "EB_GRADE_1",
+                fixedField: "ebGrade1Passed"
+            },
+            supra: {
+                filteredTypes: ["SUPRA_REQUIREMENT", "CUSTOM_SUPRA_REQUIREMENT"],
+                customType: "CUSTOM_SUPRA_REQUIREMENT",
+                customRequirements: getServiceRules(rulesDesignation)?.supraRequirements,
+                fixedType: "SUPRA_REQUIREMENT",
+                fixedField: "supraExamPassed"
+            },
+            special: {
+                filteredTypes: ["MASTERS_DEGREE", "CUSTOM_SPECIAL_REQUIREMENT"],
+                customType: "CUSTOM_SPECIAL_REQUIREMENT",
+                customRequirements: getServiceRules(rulesDesignation)?.specialRequirements,
+                fixedType: "MASTERS_DEGREE",
+                fixedField: "mastersDegreeCompleted"
+            }
+        };
+        const config = configByType[promotionType];
+        const {
+            filteredTypes,
+            customType,
+            customRequirements,
+            fixedType,
+            fixedField
+        } = config;
 
         return {
             ...employee,
             careerProgression: {
                 ...(employee?.careerProgression || {}),
-                grade2RequiredYears: designation?.grade2RequiredYears,
-                grade1RequiredYears: designation?.grade1RequiredYears
+                grade2RequiredYears: getServiceRules(rulesDesignation)?.grade2RequiredYears,
+                grade1RequiredYears: getServiceRules(rulesDesignation)?.grade1RequiredYears,
+                supraRequiredYears: getServiceRules(rulesDesignation)?.supraRequiredYears,
+                specialRequiredYears: getServiceRules(rulesDesignation)?.specialRequiredYears
             },
             requirements: [
                 ...(employee?.requirements || []).filter(
@@ -375,27 +494,49 @@ export default function PromotionDialog({
     const grade2Candidate = buildPromotionCandidate(
         form,
         "grade2",
-        selectedDesignation
+        rulesSource
     );
     const grade1Candidate = buildPromotionCandidate(
         form,
         "grade1",
-        selectedDesignation
+        rulesSource
+    );
+    const supraCandidate = buildPromotionCandidate(
+        form,
+        "supra",
+        rulesSource
+    );
+    const specialCandidate = buildPromotionCandidate(
+        form,
+        "special",
+        rulesSource
     );
     const grade2EligibleDate = getGrade2EligibilityDate(
         grade2Candidate,
-        selectedDesignation
+        rulesSource
     );
     const grade1EligibleDate = getGrade1EligibilityDate(
         grade1Candidate,
-        selectedDesignation
+        rulesSource
+    );
+    const supraEligibleDate = getSupraEligibilityDate(
+        supraCandidate,
+        rulesSource
+    );
+    const specialEligibleDate = getSpecialEligibilityDate(
+        specialCandidate,
+        rulesSource
     );
 
     const serviceMinEffectiveDate = isGrade2Promotion
         ? grade2EligibleDate
         : isGrade1Promotion
             ? grade1EligibleDate
-            : null;
+            : isSupraPromotion
+                ? supraEligibleDate
+                : isSpecialPromotion
+                    ? specialEligibleDate
+                    : null;
     const minEffectiveDate = combineMinDates(
         serviceMinEffectiveDate,
         previousEventDate
@@ -414,7 +555,7 @@ export default function PromotionDialog({
             editable: true,
             passed: isRequirementCompleted(grade2Candidate, "EB_GRADE_2")
         },
-        ...normalizeRequirements(selectedDesignation?.grade2Requirements).map(
+        ...normalizeRequirements(getServiceRules(selectedDesignation)?.grade2Requirements).map(
             (requirement) => {
                 const key = requirementKey(
                     "CUSTOM_GRADE_2_REQUIREMENT",
@@ -435,9 +576,7 @@ export default function PromotionDialog({
         ),
         {
             key: "grade2-service",
-            label: selectedDesignation?.grade2RequiredYears != null
-                ? `${selectedDesignation.grade2RequiredYears} year(s) service from first appointment`
-                : "Required service period from first appointment",
+            label: `${normalizeRequiredYears(getServiceRules(rulesSource)?.grade2RequiredYears)} year(s) service from first appointment`,
             editable: false,
             passed: servicePeriodMet(grade2EligibleDate, form.promotionDate)
         }
@@ -451,7 +590,7 @@ export default function PromotionDialog({
             editable: true,
             passed: isRequirementCompleted(grade1Candidate, "EB_GRADE_1")
         },
-        ...normalizeRequirements(selectedDesignation?.grade1Requirements).map(
+        ...normalizeRequirements(getServiceRules(selectedDesignation)?.grade1Requirements).map(
             (requirement) => {
                 const key = requirementKey(
                     "CUSTOM_GRADE_1_REQUIREMENT",
@@ -472,11 +611,79 @@ export default function PromotionDialog({
         ),
         {
             key: "grade1-service",
-            label: selectedDesignation?.grade1RequiredYears != null
-                ? `${selectedDesignation.grade1RequiredYears} year(s) Grade II service period`
-                : "Required Grade II service period",
+            label: `${normalizeRequiredYears(getServiceRules(rulesSource)?.grade1RequiredYears)} year(s) Grade II service period`,
             editable: false,
             passed: servicePeriodMet(grade1EligibleDate, form.promotionDate)
+        }
+    ];
+
+    const supraRequirementItems = [
+        {
+            key: "supra-exam",
+            label: "Supra Grade Examination Passed",
+            fieldName: "supraExamPassed",
+            editable: true,
+            passed: isRequirementCompleted(supraCandidate, "SUPRA_REQUIREMENT")
+        },
+        ...normalizeRequirements(getServiceRules(selectedDesignation)?.supraRequirements).map(
+            (requirement) => {
+                const key = requirementKey(
+                    "CUSTOM_SUPRA_REQUIREMENT",
+                    requirement.requirementName
+                );
+                return {
+                    key,
+                    label: requirement.requirementName,
+                    fieldName: key,
+                    editable: true,
+                    passed: isNamedRequirementCompleted(
+                        supraCandidate,
+                        "CUSTOM_SUPRA_REQUIREMENT",
+                        requirement.requirementName
+                    )
+                };
+            }
+        ),
+        {
+            key: "supra-service",
+            label: `${normalizeRequiredYears(getServiceRules(rulesSource)?.supraRequiredYears)} year(s) Grade I service period`,
+            editable: false,
+            passed: servicePeriodMet(supraEligibleDate, form.promotionDate)
+        }
+    ];
+
+    const specialRequirementItems = [
+        {
+            key: "masters-degree",
+            label: "Masters Degree Completed",
+            fieldName: "mastersDegreeCompleted",
+            editable: true,
+            passed: isRequirementCompleted(specialCandidate, "MASTERS_DEGREE")
+        },
+        ...normalizeRequirements(getServiceRules(selectedDesignation)?.specialRequirements).map(
+            (requirement) => {
+                const key = requirementKey(
+                    "CUSTOM_SPECIAL_REQUIREMENT",
+                    requirement.requirementName
+                );
+                return {
+                    key,
+                    label: requirement.requirementName,
+                    fieldName: key,
+                    editable: true,
+                    passed: isNamedRequirementCompleted(
+                        specialCandidate,
+                        "CUSTOM_SPECIAL_REQUIREMENT",
+                        requirement.requirementName
+                    )
+                };
+            }
+        ),
+        {
+            key: "special-service",
+            label: `${normalizeRequiredYears(getServiceRules(rulesSource)?.specialRequiredYears)} year(s) Grade I service period`,
+            editable: false,
+            passed: servicePeriodMet(specialEligibleDate, form.promotionDate)
         }
     ];
 
@@ -486,7 +693,7 @@ export default function PromotionDialog({
 
         const requirementsMet =
             isRequirementCompleted(candidate, "EB_GRADE_2")
-            && normalizeRequirements(designation?.grade2Requirements).every(
+            && normalizeRequirements(getServiceRules(designation)?.grade2Requirements).every(
                 (requirement) => isNamedRequirementCompleted(
                     candidate,
                     "CUSTOM_GRADE_2_REQUIREMENT",
@@ -503,7 +710,7 @@ export default function PromotionDialog({
         const eligibleDate = getGrade1EligibilityDate(candidate, designation);
 
         return isRequirementCompleted(candidate, "EB_GRADE_1")
-            && normalizeRequirements(designation?.grade1Requirements).every(
+            && normalizeRequirements(getServiceRules(designation)?.grade1Requirements).every(
                 (requirement) => isNamedRequirementCompleted(
                     candidate,
                     "CUSTOM_GRADE_1_REQUIREMENT",
@@ -513,22 +720,82 @@ export default function PromotionDialog({
             && servicePeriodMet(eligibleDate, nextForm.promotionDate);
     };
 
-    const grade2Qualified = isGrade2PromotionQualified(form, selectedDesignation);
-    const grade1Qualified = isGrade1PromotionQualified(form, selectedDesignation);
+    const isSupraPromotionQualified = (nextForm, designation) => {
+        const candidate = buildPromotionCandidate(nextForm, "supra", designation);
+        const eligibleDate = getSupraEligibilityDate(candidate, designation);
+
+        return isRequirementCompleted(candidate, "SUPRA_REQUIREMENT")
+            && normalizeRequirements(getServiceRules(designation)?.supraRequirements).every(
+                (requirement) => isNamedRequirementCompleted(
+                    candidate,
+                    "CUSTOM_SUPRA_REQUIREMENT",
+                    requirement.requirementName
+                )
+            )
+            && servicePeriodMet(eligibleDate, nextForm.promotionDate);
+    };
+
+    const isSpecialPromotionQualified = (nextForm, designation) => {
+        const candidate = buildPromotionCandidate(nextForm, "special", designation);
+        const eligibleDate = getSpecialEligibilityDate(candidate, designation);
+
+        return isRequirementCompleted(candidate, "MASTERS_DEGREE")
+            && normalizeRequirements(getServiceRules(designation)?.specialRequirements).every(
+                (requirement) => isNamedRequirementCompleted(
+                    candidate,
+                    "CUSTOM_SPECIAL_REQUIREMENT",
+                    requirement.requirementName
+                )
+            )
+            && servicePeriodMet(eligibleDate, nextForm.promotionDate);
+    };
+
+    const grade2Qualified = isGrade2PromotionQualified(form, rulesSource);
+    const grade1Qualified = isGrade1PromotionQualified(form, rulesSource);
+    const supraQualified = isSupraPromotionQualified(form, rulesSource);
+    const specialQualified = isSpecialPromotionQualified(form, rulesSource);
+
+    const inNwpDepartment =
+        employee?.currentDepartment === NWP_ENGINEERING_DEPARTMENT;
+    const transferringOut = form.promotionOutcome === PROMOTION_OUTCOME.TRANSFERRING_OUT;
+    const showPromotionOutcome = isPromotion && inNwpDepartment;
+    const toDepartment = resolveDepartmentValue(
+        form.toDepartmentType,
+        form.toOtherDepartmentName
+    );
+    const destinationIncomplete = transferringOut && (
+        !toDepartment?.trim()
+        || !form.toOffice?.trim()
+        || (
+            form.toDepartmentType === DEPARTMENT_OPTIONS.NWP
+            && !form.toDistrict
+        )
+    );
 
     const runValidation = (nextForm) => {
-        const designation = designations.find(
-            (item) => item.id === Number(nextForm.newDesignationId)
-        );
+        const nextIsOther = isOtherDesignation(nextForm.newDesignationId);
+        const designation = nextIsOther
+            ? null
+            : designations.find(
+                (item) => item.id === Number(nextForm.newDesignationId)
+            );
+        const nextRulesSource = designation
+            ?? (employeeService ? { service: employeeService } : null);
 
-        const validationError = validateDesignationAssignment(
-            buildValidationTarget(
-                nextForm.grade,
-                nextForm.serviceLevelId,
-                serviceLevels
-            ),
-            designation
-        );
+        const validationError = nextIsOther
+            ? validateCustomDesignationAssignment({
+                grade: nextForm.grade,
+                serviceLevelId: nextForm.serviceLevelId,
+                service: employeeService
+            })
+            : validateDesignationAssignment(
+                buildValidationTarget(
+                    nextForm.grade,
+                    nextForm.serviceLevelId,
+                    serviceLevels
+                ),
+                designation
+            );
 
         if (validationError) {
             setError(validationError);
@@ -538,15 +805,25 @@ export default function PromotionDialog({
         const minDate = combineMinDates(
             employee?.grade === "III" && nextForm.grade === "II"
                 ? getGrade2EligibilityDate(
-                    buildPromotionCandidate(nextForm, "grade2", designation),
-                    designation
+                    buildPromotionCandidate(nextForm, "grade2", nextRulesSource),
+                    nextRulesSource
                 )
                 : employee?.grade === "II" && nextForm.grade === "I"
                     ? getGrade1EligibilityDate(
-                        buildPromotionCandidate(nextForm, "grade1", designation),
-                        designation
+                        buildPromotionCandidate(nextForm, "grade1", nextRulesSource),
+                        nextRulesSource
                     )
-                    : null,
+                    : employee?.grade === "I" && nextForm.grade === "Supra"
+                        ? getSupraEligibilityDate(
+                            buildPromotionCandidate(nextForm, "supra", nextRulesSource),
+                            nextRulesSource
+                        )
+                        : employee?.grade === "I" && nextForm.grade === "Special"
+                            ? getSpecialEligibilityDate(
+                                buildPromotionCandidate(nextForm, "special", nextRulesSource),
+                                nextRulesSource
+                            )
+                            : null,
             previousEventDate
         );
 
@@ -565,7 +842,7 @@ export default function PromotionDialog({
         if (
             employee?.grade === "III"
             && nextForm.grade === "II"
-            && !isGrade2PromotionQualified(nextForm, designation)
+            && !isGrade2PromotionQualified(nextForm, nextRulesSource)
         ) {
             setError("Employee is not qualified for Grade II promotion");
             return;
@@ -574,9 +851,27 @@ export default function PromotionDialog({
         if (
             employee?.grade === "II"
             && nextForm.grade === "I"
-            && !isGrade1PromotionQualified(nextForm, designation)
+            && !isGrade1PromotionQualified(nextForm, nextRulesSource)
         ) {
             setError("Employee is not qualified for Grade I promotion");
+            return;
+        }
+
+        if (
+            employee?.grade === "I"
+            && nextForm.grade === "Supra"
+            && !isSupraPromotionQualified(nextForm, nextRulesSource)
+        ) {
+            setError("Employee is not qualified for Supra promotion");
+            return;
+        }
+
+        if (
+            employee?.grade === "I"
+            && nextForm.grade === "Special"
+            && !isSpecialPromotionQualified(nextForm, nextRulesSource)
+        ) {
+            setError("Employee is not qualified for Special promotion");
             return;
         }
 
@@ -591,17 +886,27 @@ export default function PromotionDialog({
         };
 
         if (name === "newDesignationId") {
-            const designation = designations.find(
-                (item) => item.id === Number(value)
-            );
+            if (isOtherDesignation(value)) {
+                next.recordedDesignationName = "";
+            } else {
+                next.recordedDesignationName = "";
+            }
+            const designation = isOtherDesignation(value)
+                ? null
+                : designations.find((item) => item.id === Number(value));
+            const nextRulesSource = designation
+                ?? (employeeService ? { service: employeeService } : null);
             const nextSelectableGrades = getSelectableGrades(
                 employee?.grade,
-                designation?.allowedGrades
+                isOtherDesignation(value)
+                    ? employeeService?.allowedGrades
+                    : designation?.allowedGrades,
+                getServiceRules(nextRulesSource)?.allowedGrades
             );
             if (!nextSelectableGrades.includes(next.grade)) {
                 next.grade = employee?.grade ?? nextSelectableGrades[0] ?? "";
             }
-            normalizeRequirements(designation?.grade2Requirements).forEach(
+            normalizeRequirements(getServiceRules(nextRulesSource)?.grade2Requirements).forEach(
                 (requirement) => {
                     const key = requirementKey(
                         "CUSTOM_GRADE_2_REQUIREMENT",
@@ -614,7 +919,7 @@ export default function PromotionDialog({
                     );
                 }
             );
-            normalizeRequirements(designation?.grade1Requirements).forEach(
+            normalizeRequirements(getServiceRules(nextRulesSource)?.grade1Requirements).forEach(
                 (requirement) => {
                     const key = requirementKey(
                         "CUSTOM_GRADE_1_REQUIREMENT",
@@ -623,6 +928,32 @@ export default function PromotionDialog({
                     next[key] = isNamedRequirementCompleted(
                         employee,
                         "CUSTOM_GRADE_1_REQUIREMENT",
+                        requirement.requirementName
+                    );
+                }
+            );
+            normalizeRequirements(getServiceRules(nextRulesSource)?.supraRequirements).forEach(
+                (requirement) => {
+                    const key = requirementKey(
+                        "CUSTOM_SUPRA_REQUIREMENT",
+                        requirement.requirementName
+                    );
+                    next[key] = isNamedRequirementCompleted(
+                        employee,
+                        "CUSTOM_SUPRA_REQUIREMENT",
+                        requirement.requirementName
+                    );
+                }
+            );
+            normalizeRequirements(getServiceRules(nextRulesSource)?.specialRequirements).forEach(
+                (requirement) => {
+                    const key = requirementKey(
+                        "CUSTOM_SPECIAL_REQUIREMENT",
+                        requirement.requirementName
+                    );
+                    next[key] = isNamedRequirementCompleted(
+                        employee,
+                        "CUSTOM_SPECIAL_REQUIREMENT",
                         requirement.requirementName
                     );
                 }
@@ -633,7 +964,7 @@ export default function PromotionDialog({
         runValidation(next);
     };
 
-    const { fieldProps, dateFieldProps, selectFieldProps } =
+    const { fieldProps, selectFieldProps } =
         createFormFieldProps(handleChange);
 
     const buildSubmittedRequirements = () => {
@@ -644,7 +975,7 @@ export default function PromotionDialog({
                 requirementType: "EB_GRADE_2",
                 status: completedStatus(form.ebGrade2Passed)
             });
-            normalizeRequirements(selectedDesignation?.grade2Requirements).forEach(
+            normalizeRequirements(getServiceRules(selectedDesignation)?.grade2Requirements).forEach(
                 (requirement) => {
                     const key = requirementKey(
                         "CUSTOM_GRADE_2_REQUIREMENT",
@@ -670,7 +1001,7 @@ export default function PromotionDialog({
                 requirementType: "EB_GRADE_1",
                 status: completedStatus(form.ebGrade1Passed)
             });
-            normalizeRequirements(selectedDesignation?.grade1Requirements).forEach(
+            normalizeRequirements(getServiceRules(selectedDesignation)?.grade1Requirements).forEach(
                 (requirement) => {
                     const key = requirementKey(
                         "CUSTOM_GRADE_1_REQUIREMENT",
@@ -691,25 +1022,64 @@ export default function PromotionDialog({
             );
         }
 
+        if (isSupraPromotion) {
+            requirements.push({
+                requirementType: "SUPRA_REQUIREMENT",
+                status: "COMPLETED"
+            });
+            normalizeRequirements(getServiceRules(selectedDesignation)?.supraRequirements).forEach(
+                (requirement) => {
+                    requirements.push({
+                        requirementType: "CUSTOM_SUPRA_REQUIREMENT",
+                        requirementName: requirement.requirementName,
+                        status: "COMPLETED"
+                    });
+                }
+            );
+        }
+
+        if (isSpecialPromotion) {
+            requirements.push({
+                requirementType: "MASTERS_DEGREE",
+                status: "COMPLETED"
+            });
+            normalizeRequirements(getServiceRules(selectedDesignation)?.specialRequirements).forEach(
+                (requirement) => {
+                    requirements.push({
+                        requirementType: "CUSTOM_SPECIAL_REQUIREMENT",
+                        requirementName: requirement.requirementName,
+                        status: "COMPLETED"
+                    });
+                }
+            );
+        }
+
         return requirements;
     };
 
     const submit = () => {
-        const designation = designations.find(
-            (item) => item.id === Number(form.newDesignationId)
-        );
-
-        const validationError = validateDesignationAssignment(
-            buildValidationTarget(
-                form.grade,
-                form.serviceLevelId,
-                serviceLevels
-            ),
-            designation
-        );
+        const validationError = isOtherPromotion
+            ? validateCustomDesignationAssignment({
+                grade: form.grade,
+                serviceLevelId: form.serviceLevelId,
+                service: employeeService
+            })
+            : validateDesignationAssignment(
+                buildValidationTarget(
+                    form.grade,
+                    form.serviceLevelId,
+                    serviceLevels
+                ),
+                selectedDesignation
+            );
 
         if (validationError) {
             setError(validationError);
+            return;
+        }
+
+        if (isOtherPromotion && !form.recordedDesignationName?.trim()) {
+            setError("Designation title is required for Other");
             return;
         }
 
@@ -723,15 +1093,47 @@ export default function PromotionDialog({
             return;
         }
 
-        onSubmit({
-            newDesignationId: Number(form.newDesignationId),
+        if (isSupraPromotion && !supraQualified) {
+            setError("Employee is not qualified for Supra promotion");
+            return;
+        }
+
+        if (isSpecialPromotion && !specialQualified) {
+            setError("Employee is not qualified for Special promotion");
+            return;
+        }
+
+        if (showPromotionOutcome && transferringOut && destinationIncomplete) {
+            setError("Destination department and office are required when transferring out");
+            return;
+        }
+
+        const payload = {
+            ...(isOtherPromotion
+                ? {
+                    recordedDesignationName: form.recordedDesignationName.trim()
+                }
+                : {
+                    newDesignationId: Number(form.newDesignationId)
+                }),
             grade: form.grade,
             serviceLevelId: Number(form.serviceLevelId),
             requirements: buildSubmittedRequirements(),
             grade2RequiredYears: null,
             promotionDate: form.promotionDate,
             remarks: form.remarks?.trim() || null
-        });
+        };
+
+        if (showPromotionOutcome && transferringOut) {
+            payload.transferringOut = true;
+            payload.toDepartment = toDepartment;
+            payload.toOffice = form.toOffice.trim();
+            payload.toDistrict = form.toDepartmentType === DEPARTMENT_OPTIONS.NWP
+                ? form.toDistrict
+                : null;
+        }
+
+        onSubmit(payload);
     };
 
     const canSubmit =
@@ -739,15 +1141,14 @@ export default function PromotionDialog({
         && form.grade
         && form.serviceLevelId
         && form.promotionDate
+        && (!isOtherPromotion || form.recordedDesignationName?.trim())
         && !error
         && !effectiveDateTooEarly
-        && hasAssignmentChange;
+        && hasAssignmentChange
+        && (!showPromotionOutcome || !transferringOut || !destinationIncomplete);
 
-    const inNwpDepartment =
-        employee?.currentDepartment === NWP_ENGINEERING_DEPARTMENT;
-
-    const serviceLabel = employee?.designation?.service
-        ? `${employee.designation.service.serviceCode} — ${employee.designation.service.description}`
+    const serviceLabel = employeeService
+        ? `${employeeService.serviceCode} — ${employeeService.description}`
         : "—";
 
     return (
@@ -789,7 +1190,7 @@ export default function PromotionDialog({
                         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                             <InfoField
                                 label="Designation"
-                                value={employee?.designation?.designationName}
+                                value={resolveEmployeeDesignationName(employee) || "—"}
                             />
                         </Grid>
                         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -857,8 +1258,22 @@ export default function PromotionDialog({
                                             : ""}
                                     </MenuItem>
                                 ))}
+                                <MenuItem value={OTHER_DESIGNATION_VALUE}>
+                                    Other (type historical title)
+                                </MenuItem>
                             </TextField>
                         </Grid>
+
+                        {isOtherPromotion && (
+                            <Grid size={{ xs: 12 }}>
+                                <TextField
+                                    {...fieldProps}
+                                    label="Designation title (as recorded)"
+                                    name="recordedDesignationName"
+                                    value={form.recordedDesignationName}
+                                />
+                            </Grid>
+                        )}
 
                         <Grid size={{ xs: 12, sm: 6 }}>
                             <TextField
@@ -893,7 +1308,7 @@ export default function PromotionDialog({
                             </TextField>
                         </Grid>
 
-                        {!inNwpDepartment && (
+                        {!inNwpDepartment && isPromotion && (
                             <Grid size={{ xs: 12 }}>
                                 <Alert severity="info">
                                     This promotion will be recorded but will not
@@ -903,9 +1318,82 @@ export default function PromotionDialog({
                             </Grid>
                         )}
 
+                        {showPromotionOutcome && (
+                            <Grid size={{ xs: 12 }}>
+                                <FormControl component="fieldset" required>
+                                    <FormLabel component="legend">
+                                        Promotion outcome
+                                    </FormLabel>
+                                    <RadioGroup
+                                        name="promotionOutcome"
+                                        value={form.promotionOutcome}
+                                        onChange={handleChange}
+                                    >
+                                        <FormControlLabel
+                                            value={PROMOTION_OUTCOME.STAYING}
+                                            control={<Radio />}
+                                            label="Stays in N.W.P. Engineering Department"
+                                        />
+                                        <FormControlLabel
+                                            value={PROMOTION_OUTCOME.TRANSFERRING_OUT}
+                                            control={<Radio />}
+                                            label="Transfers out of department"
+                                        />
+                                    </RadioGroup>
+                                </FormControl>
+                                <Alert
+                                    severity="info"
+                                    sx={{ mt: 1.5 }}
+                                >
+                                    {transferringOut
+                                        ? "Cadre report: Promotion on the old designation only. The employee will not count as a New Appointment in this department."
+                                        : "Cadre report: Promotion on the old designation and New Appointment on the new designation."}
+                                </Alert>
+                            </Grid>
+                        )}
+
+                        {showPromotionOutcome && transferringOut && (
+                            <>
+                                <Grid size={{ xs: 12 }}>
+                                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                                        Destination workplace
+                                    </Typography>
+                                </Grid>
+                                <DepartmentOfficeFields
+                                    departmentType={form.toDepartmentType}
+                                    otherDepartmentName={form.toOtherDepartmentName}
+                                    district={form.toDistrict}
+                                    office={form.toOffice}
+                                    departmentLabel="Destination department"
+                                    officeLabel="Destination office"
+                                    excludeNwpDepartment
+                                    onDepartmentTypeChange={(value) =>
+                                        setForm((prev) => ({
+                                            ...prev,
+                                            toDepartmentType: value,
+                                            toDistrict: "",
+                                            toOffice: ""
+                                        }))
+                                    }
+                                    onOtherDepartmentNameChange={(value) =>
+                                        setForm((prev) => ({
+                                            ...prev,
+                                            toOtherDepartmentName: value
+                                        }))
+                                    }
+                                    onDistrictChange={(value) =>
+                                        setForm((prev) => ({ ...prev, toDistrict: value }))
+                                    }
+                                    onOfficeChange={(value) =>
+                                        setForm((prev) => ({ ...prev, toOffice: value }))
+                                    }
+                                />
+                            </>
+                        )}
+
                         <Grid size={{ xs: 12, sm: 6 }}>
-                            <TextField
-                                {...dateFieldProps}
+                            <DateInput
+                                {...fieldProps}
                                 label={
                                     isPromotion || gradeChanged
                                         ? "Effective Date"
@@ -915,7 +1403,6 @@ export default function PromotionDialog({
                                 value={form.promotionDate}
                                 required
                                 slotProps={{
-                                    ...dateFieldProps.slotProps,
                                     htmlInput: minEffectiveDate
                                         ? { min: minEffectiveDate }
                                         : undefined
@@ -964,18 +1451,18 @@ export default function PromotionDialog({
                                 variant="outlined"
                                 label={`Selectable grades: ${selectableGrades.join(", ") || "—"}`}
                             />
-                            {selectedDesignation.grade2RequiredYears != null && (
+                            {getServiceRules(selectedDesignation)?.grade2RequiredYears != null && (
                                 <Chip
                                     size="small"
                                     variant="outlined"
-                                    label={`Grade II service: ${selectedDesignation.grade2RequiredYears} year(s)`}
+                                    label={`Grade II service: ${getServiceRules(selectedDesignation).grade2RequiredYears} year(s)`}
                                 />
                             )}
-                            {selectedDesignation.grade1RequiredYears != null && (
+                            {getServiceRules(selectedDesignation)?.grade1RequiredYears != null && (
                                 <Chip
                                     size="small"
                                     variant="outlined"
-                                    label={`Grade I service: ${selectedDesignation.grade1RequiredYears} year(s)`}
+                                    label={`Grade I service: ${getServiceRules(selectedDesignation).grade1RequiredYears} year(s)`}
                                 />
                             )}
                         </Stack>
@@ -991,8 +1478,12 @@ export default function PromotionDialog({
                             <Grid size={{ xs: 12, md: 4 }}>
                                 <ChangePreview
                                     label="Designation"
-                                    fromValue={employee?.designation?.designationName}
-                                    toValue={selectedDesignation?.designationName}
+                                    fromValue={resolveEmployeeDesignationName(employee)}
+                                    toValue={
+                                        isOtherPromotion
+                                            ? form.recordedDesignationName
+                                            : selectedDesignation?.designationName
+                                    }
                                 />
                             </Grid>
                             <Grid size={{ xs: 12, md: 4 }}>
@@ -1057,6 +1548,58 @@ export default function PromotionDialog({
 
                         <RequirementChecklist
                             items={grade1RequirementItems}
+                            form={form}
+                            employee={employee}
+                            handleChange={handleChange}
+                            editable
+                        />
+                    </FormSection>
+                )}
+
+                {isSupraPromotion && (
+                    <FormSection
+                        title="Supra Promotion Requirements"
+                        description="All listed requirements and the Grade I service period must be complete before promotion."
+                    >
+                        <Alert
+                            severity={supraQualified ? "success" : "warning"}
+                            sx={{ mb: 2 }}
+                        >
+                            Eligible from {formatDisplayDate(supraEligibleDate)}
+                            {" · "}
+                            {supraQualified
+                                ? "Ready for Supra promotion"
+                                : "Not yet qualified for Supra promotion"}
+                        </Alert>
+
+                        <RequirementChecklist
+                            items={supraRequirementItems}
+                            form={form}
+                            employee={employee}
+                            handleChange={handleChange}
+                            editable
+                        />
+                    </FormSection>
+                )}
+
+                {isSpecialPromotion && (
+                    <FormSection
+                        title="Special Promotion Requirements"
+                        description="All listed requirements and the Grade I service period must be complete before promotion."
+                    >
+                        <Alert
+                            severity={specialQualified ? "success" : "warning"}
+                            sx={{ mb: 2 }}
+                        >
+                            Eligible from {formatDisplayDate(specialEligibleDate)}
+                            {" · "}
+                            {specialQualified
+                                ? "Ready for Special promotion"
+                                : "Not yet qualified for Special promotion"}
+                        </Alert>
+
+                        <RequirementChecklist
+                            items={specialRequirementItems}
                             form={form}
                             employee={employee}
                             handleChange={handleChange}

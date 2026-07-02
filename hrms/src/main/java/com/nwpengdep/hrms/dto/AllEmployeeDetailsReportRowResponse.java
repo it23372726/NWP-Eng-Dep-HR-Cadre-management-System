@@ -33,16 +33,6 @@ public class AllEmployeeDetailsReportRowResponse {
 
     private String natureOfAppointment;
 
-    private String employmentType;
-
-    private String permanentStatus;
-
-    private String qualifiedForPermanent;
-
-    private LocalDate permanentQualificationDate;
-
-    private LocalDate permanentConfirmationDate;
-
     private LocalDate dateOfFirstAppointment;
 
     private String incremantDate;

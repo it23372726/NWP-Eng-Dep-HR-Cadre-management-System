@@ -97,8 +97,8 @@ class VehiclePermitServiceTest {
     }
 
     @Test
-    void seniorEmployeeCanCollectAfterFiveYearsSinceSeniorEvent() {
-        LocalDate seniorSince = LocalDate.now().minusYears(6);
+    void seniorEmployeeCanCollectAfterSixYearsSinceSeniorEvent() {
+        LocalDate seniorSince = LocalDate.now().minusYears(7);
         when(employeeActionRepository.findCareerActionsByEmployeeIdOrderByActionDateAsc(
                 eq(1L),
                 any()
@@ -112,10 +112,29 @@ class VehiclePermitServiceTest {
         assertEquals(seniorSince, status.getSeniorSinceDate());
         assertNull(status.getLastCollectedDate());
         assertEquals(
-                seniorSince.plusYears(5),
+                seniorSince.plusYears(6),
                 status.getNextCollectableDate()
         );
         assertTrue(status.isCanCollectNow());
+    }
+
+    @Test
+    void seniorEmployeeCannotCollectFirstPermitBeforeSixYearsSinceSeniorEvent() {
+        LocalDate seniorSince = LocalDate.now().minusYears(5);
+        when(employeeActionRepository.findCareerActionsByEmployeeIdOrderByActionDateAsc(
+                eq(1L),
+                any()
+        )).thenReturn(List.of(
+                seniorAction(EmployeeActionType.PROMOTION, seniorSince, seniorDesignation)
+        ));
+
+        VehiclePermitStatusDto status = vehiclePermitService.getStatus(1L);
+
+        assertEquals(
+                seniorSince.plusYears(6),
+                status.getNextCollectableDate()
+        );
+        assertFalse(status.isCanCollectNow());
     }
 
     @Test
@@ -143,7 +162,7 @@ class VehiclePermitServiceTest {
 
     @Test
     void recordCollectionUpdatesCollectedDate() {
-        LocalDate seniorSince = LocalDate.now().minusYears(6);
+        LocalDate seniorSince = LocalDate.now().minusYears(7);
         LocalDate collectedDate = LocalDate.now().minusDays(1);
 
         when(employeeActionRepository.findCareerActionsByEmployeeIdOrderByActionDateAsc(
@@ -169,7 +188,7 @@ class VehiclePermitServiceTest {
 
     @Test
     void recordCollectionRejectsDateBeforeNextCollectableDate() {
-        LocalDate seniorSince = LocalDate.now().minusYears(6);
+        LocalDate seniorSince = LocalDate.now().minusYears(7);
         when(employeeActionRepository.findCareerActionsByEmployeeIdOrderByActionDateAsc(
                 eq(1L),
                 any()
@@ -178,7 +197,7 @@ class VehiclePermitServiceTest {
         ));
 
         VehiclePermitCollectionRequest request = new VehiclePermitCollectionRequest();
-        request.setCollectedDate(seniorSince.plusYears(4));
+        request.setCollectedDate(seniorSince.plusYears(5));
 
         assertThrows(
                 IllegalArgumentException.class,
@@ -204,6 +223,97 @@ class VehiclePermitServiceTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> vehiclePermitService.recordCollection(1L, request)
+        );
+    }
+
+    @Test
+    void undoCollectionClearsCollectedDate() {
+        LocalDate seniorSince = LocalDate.now().minusYears(10);
+        LocalDate lastCollected = LocalDate.now().minusYears(4);
+        seniorEmployee.setVehiclePermitCollectedDate(lastCollected);
+
+        when(employeeActionRepository.findCareerActionsByEmployeeIdOrderByActionDateAsc(
+                eq(1L),
+                any()
+        )).thenReturn(List.of(
+                seniorAction(EmployeeActionType.PROMOTION, seniorSince, seniorDesignation)
+        ));
+
+        VehiclePermitStatusDto status = vehiclePermitService.undoCollection(1L);
+
+        assertNull(seniorEmployee.getVehiclePermitCollectedDate());
+        assertNull(status.getLastCollectedDate());
+        assertEquals(
+                seniorSince.plusYears(6),
+                status.getNextCollectableDate()
+        );
+        verify(employeeRepository).save(seniorEmployee);
+    }
+
+    @Test
+    void undoCollectionRejectsWhenNoCollectionRecorded() {
+        when(employeeActionRepository.findCareerActionsByEmployeeIdOrderByActionDateAsc(
+                eq(1L),
+                any()
+        )).thenReturn(List.of(
+                seniorAction(
+                        EmployeeActionType.PROMOTION,
+                        LocalDate.now().minusYears(6),
+                        seniorDesignation
+                )
+        ));
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> vehiclePermitService.undoCollection(1L)
+        );
+    }
+
+    @Test
+    void updateCollectionChangesCollectedDate() {
+        LocalDate seniorSince = LocalDate.now().minusYears(10);
+        LocalDate lastCollected = LocalDate.now().minusYears(4);
+        LocalDate updatedDate = LocalDate.now().minusYears(3);
+        seniorEmployee.setVehiclePermitCollectedDate(lastCollected);
+
+        when(employeeActionRepository.findCareerActionsByEmployeeIdOrderByActionDateAsc(
+                eq(1L),
+                any()
+        )).thenReturn(List.of(
+                seniorAction(EmployeeActionType.PROMOTION, seniorSince, seniorDesignation)
+        ));
+
+        VehiclePermitCollectionRequest request = new VehiclePermitCollectionRequest();
+        request.setCollectedDate(updatedDate);
+
+        VehiclePermitStatusDto status = vehiclePermitService.updateCollection(1L, request);
+
+        assertEquals(updatedDate, seniorEmployee.getVehiclePermitCollectedDate());
+        assertEquals(updatedDate, status.getLastCollectedDate());
+        assertEquals(
+                updatedDate.plusYears(5),
+                status.getNextCollectableDate()
+        );
+        verify(employeeRepository).save(seniorEmployee);
+    }
+
+    @Test
+    void updateCollectionRejectsWhenNoCollectionRecorded() {
+        LocalDate seniorSince = LocalDate.now().minusYears(6);
+
+        when(employeeActionRepository.findCareerActionsByEmployeeIdOrderByActionDateAsc(
+                eq(1L),
+                any()
+        )).thenReturn(List.of(
+                seniorAction(EmployeeActionType.PROMOTION, seniorSince, seniorDesignation)
+        ));
+
+        VehiclePermitCollectionRequest request = new VehiclePermitCollectionRequest();
+        request.setCollectedDate(LocalDate.now().minusDays(1));
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> vehiclePermitService.updateCollection(1L, request)
         );
     }
 

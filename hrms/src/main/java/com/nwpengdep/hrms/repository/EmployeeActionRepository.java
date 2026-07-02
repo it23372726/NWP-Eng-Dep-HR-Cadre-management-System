@@ -59,6 +59,22 @@ public interface EmployeeActionRepository
     );
 
     @Query("""
+            SELECT a
+            FROM EmployeeAction a
+            JOIN FETCH a.employee e
+            LEFT JOIN FETCH e.designation
+            LEFT JOIN FETCH a.oldDesignation
+            LEFT JOIN FETCH a.newDesignation
+            WHERE a.actionDate BETWEEN :from AND :to
+              AND (a.deleted IS NULL OR a.deleted = false)
+            ORDER BY a.actionDate ASC, e.fullName ASC, a.id ASC
+            """)
+    List<EmployeeAction> findActionsBetweenDates(
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to
+    );
+
+    @Query("""
             SELECT a.newDesignation.id, COUNT(a)
             FROM EmployeeAction a
             WHERE a.actionType = :actionType
@@ -133,6 +149,26 @@ public interface EmployeeActionRepository
             GROUP BY a.oldDesignation.id
             """)
     List<Object[]> countGroupedByOldDesignationAndDepartment(
+            @Param("actionType") EmployeeActionType actionType,
+            @Param("department") String department,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to
+    );
+
+    @Query("""
+            SELECT a.oldDesignation.id, COUNT(a)
+            FROM EmployeeAction a
+            WHERE a.actionType = :actionType
+              AND a.oldDesignation IS NOT NULL
+              AND (
+                    a.department = :department
+                    OR a.fromDepartment = :department
+              )
+              AND a.actionDate BETWEEN :from AND :to
+              AND (a.deleted IS NULL OR a.deleted = false)
+            GROUP BY a.oldDesignation.id
+            """)
+    List<Object[]> countPromotionOutByDepartment(
             @Param("actionType") EmployeeActionType actionType,
             @Param("department") String department,
             @Param("from") LocalDate from,

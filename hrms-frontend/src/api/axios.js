@@ -1,5 +1,5 @@
 import axios from "axios";
-import { isTokenExpired, clearAuthData, redirectToLogin } from "../utils/tokenUtils";
+import { isTokenExpired, clearAuthData, redirectToLogin, generateCorrelationId } from "../utils/tokenUtils";
 
 const api = axios.create({
     baseURL: "http://localhost:8080/api"
@@ -7,8 +7,7 @@ const api = axios.create({
 
 // Public endpoints that should not have Authorization header
 const publicEndpoints = [
-    '/api/auth/login',
-    '/api/auth/register'
+    '/auth/login'
 ];
 
 api.interceptors.request.use(
@@ -26,6 +25,18 @@ api.interceptors.request.use(
         // 3. This is not a public endpoint
         if (token && !isTokenExpired(token) && !isPublicEndpoint) {
             config.headers.Authorization = `Bearer ${token.trim()}`;
+        }
+
+        config.headers["X-Correlation-Id"] = generateCorrelationId();
+
+        const clientHost = localStorage.getItem("clientHost");
+        if (clientHost) {
+            config.headers["X-Client-Host"] = clientHost;
+        }
+
+        const sessionId = localStorage.getItem("sessionId");
+        if (sessionId) {
+            config.headers["X-Session-Id"] = sessionId;
         }
 
         if (

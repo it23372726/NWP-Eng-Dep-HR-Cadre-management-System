@@ -20,6 +20,10 @@ public class CareerHistoryEventRequest {
 
     private Long designationId;
 
+    private String recordedDesignationName;
+
+    private Long serviceId;
+
     private Grade grade;
 
     private Long serviceLevelId;
@@ -39,4 +43,7 @@ public class CareerHistoryEventRequest {
     private String reason;
 
     private String remarks;
+
+    /** When true on promotion, employee leaves N.W.P. Engineering on promotion. */
+    private Boolean transferringOut;
 }

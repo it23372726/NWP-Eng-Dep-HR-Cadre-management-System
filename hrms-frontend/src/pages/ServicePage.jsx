@@ -19,7 +19,8 @@ import {
     DialogTitle,
     DialogContent,
     DialogActions,
-    Alert
+    Alert,
+    Chip
 } from "@mui/material";
 import {
     Add as AddIcon,
@@ -40,6 +41,29 @@ import {
 } from "../services/serviceService";
 import ServiceForm from "../components/ServiceForm";
 import { getApiErrorMessage } from "../constants/hrms";
+
+function GradeChips({ grades }) {
+    if (!grades?.length) {
+        return (
+            <Typography variant="body2" color="text.secondary">
+                —
+            </Typography>
+        );
+    }
+
+    return (
+        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+            {grades.map((grade) => (
+                <Chip
+                    key={grade}
+                    label={grade}
+                    size="small"
+                    variant="outlined"
+                />
+            ))}
+        </Stack>
+    );
+}
 
 export default function ServicePage() {
     const [services, setServices] = useState([]);
@@ -231,6 +255,7 @@ export default function ServicePage() {
                             <TableRow>
                                 <TableCell>Service Code</TableCell>
                                 <TableCell>Description</TableCell>
+                                <TableCell>Max Grades</TableCell>
                                 <TableCell align="right">Actions</TableCell>
                             </TableRow>
                         </TableHead>
@@ -251,6 +276,9 @@ export default function ServicePage() {
                                         <Typography variant="body2" color="text.secondary">
                                             {service.description}
                                         </Typography>
+                                    </TableCell>
+                                    <TableCell>
+                                        <GradeChips grades={service.allowedGrades} />
                                     </TableCell>
                                     <TableCell align="right">
                                         <Tooltip title="Edit service">

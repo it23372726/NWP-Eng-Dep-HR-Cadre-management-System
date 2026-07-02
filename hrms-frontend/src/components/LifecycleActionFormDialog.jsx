@@ -10,7 +10,12 @@ import {
     Alert,
     Chip,
     Stack,
-    Typography
+    Typography,
+    Radio,
+    RadioGroup,
+    FormControl,
+    FormLabel,
+    FormControlLabel
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
@@ -19,10 +24,26 @@ import { getServiceLevels } from "../services/serviceLevelService";
 import {
     ACTION_TYPE_LABELS,
     GRADES,
+    getActionTypeLabel,
     getApiErrorMessage,
+    isOtherDesignation,
+    NWP_ENGINEERING_DEPARTMENT,
+    OTHER_DESIGNATION_VALUE,
+    validateCustomDesignationAssignment,
     validateDesignationAssignment
 } from "../constants/hrms";
+import DepartmentOfficeFields, {
+    DEPARTMENT_OPTIONS,
+    parseDepartmentValue,
+    resolveDepartmentValue
+} from "./workplace/DepartmentOfficeFields";
+
+const PROMOTION_OUTCOME = {
+    STAYING: "staying",
+    TRANSFERRING_OUT: "transferringOut"
+};
 import { createFormFieldProps, dialogActionsSx } from "../utils/formLayout";
+import DateInput from "./DateInput";
 import { getMinimumPromotionEffectiveDate } from "../utils/gradeAchievementDates";
 import {
     combineMinDates,
@@ -54,10 +75,16 @@ export default function LifecycleActionFormDialog({
     const [serviceLevels, setServiceLevels] = useState([]);
     const [form, setForm] = useState({
         newDesignationId: "",
+        recordedDesignationName: "",
         grade: "",
         serviceLevelId: "",
         actionDate: "",
-        remarks: ""
+        remarks: "",
+        promotionOutcome: PROMOTION_OUTCOME.STAYING,
+        toDepartmentType: DEPARTMENT_OPTIONS.OTHER,
+        toOtherDepartmentName: "",
+        toOffice: "",
+        toDistrict: ""
     });
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
@@ -78,26 +105,65 @@ export default function LifecycleActionFormDialog({
             const serviceLevelId = action.serviceLevelId
                 ?? (action.canModify ? employee?.serviceLevel?.id : null);
 
+            const transferringOut = Boolean(
+                action.fromDepartment === NWP_ENGINEERING_DEPARTMENT
+                && action.department
+                && action.department !== NWP_ENGINEERING_DEPARTMENT
+            );
+            const destination = transferringOut
+                ? parseDepartmentValue(action.department)
+                : parseDepartmentValue("");
+
             setForm({
-                newDesignationId: String(action.newDesignationId || ""),
+                newDesignationId: action.recordedDesignationName
+                    ? OTHER_DESIGNATION_VALUE
+                    : String(action.newDesignationId || ""),
+                recordedDesignationName: action.recordedDesignationName || "",
                 grade: action.newGrade || "",
                 serviceLevelId: serviceLevelId ? String(serviceLevelId) : "",
                 actionDate: action.actionDate || "",
-                remarks: action.remarks || ""
+                remarks: action.remarks || "",
+                promotionOutcome: transferringOut
+                    ? PROMOTION_OUTCOME.TRANSFERRING_OUT
+                    : PROMOTION_OUTCOME.STAYING,
+                toDepartmentType: destination.departmentType,
+                toOtherDepartmentName: destination.otherDepartmentName,
+                toOffice: transferringOut ? (action.office || "") : "",
+                toDistrict: transferringOut ? (action.district || "") : ""
             });
         });
     }, [open, action, employee]);
 
-    const designation = designations?.find(
-        (d) => d.id === Number(form.newDesignationId)
+    const inNwpDepartment =
+        employee?.currentDepartment === NWP_ENGINEERING_DEPARTMENT;
+    const transferringOut = form.promotionOutcome === PROMOTION_OUTCOME.TRANSFERRING_OUT;
+    const showPromotionOutcome = isPromotion && inNwpDepartment;
+    const toDepartment = resolveDepartmentValue(
+        form.toDepartmentType,
+        form.toOtherDepartmentName
     );
+    const destinationIncomplete = transferringOut && (
+        !toDepartment?.trim()
+        || !form.toOffice?.trim()
+    );
+    const employeeService = employee?.designation?.service ?? employee?.service;
+    const promotionDesignations = designations?.filter(
+        (item) => item.service?.id === employeeService?.id
+    ) ?? [];
+    const isOtherPromotion = isOtherDesignation(form.newDesignationId);
+
+    const designation = isOtherPromotion
+        ? null
+        : designations?.find((d) => d.id === Number(form.newDesignationId));
+    const rulesSource = designation
+        ?? (employeeService ? { service: employeeService } : null);
 
     const serviceMinimumEffectiveDate = isPromotionLike
         ? getMinimumPromotionEffectiveDate(
             employee,
             action?.oldGrade,
             action?.newGrade || form.grade,
-            designation || employee?.designation
+            rulesSource
         )
         : null;
     const previousEventDate = getPreviousEventDateForEdit(actionHistory, action?.id);
@@ -112,19 +178,30 @@ export default function LifecycleActionFormDialog({
     );
 
     const runValidation = (nextForm) => {
-        if (isPromotionLike) {
-            const nextDesignation = designations?.find(
+        const nextIsOther = isOtherDesignation(nextForm.newDesignationId);
+        const nextDesignation = nextIsOther
+            ? null
+            : designations?.find(
                 (d) => d.id === Number(nextForm.newDesignationId)
             );
+        const nextRulesSource = nextDesignation
+            ?? (employeeService ? { service: employeeService } : null);
 
-            const validationError = validateDesignationAssignment(
-                buildValidationTarget(
-                    nextForm.grade,
-                    nextForm.serviceLevelId,
-                    serviceLevels
-                ),
-                nextDesignation
-            );
+        if (isPromotionLike) {
+            const validationError = nextIsOther
+                ? validateCustomDesignationAssignment({
+                    grade: nextForm.grade,
+                    serviceLevelId: nextForm.serviceLevelId,
+                    service: employeeService
+                })
+                : validateDesignationAssignment(
+                    buildValidationTarget(
+                        nextForm.grade,
+                        nextForm.serviceLevelId,
+                        serviceLevels
+                    ),
+                    nextDesignation
+                );
 
             if (validationError) {
                 setError(validationError);
@@ -138,9 +215,7 @@ export default function LifecycleActionFormDialog({
                     employee,
                     action?.oldGrade,
                     action?.newGrade || nextForm.grade,
-                    designations?.find(
-                        (d) => d.id === Number(nextForm.newDesignationId)
-                    ) || employee?.designation
+                    nextRulesSource
                 )
                 : null,
             previousEventDate
@@ -158,7 +233,11 @@ export default function LifecycleActionFormDialog({
     };
 
     const handleChange = (e) => {
-        const next = { ...form, [e.target.name]: e.target.value };
+        const { name, type, checked, value } = e.target;
+        const next = {
+            ...form,
+            [name]: type === "checkbox" ? checked : value
+        };
         setForm(next);
 
         if (
@@ -166,14 +245,15 @@ export default function LifecycleActionFormDialog({
                 "newDesignationId",
                 "grade",
                 "serviceLevelId",
-                "actionDate"
-            ].includes(e.target.name)
+                "actionDate",
+                "promotionOutcome"
+            ].includes(name)
         ) {
             runValidation(next);
         }
     };
 
-    const { fieldProps, dateFieldProps, selectFieldProps } =
+    const { fieldProps, selectFieldProps } =
         createFormFieldProps(handleChange);
 
     const handleSubmit = async (e) => {
@@ -182,21 +262,29 @@ export default function LifecycleActionFormDialog({
 
         try {
             if (isPromotionLike) {
-                const designation = designations?.find(
-                    (d) => d.id === Number(form.newDesignationId)
-                );
-
-                const validationError = validateDesignationAssignment(
-                    buildValidationTarget(
-                        form.grade,
-                        form.serviceLevelId,
-                        serviceLevels
-                    ),
-                    designation
-                );
+                const validationError = isOtherPromotion
+                    ? validateCustomDesignationAssignment({
+                        grade: form.grade,
+                        serviceLevelId: form.serviceLevelId,
+                        service: employeeService
+                    })
+                    : validateDesignationAssignment(
+                        buildValidationTarget(
+                            form.grade,
+                            form.serviceLevelId,
+                            serviceLevels
+                        ),
+                        designation
+                    );
 
                 if (validationError) {
                     setError(validationError);
+                    setLoading(false);
+                    return;
+                }
+
+                if (isOtherPromotion && !form.recordedDesignationName?.trim()) {
+                    setError("Designation title is required for Other");
                     setLoading(false);
                     return;
                 }
@@ -206,7 +294,7 @@ export default function LifecycleActionFormDialog({
                         employee,
                         action?.oldGrade,
                         action?.newGrade || form.grade,
-                        designation || employee?.designation
+                        rulesSource
                     ),
                     previousEventDate
                 );
@@ -233,13 +321,37 @@ export default function LifecycleActionFormDialog({
 
             const updateData = {
                 actionDate: form.actionDate,
-                newDesignationId: Number(form.newDesignationId) || null,
                 remarks: form.remarks?.trim() || null
             };
 
             if (isPromotionLike) {
+                if (isOtherPromotion) {
+                    updateData.recordedDesignationName =
+                        form.recordedDesignationName.trim();
+                    updateData.newDesignationId = null;
+                } else {
+                    updateData.newDesignationId =
+                        Number(form.newDesignationId) || null;
+                    updateData.recordedDesignationName = null;
+                }
                 updateData.grade = form.grade;
                 updateData.serviceLevelId = Number(form.serviceLevelId) || null;
+            }
+
+            if (showPromotionOutcome) {
+                updateData.transferringOut = transferringOut;
+                if (transferringOut) {
+                    if (destinationIncomplete) {
+                        setError(
+                            "Destination department and office are required when transferring out"
+                        );
+                        setLoading(false);
+                        return;
+                    }
+                    updateData.toDepartment = toDepartment;
+                    updateData.toOffice = form.toOffice.trim();
+                    updateData.toDistrict = null;
+                }
             }
 
             await updateEmployeeAction(action.id, updateData);
@@ -256,7 +368,8 @@ export default function LifecycleActionFormDialog({
     const canSubmit =
         form.actionDate
         && !error
-        && !actionDateTooEarly;
+        && !actionDateTooEarly
+        && (!showPromotionOutcome || !transferringOut || !destinationIncomplete);
 
     return (
         <Dialog
@@ -269,7 +382,7 @@ export default function LifecycleActionFormDialog({
             }}
         >
             <DialogTitle>
-                Edit {ACTION_TYPE_LABELS[action?.actionType] || "Lifecycle Action"}
+                Edit {getActionTypeLabel(action) || "Lifecycle Action"}
             </DialogTitle>
 
             <DialogContent dividers>
@@ -293,12 +406,26 @@ export default function LifecycleActionFormDialog({
                                 name="newDesignationId"
                                 value={form.newDesignationId}
                             >
-                                {designations?.map((d) => (
+                                {promotionDesignations.map((d) => (
                                     <MenuItem key={d.id} value={d.id}>
                                         {d.designationName}
                                     </MenuItem>
                                 ))}
+                                <MenuItem value={OTHER_DESIGNATION_VALUE}>
+                                    Other (type historical title)
+                                </MenuItem>
                             </TextField>
+                        </Grid>
+                    )}
+
+                    {isPromotionLike && isOtherPromotion && (
+                        <Grid size={{ xs: 12 }}>
+                            <TextField
+                                {...fieldProps}
+                                label="Designation title (as recorded)"
+                                name="recordedDesignationName"
+                                value={form.recordedDesignationName}
+                            />
                         </Grid>
                     )}
 
@@ -336,15 +463,72 @@ export default function LifecycleActionFormDialog({
                         </Grid>
                     )}
 
+                    {showPromotionOutcome && (
+                        <Grid size={{ xs: 12 }}>
+                            <FormControl component="fieldset" required>
+                                <FormLabel component="legend">
+                                    Promotion outcome
+                                </FormLabel>
+                                <RadioGroup
+                                    name="promotionOutcome"
+                                    value={form.promotionOutcome}
+                                    onChange={handleChange}
+                                >
+                                    <FormControlLabel
+                                        value={PROMOTION_OUTCOME.STAYING}
+                                        control={<Radio />}
+                                        label="Stays in N.W.P. Engineering Department"
+                                    />
+                                    <FormControlLabel
+                                        value={PROMOTION_OUTCOME.TRANSFERRING_OUT}
+                                        control={<Radio />}
+                                        label="Transfers out of department"
+                                    />
+                                </RadioGroup>
+                            </FormControl>
+                        </Grid>
+                    )}
+
+                    {showPromotionOutcome && transferringOut && (
+                        <DepartmentOfficeFields
+                            departmentType={form.toDepartmentType}
+                            otherDepartmentName={form.toOtherDepartmentName}
+                            district={form.toDistrict}
+                            office={form.toOffice}
+                            departmentLabel="Destination department"
+                            officeLabel="Destination office"
+                            excludeNwpDepartment
+                            onDepartmentTypeChange={(value) =>
+                                setForm((prev) => ({
+                                    ...prev,
+                                    toDepartmentType: value,
+                                    toDistrict: "",
+                                    toOffice: ""
+                                }))
+                            }
+                            onOtherDepartmentNameChange={(value) =>
+                                setForm((prev) => ({
+                                    ...prev,
+                                    toOtherDepartmentName: value
+                                }))
+                            }
+                            onDistrictChange={(value) =>
+                                setForm((prev) => ({ ...prev, toDistrict: value }))
+                            }
+                            onOfficeChange={(value) =>
+                                setForm((prev) => ({ ...prev, toOffice: value }))
+                            }
+                        />
+                    )}
+
                     <Grid size={{ xs: 12 }}>
-                        <TextField
-                            {...dateFieldProps}
+                        <DateInput
+                            {...fieldProps}
                             label="Effective Date"
                             name="actionDate"
                             value={form.actionDate}
                             required
                             slotProps={{
-                                ...dateFieldProps.slotProps,
                                 htmlInput: {
                                     min: minimumEffectiveDate || undefined
                                 }

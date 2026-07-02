@@ -26,4 +26,7 @@ public class CadrePosition {
     private Designation designation;
 
     private Integer approvedCount;
+
+    @Column(name = "display_order")
+    private Integer displayOrder;
 }

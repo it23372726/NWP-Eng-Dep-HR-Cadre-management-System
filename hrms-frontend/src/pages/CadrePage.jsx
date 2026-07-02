@@ -27,8 +27,25 @@ import {
     Edit as EditIcon,
     Delete as DeleteIcon,
     Search as SearchIcon,
-    Clear as ClearIcon
+    Clear as ClearIcon,
+    DragIndicator as DragIndicatorIcon
 } from "@mui/icons-material";
+import {
+    DndContext,
+    KeyboardSensor,
+    PointerSensor,
+    closestCenter,
+    useSensor,
+    useSensors
+} from "@dnd-kit/core";
+import {
+    SortableContext,
+    arrayMove,
+    sortableKeyboardCoordinates,
+    useSortable,
+    verticalListSortingStrategy
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 
@@ -36,7 +53,8 @@ import {
     getCadres,
     createCadre,
     updateCadre,
-    deleteCadre
+    deleteCadre,
+    reorderCadres
 } from "../services/cadreService";
 import CadreForm from "../components/CadreForm";
 import { getApiErrorMessage } from "../constants/hrms";
@@ -58,6 +76,131 @@ function matchesSearch(cadre, keyword) {
     );
 }
 
+function SortableCadreRow({
+    cadre,
+    canReorder,
+    onEdit,
+    onDelete
+}) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({
+        id: cadre.id,
+        disabled: !canReorder
+    });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition
+    };
+
+    return (
+        <TableRow
+            ref={setNodeRef}
+            component="div"
+            style={style}
+            hover
+            sx={{
+                display: "table-row",
+                opacity: isDragging ? 0.5 : 1,
+                bgcolor: isDragging ? "action.hover" : undefined,
+                "&:last-child .MuiTableCell-root": { borderBottom: 0 }
+            }}
+        >
+            <TableCell
+                component="div"
+                width={48}
+                padding="checkbox"
+                sx={{ display: "table-cell", verticalAlign: "middle" }}
+            >
+                <Box
+                    {...attributes}
+                    {...listeners}
+                    title={canReorder ? "Drag to reorder" : "Clear search to reorder"}
+                    aria-label="Drag to reorder"
+                    sx={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        color: canReorder ? "text.secondary" : "action.disabled",
+                        cursor: canReorder ? "grab" : "not-allowed",
+                        touchAction: "none",
+                        userSelect: "none",
+                        "&:active": {
+                            cursor: canReorder ? "grabbing" : "not-allowed"
+                        }
+                    }}
+                >
+                    <DragIndicatorIcon fontSize="small" />
+                </Box>
+            </TableCell>
+            <TableCell component="div" sx={{ display: "table-cell", verticalAlign: "middle" }}>
+                <Typography variant="body2" fontWeight={500}>
+                    {cadre.designation?.designationName ?? "—"}
+                </Typography>
+            </TableCell>
+            <TableCell component="div" sx={{ display: "table-cell", verticalAlign: "middle" }}>
+                <Typography variant="body2" color="text.secondary">
+                    {cadre.designation?.service?.serviceCode ?? "—"}
+                </Typography>
+                {cadre.designation?.service?.description && (
+                    <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        display="block"
+                    >
+                        {cadre.designation.service.description}
+                    </Typography>
+                )}
+            </TableCell>
+            <TableCell component="div" sx={{ display: "table-cell", verticalAlign: "middle" }}>
+                <Typography variant="body2" color="text.secondary">
+                    {cadre.designation?.serviceLevel?.levelName ?? "—"}
+                </Typography>
+            </TableCell>
+            <TableCell
+                component="div"
+                align="center"
+                sx={{ display: "table-cell", verticalAlign: "middle" }}
+            >
+                <Chip
+                    label={cadre.approvedCount}
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                />
+            </TableCell>
+            <TableCell
+                component="div"
+                align="right"
+                sx={{ display: "table-cell", verticalAlign: "middle" }}
+            >
+                <Tooltip title="Edit cadre position">
+                    <IconButton
+                        size="small"
+                        onClick={() => onEdit(cadre)}
+                    >
+                        <EditIcon fontSize="small" />
+                    </IconButton>
+                </Tooltip>
+                <Tooltip title="Delete cadre position">
+                    <IconButton
+                        size="small"
+                        color="error"
+                        onClick={() => onDelete(cadre)}
+                    >
+                        <DeleteIcon fontSize="small" />
+                    </IconButton>
+                </Tooltip>
+            </TableCell>
+        </TableRow>
+    );
+}
+
 export default function CadrePage() {
     const [cadres, setCadres] = useState([]);
     const [selectedCadre, setSelectedCadre] = useState(null);
@@ -66,6 +209,19 @@ export default function CadrePage() {
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [cadreToDelete, setCadreToDelete] = useState(null);
     const [deleting, setDeleting] = useState(false);
+    const [savingOrder, setSavingOrder] = useState(false);
+
+    const isSearchActive = Boolean(searchKeyword.trim());
+    const canReorder = !isSearchActive && !savingOrder;
+
+    const sensors = useSensors(
+        useSensor(PointerSensor, {
+            activationConstraint: { distance: 6 }
+        }),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates
+        })
+    );
 
     useEffect(() => {
         loadCadres();
@@ -74,6 +230,11 @@ export default function CadrePage() {
     const filteredCadres = useMemo(
         () => cadres.filter((cadre) => matchesSearch(cadre, searchKeyword)),
         [cadres, searchKeyword]
+    );
+
+    const sortableCadreIds = useMemo(
+        () => filteredCadres.map((cadre) => cadre.id),
+        [filteredCadres]
     );
 
     const loadCadres = async () => {
@@ -128,6 +289,36 @@ export default function CadrePage() {
         }
     };
 
+    const handleDragEnd = async ({ active, over }) => {
+        if (!canReorder || !over || active.id === over.id) {
+            return;
+        }
+
+        const activeId = Number(active.id);
+        const overId = Number(over.id);
+        const oldIndex = cadres.findIndex((cadre) => Number(cadre.id) === activeId);
+        const newIndex = cadres.findIndex((cadre) => Number(cadre.id) === overId);
+
+        if (oldIndex < 0 || newIndex < 0) {
+            return;
+        }
+
+        const previousCadres = cadres;
+        const reordered = arrayMove(cadres, oldIndex, newIndex);
+
+        setCadres(reordered);
+        setSavingOrder(true);
+
+        try {
+            await reorderCadres(reordered.map((cadre) => cadre.id));
+        } catch (error) {
+            setCadres(previousCadres);
+            toast.error(getApiErrorMessage(error));
+        } finally {
+            setSavingOrder(false);
+        }
+    };
+
     const openCreateDialog = () => {
         setSelectedCadre(null);
         setOpen(true);
@@ -157,7 +348,8 @@ export default function CadrePage() {
                         </Typography>
                         <Typography variant="body1" color="text.secondary">
                             Define approved cadre positions by designation and headcount
-                            for vacancy and excess reporting.
+                            for vacancy and excess reporting. Drag rows to set the order
+                            used in cadre reports.
                         </Typography>
                     </Box>
                     <Button
@@ -204,6 +396,8 @@ export default function CadrePage() {
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
                     Showing {filteredCadres.length} of {cadres.length} cadre position
                     {cadres.length !== 1 ? "s" : ""}
+                    {isSearchActive ? " — clear search to reorder rows" : ""}
+                    {savingOrder ? " — saving order..." : ""}
                 </Typography>
             </Box>
 
@@ -230,81 +424,47 @@ export default function CadrePage() {
                     )}
                 </Paper>
             ) : (
-                <TableContainer component={Paper} variant="outlined">
-                    <Table>
-                        <TableHead>
-                            <TableRow>
-                                <TableCell>Designation</TableCell>
-                                <TableCell>Service</TableCell>
-                                <TableCell>Service Level</TableCell>
-                                <TableCell align="center">Approved Count</TableCell>
-                                <TableCell align="right">Actions</TableCell>
-                            </TableRow>
-                        </TableHead>
-
-                        <TableBody>
-                            {filteredCadres.map((cadre) => (
-                                <TableRow
-                                    key={cadre.id}
-                                    hover
-                                    sx={{ "&:last-child td": { borderBottom: 0 } }}
-                                >
-                                    <TableCell>
-                                        <Typography variant="body2" fontWeight={500}>
-                                            {cadre.designation?.designationName ?? "—"}
-                                        </Typography>
+                <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                >
+                    <TableContainer component={Paper} variant="outlined">
+                        <Table component="div" sx={{ display: "table", width: "100%" }}>
+                            <TableHead component="div" sx={{ display: "table-header-group" }}>
+                                <TableRow component="div" sx={{ display: "table-row" }}>
+                                    <TableCell component="div" width={48} sx={{ display: "table-cell" }} />
+                                    <TableCell component="div" sx={{ display: "table-cell" }}>Designation</TableCell>
+                                    <TableCell component="div" sx={{ display: "table-cell" }}>Service</TableCell>
+                                    <TableCell component="div" sx={{ display: "table-cell" }}>Service Level</TableCell>
+                                    <TableCell component="div" align="center" sx={{ display: "table-cell" }}>
+                                        Approved Count
                                     </TableCell>
-                                    <TableCell>
-                                        <Typography variant="body2" color="text.secondary">
-                                            {cadre.designation?.service?.serviceCode ?? "—"}
-                                        </Typography>
-                                        {cadre.designation?.service?.description && (
-                                            <Typography
-                                                variant="caption"
-                                                color="text.secondary"
-                                                display="block"
-                                            >
-                                                {cadre.designation.service.description}
-                                            </Typography>
-                                        )}
-                                    </TableCell>
-                                    <TableCell>
-                                        <Typography variant="body2" color="text.secondary">
-                                            {cadre.designation?.serviceLevel?.levelName ?? "—"}
-                                        </Typography>
-                                    </TableCell>
-                                    <TableCell align="center">
-                                        <Chip
-                                            label={cadre.approvedCount}
-                                            size="small"
-                                            color="primary"
-                                            variant="outlined"
-                                        />
-                                    </TableCell>
-                                    <TableCell align="right">
-                                        <Tooltip title="Edit cadre position">
-                                            <IconButton
-                                                size="small"
-                                                onClick={() => openEditDialog(cadre)}
-                                            >
-                                                <EditIcon fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>
-                                        <Tooltip title="Delete cadre position">
-                                            <IconButton
-                                                size="small"
-                                                color="error"
-                                                onClick={() => handleDeleteClick(cadre)}
-                                            >
-                                                <DeleteIcon fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>
+                                    <TableCell component="div" align="right" sx={{ display: "table-cell" }}>
+                                        Actions
                                     </TableCell>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
+                            </TableHead>
+
+                            <TableBody component="div" sx={{ display: "table-row-group" }}>
+                                <SortableContext
+                                    items={sortableCadreIds}
+                                    strategy={verticalListSortingStrategy}
+                                >
+                                    {filteredCadres.map((cadre) => (
+                                        <SortableCadreRow
+                                            key={cadre.id}
+                                            cadre={cadre}
+                                            canReorder={canReorder}
+                                            onEdit={openEditDialog}
+                                            onDelete={handleDeleteClick}
+                                        />
+                                    ))}
+                                </SortableContext>
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                </DndContext>
             )}
 
             <CadreForm

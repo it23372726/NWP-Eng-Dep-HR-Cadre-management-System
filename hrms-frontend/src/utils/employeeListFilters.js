@@ -1,10 +1,17 @@
 import { calculateRetirementDate } from "./employeeRetirement";
 import { hasCompletedProbationYears } from "./gradeAchievementDates";
+import { matchesIncrementStatus } from "./salaryIncrement";
+import { matchesPrivateVehicleFilter, findPrivateVehicleFilterLabel } from "./privateVehicle";
 import {
     FIXED_GRADE1_REQUIREMENTS,
     FIXED_GRADE2_REQUIREMENTS,
     FIXED_PERMANENT_REQUIREMENTS,
-    PERMANENT_STATUS_OPTIONS,
+    EMPLOYEE_TYPE_FILTER_OPTIONS,
+    getEmploymentTypeLabel,
+    isTrainingEmployee,
+    resolveEmployeeService,
+    NON_PERMANENT_EMPLOYMENT_FILTER_VALUES,
+    PERMANENT_TRACK_FILTER_VALUES,
     GRADE_PROMOTION_FILTER_OPTIONS,
     RETIREMENT_FILTER_OPTIONS,
     DISTRICT_FILTER_OPTIONS,
@@ -44,6 +51,16 @@ export function isQualifiedForGradePromotion(employee, filterValue) {
     if (filterValue === "QUALIFIED_GRADE_2_TO_1") {
         return employee?.grade === "II"
             && Boolean(career?.qualifiedForGrade1);
+    }
+
+    if (filterValue === "QUALIFIED_GRADE_1_TO_SUPRA") {
+        return employee?.grade === "I"
+            && Boolean(career?.qualifiedForSupra);
+    }
+
+    if (filterValue === "QUALIFIED_GRADE_1_TO_SPECIAL") {
+        return employee?.grade === "I"
+            && Boolean(career?.qualifiedForSpecial);
     }
 
     return true;
@@ -214,6 +231,9 @@ export function matchesEmployeeSearch(employee, searchTerm) {
     const designation = employee.designation?.designationName?.toLowerCase() || "";
     const serviceLevel = employee.serviceLevel?.levelName?.toLowerCase() || "";
     const contact = employee.contactNo?.toLowerCase() || "";
+    const service = resolveEmployeeService(employee);
+    const serviceCode = service?.serviceCode?.toLowerCase() || "";
+    const serviceDescription = service?.description?.toLowerCase() || "";
 
     return (
         fullName.includes(term)
@@ -221,8 +241,31 @@ export function matchesEmployeeSearch(employee, searchTerm) {
         || nic.includes(term)
         || designation.includes(term)
         || serviceLevel.includes(term)
+        || serviceCode.includes(term)
+        || serviceDescription.includes(term)
         || contact.includes(term)
     );
+}
+
+export function matchesEmployeeTypeFilter(employee, filterValue) {
+    if (!filterValue || filterValue === "ALL") {
+        return true;
+    }
+
+    if (PERMANENT_TRACK_FILTER_VALUES.includes(filterValue)) {
+        return employee?.employmentType === "PERMANENT"
+            && employee?.permanentStatus === filterValue;
+    }
+
+    if (NON_PERMANENT_EMPLOYMENT_FILTER_VALUES.includes(filterValue)) {
+        return employee?.employmentType === filterValue;
+    }
+
+    if (filterValue === "TRAINING") {
+        return isTrainingEmployee(employee);
+    }
+
+    return true;
 }
 
 export function filterActiveEmployees(
@@ -230,16 +273,23 @@ export function filterActiveEmployees(
     {
         searchTerm = "",
         permanentStatusFilter = "ALL",
+        employmentTypeFilter = "",
         gradePromotionFilter = "ALL",
         retiringWithinMonths = "",
         districtFilter = "",
         officeFilter = "",
-        qualificationFilter = ""
+        qualificationFilter = "",
+        incrementStatusFilter = "",
+        privateVehicleFilter = ""
     } = {}
 ) {
     return employees.filter((employee) => {
-        if (permanentStatusFilter !== "ALL"
-            && employee.permanentStatus !== permanentStatusFilter) {
+        if (employmentTypeFilter
+            && employee?.employmentType !== employmentTypeFilter) {
+            return false;
+        }
+
+        if (!matchesEmployeeTypeFilter(employee, permanentStatusFilter)) {
             return false;
         }
 
@@ -264,6 +314,14 @@ export function filterActiveEmployees(
             return false;
         }
 
+        if (!matchesIncrementStatus(employee, incrementStatusFilter)) {
+            return false;
+        }
+
+        if (!matchesPrivateVehicleFilter(employee, privateVehicleFilter)) {
+            return false;
+        }
+
         return matchesEmployeeSearch(employee, searchTerm);
     });
 }
@@ -279,19 +337,25 @@ export function sortEmployeesBySerialNo(employees) {
 export function hasActiveEmployeeFilters({
     searchTerm = "",
     permanentStatusFilter = "ALL",
+    employmentTypeFilter = "",
     gradePromotionFilter = "ALL",
     retiringWithinMonths = "",
     districtFilter = "",
     officeFilter = "",
-    qualificationFilter = ""
+    qualificationFilter = "",
+    incrementStatusFilter = "",
+    privateVehicleFilter = ""
 } = {}) {
     return Boolean(searchTerm.trim())
         || permanentStatusFilter !== "ALL"
+        || Boolean(employmentTypeFilter)
         || gradePromotionFilter !== "ALL"
         || Boolean(retiringWithinMonths)
         || Boolean(districtFilter)
         || Boolean(officeFilter)
-        || Boolean(qualificationFilter);
+        || Boolean(qualificationFilter)
+        || Boolean(incrementStatusFilter)
+        || Boolean(privateVehicleFilter);
 }
 
 export function filterInactiveEmployees(employees, searchTerm = "") {
@@ -329,12 +393,20 @@ export function getActiveFilterLabels(filterState) {
             label: `Search: "${filterState.searchTerm.trim()}"`
         });
     }
+    if (filterState.employmentTypeFilter) {
+        labels.push({
+            key: "employmentType",
+            label: `Employment type: ${getEmploymentTypeLabel(
+                filterState.employmentTypeFilter
+            )}`
+        });
+    }
     if (filterState.permanentStatusFilter
         && filterState.permanentStatusFilter !== "ALL") {
         labels.push({
             key: "permanentStatus",
             label: findOptionLabel(
-                PERMANENT_STATUS_OPTIONS,
+                EMPLOYEE_TYPE_FILTER_OPTIONS,
                 filterState.permanentStatusFilter
             )
         });
@@ -377,6 +449,24 @@ export function getActiveFilterLabels(filterState) {
                 QUALIFICATION_FILTER_OPTIONS,
                 filterState.qualificationFilter
             )
+        });
+    }
+    if (filterState.incrementStatusFilter === "PENDING") {
+        labels.push({
+            key: "incrementStatus",
+            label: "Pending salary increments"
+        });
+    }
+    if (filterState.incrementStatusFilter === "UPCOMING") {
+        labels.push({
+            key: "incrementStatus",
+            label: "Upcoming salary increments"
+        });
+    }
+    if (filterState.privateVehicleFilter) {
+        labels.push({
+            key: "privateVehicle",
+            label: findPrivateVehicleFilterLabel(filterState.privateVehicleFilter)
         });
     }
 

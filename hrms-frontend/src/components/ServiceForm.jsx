@@ -12,6 +12,8 @@ import {
 import { useEffect, useState } from "react";
 
 import FormSection from "./FormSection";
+import GradeSelector from "./GradeSelector";
+import QualificationRulesSection from "./QualificationRulesSection";
 import {
     createFormFieldProps,
     dialogActionsSx
@@ -19,7 +21,17 @@ import {
 
 const emptyForm = {
     serviceCode: "",
-    description: ""
+    description: "",
+    allowedGrades: [],
+    grade2RequiredYears: "",
+    grade1RequiredYears: "",
+    supraRequiredYears: "",
+    specialRequiredYears: "",
+    customPermanentRequirements: [],
+    customGrade2Requirements: [],
+    customGrade1Requirements: [],
+    customSupraRequirements: [],
+    customSpecialRequirements: []
 };
 
 export default function ServiceForm({
@@ -30,6 +42,7 @@ export default function ServiceForm({
 }) {
     const [formData, setFormData] = useState(emptyForm);
     const [codeError, setCodeError] = useState("");
+    const [gradeError, setGradeError] = useState("");
 
     const isEdit = Boolean(selectedService);
 
@@ -37,12 +50,38 @@ export default function ServiceForm({
         if (selectedService) {
             setFormData({
                 serviceCode: selectedService.serviceCode ?? "",
-                description: selectedService.description ?? ""
+                description: selectedService.description ?? "",
+                allowedGrades: selectedService.allowedGrades ?? [],
+                grade2RequiredYears: selectedService.grade2RequiredYears ?? "",
+                grade1RequiredYears: selectedService.grade1RequiredYears ?? "",
+                supraRequiredYears: selectedService.supraRequiredYears ?? "",
+                specialRequiredYears: selectedService.specialRequiredYears ?? "",
+                customPermanentRequirements:
+                    selectedService.permanentRequirements?.map(
+                        (requirement) => requirement.requirementName
+                    ) ?? [],
+                customGrade2Requirements:
+                    selectedService.grade2Requirements?.map(
+                        (requirement) => requirement.requirementName
+                    ) ?? [],
+                customGrade1Requirements:
+                    selectedService.grade1Requirements?.map(
+                        (requirement) => requirement.requirementName
+                    ) ?? [],
+                customSupraRequirements:
+                    selectedService.supraRequirements?.map(
+                        (requirement) => requirement.requirementName
+                    ) ?? [],
+                customSpecialRequirements:
+                    selectedService.specialRequirements?.map(
+                        (requirement) => requirement.requirementName
+                    ) ?? []
             });
         } else {
             setFormData(emptyForm);
         }
         setCodeError("");
+        setGradeError("");
     }, [selectedService, open]);
 
     const handleChange = (e) => {
@@ -55,6 +94,64 @@ export default function ServiceForm({
         }
     };
 
+    const toggleGrade = (grade) => {
+        const exists = formData.allowedGrades.includes(grade);
+        let allowedGrades = exists
+            ? formData.allowedGrades.filter((g) => g !== grade)
+            : [...formData.allowedGrades, grade];
+
+        let nextForm = { ...formData, allowedGrades };
+
+        if (!exists && grade === "Supra") {
+            allowedGrades = allowedGrades.filter((g) => g !== "Special");
+            nextForm = {
+                ...nextForm,
+                allowedGrades,
+                specialRequiredYears: "",
+                customSpecialRequirements: []
+            };
+        } else if (!exists && grade === "Special") {
+            allowedGrades = allowedGrades.filter((g) => g !== "Supra");
+            nextForm = {
+                ...nextForm,
+                allowedGrades,
+                supraRequiredYears: "",
+                customSupraRequirements: []
+            };
+        } else {
+            nextForm.allowedGrades = allowedGrades;
+        }
+
+        setFormData(nextForm);
+        setGradeError("");
+    };
+
+    const addCustomRequirement = (field) => {
+        setFormData({
+            ...formData,
+            [field]: [...formData[field], ""]
+        });
+    };
+
+    const updateCustomRequirement = (field, index, value) => {
+        setFormData({
+            ...formData,
+            [field]: formData[field].map((item, itemIndex) =>
+                itemIndex === index ? value : item
+            )
+        });
+    };
+
+    const removeCustomRequirement = (field, index) => {
+        setFormData({
+            ...formData,
+            [field]: formData[field].filter((_, itemIndex) => itemIndex !== index)
+        });
+    };
+
+    const cleanRequirements = (requirements) =>
+        requirements.map((requirement) => requirement.trim()).filter(Boolean);
+
     const { fieldProps } = createFormFieldProps(handleChange);
 
     const submitForm = () => {
@@ -66,21 +163,60 @@ export default function ServiceForm({
             return;
         }
 
+        if (!formData.allowedGrades.length) {
+            setGradeError("Select at least one maximum achievable grade");
+            return;
+        }
+
         handleSubmit({
             serviceCode: trimmedCode,
-            description: trimmedDescription
+            description: trimmedDescription,
+            allowedGrades: formData.allowedGrades,
+            grade2RequiredYears:
+                formData.grade2RequiredYears === ""
+                    ? 0
+                    : Number(formData.grade2RequiredYears),
+            grade1RequiredYears:
+                formData.grade1RequiredYears === ""
+                    ? 0
+                    : Number(formData.grade1RequiredYears),
+            supraRequiredYears:
+                formData.supraRequiredYears === ""
+                    ? 0
+                    : Number(formData.supraRequiredYears),
+            specialRequiredYears:
+                formData.specialRequiredYears === ""
+                    ? 0
+                    : Number(formData.specialRequiredYears),
+            customPermanentRequirements: cleanRequirements(
+                formData.customPermanentRequirements
+            ),
+            customGrade2Requirements: cleanRequirements(
+                formData.customGrade2Requirements
+            ),
+            customGrade1Requirements: cleanRequirements(
+                formData.customGrade1Requirements
+            ),
+            customSupraRequirements: cleanRequirements(
+                formData.customSupraRequirements
+            ),
+            customSpecialRequirements: cleanRequirements(
+                formData.customSpecialRequirements
+            )
         });
     };
 
     const canSave =
-        formData.serviceCode.trim() && formData.description.trim();
+        formData.serviceCode.trim()
+        && formData.description.trim()
+        && formData.allowedGrades.length > 0;
 
     return (
         <Dialog
             open={open}
             onClose={handleClose}
             fullWidth
-            maxWidth="sm"
+            maxWidth="lg"
             scroll="paper"
             onTransitionExited={() => {
                 document.activeElement?.blur();
@@ -91,7 +227,8 @@ export default function ServiceForm({
                     {isEdit ? "Edit Service" : "Add Service"}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                    Define a service classification for designations and employees.
+                    Configure service identity, maximum achievable grades, and
+                    qualification rules shared by all designations in this service.
                 </Typography>
             </DialogTitle>
 
@@ -136,12 +273,32 @@ export default function ServiceForm({
 
                         <Grid size={{ xs: 12 }}>
                             <Alert severity="info">
-                                Service codes are used across designations and reports.
-                                Use a consistent, recognizable code for each service type.
+                                Qualification and promotion rules configured here apply
+                                to every designation in this service nationwide.
                             </Alert>
                         </Grid>
                     </Grid>
                 </FormSection>
+
+                <FormSection
+                    title="Maximum Achievable Grades"
+                    description="Select the highest grade classes employees may reach in this service."
+                >
+                    <GradeSelector
+                        selectedGrades={formData.allowedGrades}
+                        onToggle={toggleGrade}
+                        error={gradeError}
+                    />
+                </FormSection>
+
+                <QualificationRulesSection
+                    formData={formData}
+                    allowedGrades={formData.allowedGrades}
+                    fieldProps={fieldProps}
+                    onAddCustomRequirement={addCustomRequirement}
+                    onUpdateCustomRequirement={updateCustomRequirement}
+                    onRemoveCustomRequirement={removeCustomRequirement}
+                />
             </DialogContent>
 
             <DialogActions sx={dialogActionsSx}>

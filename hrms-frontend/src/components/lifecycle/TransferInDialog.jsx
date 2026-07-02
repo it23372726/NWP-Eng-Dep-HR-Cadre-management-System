@@ -10,6 +10,7 @@ import {
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import { createFormFieldProps, dialogActionsSx } from "../../utils/formLayout";
+import DateInput from "../DateInput";
 
 export default function TransferInDialog({
     open,
@@ -33,7 +34,7 @@ export default function TransferInDialog({
         setForm({ ...form, [e.target.name]: e.target.value });
     };
 
-    const { fieldProps, dateFieldProps } = createFormFieldProps(handleChange);
+    const { fieldProps } = createFormFieldProps(handleChange);
 
     const submit = () => {
         onSubmit({
@@ -61,8 +62,8 @@ export default function TransferInDialog({
                 </Alert>
                 <Grid container spacing={2}>
                     <Grid size={{ xs: 12 }}>
-                        <TextField
-                            {...dateFieldProps}
+                        <DateInput
+                            {...fieldProps}
                             label="Effective Date"
                             name="effectiveDate"
                             value={form.effectiveDate}

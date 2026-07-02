@@ -1,5 +1,6 @@
 package com.nwpengdep.hrms.service;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashSet;
@@ -10,15 +11,20 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 
 import com.nwpengdep.hrms.entity.Designation;
-import com.nwpengdep.hrms.entity.DesignationGrade1Requirement;
-import com.nwpengdep.hrms.entity.DesignationGrade2Requirement;
-import com.nwpengdep.hrms.entity.DesignationPermanentRequirement;
 import com.nwpengdep.hrms.entity.Employee;
 import com.nwpengdep.hrms.entity.EmployeeRequirement;
 import com.nwpengdep.hrms.entity.EmploymentType;
 import com.nwpengdep.hrms.entity.Grade;
 import com.nwpengdep.hrms.entity.RequirementStatus;
 import com.nwpengdep.hrms.entity.RequirementType;
+import com.nwpengdep.hrms.entity.ServiceGrade1Requirement;
+import com.nwpengdep.hrms.entity.ServiceGrade2Requirement;
+import com.nwpengdep.hrms.entity.ServicePermanentRequirement;
+import com.nwpengdep.hrms.entity.ServiceSpecialRequirement;
+import com.nwpengdep.hrms.entity.ServiceSupraRequirement;
+import com.nwpengdep.hrms.entity.ServiceType;
+import com.nwpengdep.hrms.util.EmployeeTrainingUtil;
+import com.nwpengdep.hrms.util.TrainingGraduationRequirements;
 
 @Service
 public class EmployeeRequirementSyncService {
@@ -40,7 +46,17 @@ public class EmployeeRequirementSyncService {
     );
 
     public void syncEmployeeRequirements(Employee employee) {
-        if (employee == null || employee.getDesignation() == null) {
+        if (employee == null) {
+            return;
+        }
+
+        if (EmployeeTrainingUtil.isTrainingEmployee(employee)) {
+            syncTrainingEmployeeRequirements(employee);
+            return;
+        }
+
+        ServiceType service = resolveService(employee);
+        if (service == null) {
             return;
         }
 
@@ -59,6 +75,201 @@ public class EmployeeRequirementSyncService {
 
         removeOrphanedCustomRequirements(employee);
         removeLegacyRequirements(employee);
+    }
+
+    public void completeRequirementsForGradePromotion(
+            Employee employee,
+            Grade oldGrade,
+            Grade newGrade,
+            LocalDate completedDate
+    ) {
+        if (employee == null
+                || employee.getEmploymentType() != EmploymentType.PERMANENT
+                || oldGrade == null
+                || newGrade == null) {
+            return;
+        }
+
+        LocalDate effectiveDate = completedDate != null
+                ? completedDate
+                : LocalDate.now();
+
+        if (oldGrade == Grade.III && newGrade == Grade.II) {
+            markGrade2RequirementsCompleted(employee, effectiveDate);
+        }
+        if (oldGrade == Grade.II && newGrade == Grade.I) {
+            markGrade1RequirementsCompleted(employee, effectiveDate);
+        }
+        if (oldGrade == Grade.I && newGrade == Grade.SUPRA) {
+            markSupraRequirementsCompleted(employee, effectiveDate);
+        }
+        if (oldGrade == Grade.I && newGrade == Grade.SPECIAL) {
+            markSpecialRequirementsCompleted(employee, effectiveDate);
+        }
+    }
+
+    public void completeRequirementsForAchievedGrade(Employee employee) {
+        if (employee == null
+                || employee.getEmploymentType() != EmploymentType.PERMANENT) {
+            return;
+        }
+
+        Grade grade = employee.getGrade() != null ? employee.getGrade() : Grade.NONE;
+        boolean confirmedPermanent = employee.getCareerProgression() != null
+                && employee.getCareerProgression().getPermanentConfirmationDate() != null;
+        LocalDate completedDate = LocalDate.now();
+
+        if (confirmedPermanent || isHigherPermanentGrade(grade)) {
+            markPermanentRequirementsCompleted(employee, completedDate);
+        }
+        if (isHigherPermanentGrade(grade)) {
+            markGrade2RequirementsCompleted(employee, completedDate);
+        }
+        if (grade == Grade.I || grade == Grade.SUPRA || grade == Grade.SPECIAL) {
+            markGrade1RequirementsCompleted(employee, completedDate);
+        }
+        if (grade == Grade.SUPRA) {
+            markSupraRequirementsCompleted(employee, completedDate);
+        }
+        if (grade == Grade.SPECIAL) {
+            markSpecialRequirementsCompleted(employee, completedDate);
+        }
+    }
+
+    public void markPermanentRequirementsCompleted(
+            Employee employee,
+            LocalDate completedDate
+    ) {
+        setRequirementCompleted(employee, RequirementType.EB_GRADE_3, null, completedDate);
+        setRequirementCompleted(
+                employee,
+                RequirementType.GOVERNMENT_LANGUAGE_QUALIFICATION,
+                null,
+                completedDate
+        );
+        setRequirementCompleted(employee, RequirementType.MEDICAL_REPORT, null, completedDate);
+        setRequirementCompleted(employee, RequirementType.OL_CERTIFICATE, null, completedDate);
+        setRequirementCompleted(employee, RequirementType.AL_CERTIFICATE, null, completedDate);
+        setRequirementCompleted(employee, RequirementType.DEGREE_CERTIFICATE, null, completedDate);
+        setRequirementCompleted(employee, RequirementType.BIRTH_CERTIFICATE, null, completedDate);
+
+        ServiceType service = resolveService(employee);
+        if (service != null && service.getPermanentRequirements() != null) {
+            service.getPermanentRequirements()
+                    .forEach(requirement -> setRequirementCompleted(
+                            employee,
+                            RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                            requirement.getRequirementName(),
+                            completedDate
+                    ));
+        }
+    }
+
+    public void markGrade2RequirementsCompleted(
+            Employee employee,
+            LocalDate completedDate
+    ) {
+        setRequirementCompleted(employee, RequirementType.EB_GRADE_2, null, completedDate);
+        ServiceType service = resolveService(employee);
+        if (service == null || service.getGrade2Requirements() == null) {
+            return;
+        }
+
+        service.getGrade2Requirements()
+                .forEach(requirement -> setRequirementCompleted(
+                        employee,
+                        RequirementType.CUSTOM_GRADE_2_REQUIREMENT,
+                        requirement.getRequirementName(),
+                        completedDate
+                ));
+    }
+
+    public void markGrade1RequirementsCompleted(
+            Employee employee,
+            LocalDate completedDate
+    ) {
+        setRequirementCompleted(employee, RequirementType.EB_GRADE_1, null, completedDate);
+        ServiceType service = resolveService(employee);
+        if (service == null || service.getGrade1Requirements() == null) {
+            return;
+        }
+
+        service.getGrade1Requirements()
+                .forEach(requirement -> setRequirementCompleted(
+                        employee,
+                        RequirementType.CUSTOM_GRADE_1_REQUIREMENT,
+                        requirement.getRequirementName(),
+                        completedDate
+                ));
+    }
+
+    public void markSupraRequirementsCompleted(
+            Employee employee,
+            LocalDate completedDate
+    ) {
+        setRequirementCompleted(
+                employee,
+                RequirementType.SUPRA_REQUIREMENT,
+                null,
+                completedDate
+        );
+        ServiceType service = resolveService(employee);
+        if (service == null || service.getSupraRequirements() == null) {
+            return;
+        }
+
+        service.getSupraRequirements()
+                .forEach(requirement -> setRequirementCompleted(
+                        employee,
+                        RequirementType.CUSTOM_SUPRA_REQUIREMENT,
+                        requirement.getRequirementName(),
+                        completedDate
+                ));
+    }
+
+    public void markSpecialRequirementsCompleted(
+            Employee employee,
+            LocalDate completedDate
+    ) {
+        setRequirementCompleted(employee, RequirementType.MASTERS_DEGREE, null, completedDate);
+        ServiceType service = resolveService(employee);
+        if (service == null || service.getSpecialRequirements() == null) {
+            return;
+        }
+
+        service.getSpecialRequirements()
+                .forEach(requirement -> setRequirementCompleted(
+                        employee,
+                        RequirementType.CUSTOM_SPECIAL_REQUIREMENT,
+                        requirement.getRequirementName(),
+                        completedDate
+                ));
+    }
+
+    public void syncTrainingEmployeeRequirements(Employee employee) {
+        if (employee == null || !EmployeeTrainingUtil.isTrainingEmployee(employee)) {
+            return;
+        }
+
+        ensureRequirementsList(employee);
+        removeLegacyRequirements(employee);
+
+        for (RequirementType type : TrainingGraduationRequirements.fixedTypes()) {
+            ensureRequirementExists(employee, new ExpectedRequirement(type, null));
+        }
+
+        removeOrphanedTrainingRequirements(employee);
+    }
+
+    private void removeOrphanedTrainingRequirements(Employee employee) {
+        if (employee.getRequirements() == null) {
+            return;
+        }
+
+        employee.getRequirements().removeIf(requirement ->
+                !TrainingGraduationRequirements.fixedTypes()
+                        .contains(requirement.getRequirementType())
+        );
     }
 
     private void removeLegacyRequirements(Employee employee) {
@@ -81,7 +292,7 @@ public class EmployeeRequirementSyncService {
     }
 
     private List<ExpectedRequirement> buildExpectedRequirements(Employee employee) {
-        Designation designation = employee.getDesignation();
+        ServiceType service = resolveService(employee);
         List<ExpectedRequirement> expected = new ArrayList<>();
         Grade grade = employee.getGrade() != null ? employee.getGrade() : Grade.NONE;
 
@@ -90,10 +301,10 @@ public class EmployeeRequirementSyncService {
                     expected.add(new ExpectedRequirement(type, null))
             );
 
-            if (designation.getPermanentRequirements() != null) {
-                designation.getPermanentRequirements()
+            if (service != null && service.getPermanentRequirements() != null) {
+                service.getPermanentRequirements()
                         .stream()
-                        .map(DesignationPermanentRequirement::getRequirementName)
+                        .map(ServicePermanentRequirement::getRequirementName)
                         .filter(this::hasText)
                         .forEach(name -> expected.add(new ExpectedRequirement(
                                 RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
@@ -105,10 +316,10 @@ public class EmployeeRequirementSyncService {
         if (grade == Grade.II || grade == Grade.I || grade == Grade.SUPRA || grade == Grade.SPECIAL) {
             expected.add(new ExpectedRequirement(RequirementType.EB_GRADE_2, null));
 
-            if (designation.getGrade2Requirements() != null) {
-                designation.getGrade2Requirements()
+            if (service != null && service.getGrade2Requirements() != null) {
+                service.getGrade2Requirements()
                         .stream()
-                        .map(DesignationGrade2Requirement::getRequirementName)
+                        .map(ServiceGrade2Requirement::getRequirementName)
                         .filter(this::hasText)
                         .forEach(name -> expected.add(new ExpectedRequirement(
                                 RequirementType.CUSTOM_GRADE_2_REQUIREMENT,
@@ -123,15 +334,49 @@ public class EmployeeRequirementSyncService {
                 || grade == Grade.SPECIAL) {
             expected.add(new ExpectedRequirement(RequirementType.EB_GRADE_1, null));
 
-            if (designation.getGrade1Requirements() != null) {
-                designation.getGrade1Requirements()
+            if (service != null && service.getGrade1Requirements() != null) {
+                service.getGrade1Requirements()
                         .stream()
-                        .map(DesignationGrade1Requirement::getRequirementName)
+                        .map(ServiceGrade1Requirement::getRequirementName)
                         .filter(this::hasText)
                         .forEach(name -> expected.add(new ExpectedRequirement(
                                 RequirementType.CUSTOM_GRADE_1_REQUIREMENT,
                                 name
                         )));
+            }
+        }
+
+        if (grade == Grade.I || grade == Grade.SUPRA) {
+            if (service != null && serviceAllowsSupra(service)) {
+                expected.add(new ExpectedRequirement(RequirementType.SUPRA_REQUIREMENT, null));
+
+                if (service.getSupraRequirements() != null) {
+                    service.getSupraRequirements()
+                            .stream()
+                            .map(ServiceSupraRequirement::getRequirementName)
+                            .filter(this::hasText)
+                            .forEach(name -> expected.add(new ExpectedRequirement(
+                                    RequirementType.CUSTOM_SUPRA_REQUIREMENT,
+                                    name
+                            )));
+                }
+            }
+        }
+
+        if (grade == Grade.I || grade == Grade.SPECIAL) {
+            if (service != null && serviceAllowsSpecial(service)) {
+                expected.add(new ExpectedRequirement(RequirementType.MASTERS_DEGREE, null));
+
+                if (service.getSpecialRequirements() != null) {
+                    service.getSpecialRequirements()
+                            .stream()
+                            .map(ServiceSpecialRequirement::getRequirementName)
+                            .filter(this::hasText)
+                            .forEach(name -> expected.add(new ExpectedRequirement(
+                                    RequirementType.CUSTOM_SPECIAL_REQUIREMENT,
+                                    name
+                            )));
+                }
             }
         }
 
@@ -172,22 +417,30 @@ public class EmployeeRequirementSyncService {
     }
 
     private void removeOrphanedCustomRequirements(Employee employee) {
-        Designation designation = employee.getDesignation();
-        if (designation == null || employee.getRequirements() == null) {
+        ServiceType service = resolveService(employee);
+        if (service == null || employee.getRequirements() == null) {
             return;
         }
 
         Set<String> permanentNames = requirementNames(
-                designation.getPermanentRequirements(),
-                DesignationPermanentRequirement::getRequirementName
+                service.getPermanentRequirements(),
+                ServicePermanentRequirement::getRequirementName
         );
         Set<String> grade2Names = requirementNames(
-                designation.getGrade2Requirements(),
-                DesignationGrade2Requirement::getRequirementName
+                service.getGrade2Requirements(),
+                ServiceGrade2Requirement::getRequirementName
         );
         Set<String> grade1Names = requirementNames(
-                designation.getGrade1Requirements(),
-                DesignationGrade1Requirement::getRequirementName
+                service.getGrade1Requirements(),
+                ServiceGrade1Requirement::getRequirementName
+        );
+        Set<String> supraNames = requirementNames(
+                service.getSupraRequirements(),
+                ServiceSupraRequirement::getRequirementName
+        );
+        Set<String> specialNames = requirementNames(
+                service.getSpecialRequirements(),
+                ServiceSpecialRequirement::getRequirementName
         );
 
         employee.getRequirements().removeIf(requirement -> {
@@ -200,6 +453,20 @@ public class EmployeeRequirementSyncService {
             }
             if (type == RequirementType.CUSTOM_GRADE_1_REQUIREMENT) {
                 return !containsName(grade1Names, requirement.getRequirementName());
+            }
+            if (type == RequirementType.CUSTOM_SUPRA_REQUIREMENT) {
+                return !containsName(supraNames, requirement.getRequirementName());
+            }
+            if (type == RequirementType.CUSTOM_SPECIAL_REQUIREMENT) {
+                return !containsName(specialNames, requirement.getRequirementName());
+            }
+            if (type == RequirementType.SUPRA_REQUIREMENT
+                    && !serviceAllowsSupra(service)) {
+                return true;
+            }
+            if (type == RequirementType.MASTERS_DEGREE
+                    && !serviceAllowsSpecial(service)) {
+                return true;
             }
             return false;
         });
@@ -244,6 +511,59 @@ public class EmployeeRequirementSyncService {
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private ServiceType resolveService(Employee employee) {
+        if (employee.getDesignation() != null
+                && employee.getDesignation().getService() != null) {
+            return employee.getDesignation().getService();
+        }
+        return employee.getService();
+    }
+
+    private boolean serviceAllowsSupra(ServiceType service) {
+        return service != null
+                && service.getAllowedGrades() != null
+                && service.getAllowedGrades().contains(Grade.SUPRA);
+    }
+
+    private boolean serviceAllowsSpecial(ServiceType service) {
+        return service != null
+                && service.getAllowedGrades() != null
+                && service.getAllowedGrades().contains(Grade.SPECIAL);
+    }
+
+    private void setRequirementCompleted(
+            Employee employee,
+            RequirementType type,
+            String requirementName,
+            LocalDate completedDate
+    ) {
+        ensureRequirementsList(employee);
+
+        EmployeeRequirement requirement = employee.getRequirements()
+                .stream()
+                .filter(existing -> existing.getRequirementType() == type
+                        && sameRequirementName(
+                                existing.getRequirementName(),
+                                requirementName
+                        ))
+                .findFirst()
+                .orElseGet(() -> {
+                    EmployeeRequirement created = new EmployeeRequirement();
+                    created.setEmployee(employee);
+                    created.setRequirementType(type);
+                    created.setRequirementName(normalizeName(requirementName));
+                    created.setStatus(RequirementStatus.PENDING);
+                    employee.getRequirements().add(created);
+                    return created;
+                });
+
+        requirement.setStatus(RequirementStatus.COMPLETED);
+        requirement.setRequirementName(normalizeName(requirementName));
+        requirement.setCompletedDate(
+                completedDate != null ? completedDate : LocalDate.now()
+        );
     }
 
     private record ExpectedRequirement(

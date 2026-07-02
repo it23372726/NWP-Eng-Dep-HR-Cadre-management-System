@@ -6,9 +6,6 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 
 import com.nwpengdep.hrms.entity.Designation;
-import com.nwpengdep.hrms.entity.DesignationGrade1Requirement;
-import com.nwpengdep.hrms.entity.DesignationGrade2Requirement;
-import com.nwpengdep.hrms.entity.DesignationPermanentRequirement;
 import com.nwpengdep.hrms.entity.Employee;
 import com.nwpengdep.hrms.entity.EmployeeCareerProgression;
 import com.nwpengdep.hrms.entity.EmployeeRequirement;
@@ -17,6 +14,12 @@ import com.nwpengdep.hrms.entity.Grade;
 import com.nwpengdep.hrms.entity.PermanentStatus;
 import com.nwpengdep.hrms.entity.RequirementStatus;
 import com.nwpengdep.hrms.entity.RequirementType;
+import com.nwpengdep.hrms.entity.ServiceGrade1Requirement;
+import com.nwpengdep.hrms.entity.ServiceGrade2Requirement;
+import com.nwpengdep.hrms.entity.ServicePermanentRequirement;
+import com.nwpengdep.hrms.entity.ServiceSpecialRequirement;
+import com.nwpengdep.hrms.entity.ServiceSupraRequirement;
+import com.nwpengdep.hrms.entity.ServiceType;
 
 @Service
 public class CareerProgressionService {
@@ -24,22 +27,89 @@ public class CareerProgressionService {
     public static final int PROBATION_YEARS = 3;
 
     public void recalculateEmployeeCareer(Employee employee) {
+        if (com.nwpengdep.hrms.util.EmployeeTrainingUtil.isTrainingEmployee(employee)) {
+            return;
+        }
         syncDesignationRules(employee);
         calculatePermanentEligibility(employee);
         calculateGrade2Eligibility(employee);
         calculateGrade1Eligibility(employee);
+        calculateSupraEligibility(employee);
+        calculateSpecialEligibility(employee);
+    }
+
+    private void calculateSupraEligibility(Employee employee) {
+        EmployeeCareerProgression progression = ensureCareerProgression(employee);
+        ServiceType service = resolveService(employee);
+        if (!serviceAllowsSupra(service)) {
+            progression.setSupraRequiredYears(null);
+            progression.setSupraEligibilityDate(null);
+            progression.setQualifiedForSupra(false);
+            return;
+        }
+
+        progression.setSupraRequiredYears(
+                normalizeRequiredYears(service.getSupraRequiredYears())
+        );
+        LocalDate eligibilityDate = calculateSupraEligibilityDate(employee);
+        progression.setSupraEligibilityDate(eligibilityDate);
+        progression.setQualifiedForSupra(
+                employee.getGrade() == Grade.SUPRA
+                        || (employee.getGrade() == Grade.I
+                        && eligibilityDate != null
+                        && !LocalDate.now().isBefore(eligibilityDate)
+                        && supraRequirementsSatisfied(employee))
+        );
+    }
+
+    private void calculateSpecialEligibility(Employee employee) {
+        EmployeeCareerProgression progression = ensureCareerProgression(employee);
+        ServiceType service = resolveService(employee);
+        if (!serviceAllowsSpecial(service)) {
+            progression.setSpecialRequiredYears(null);
+            progression.setSpecialEligibilityDate(null);
+            progression.setQualifiedForSpecial(false);
+            return;
+        }
+
+        progression.setSpecialRequiredYears(
+                normalizeRequiredYears(service.getSpecialRequiredYears())
+        );
+        LocalDate eligibilityDate = calculateSpecialEligibilityDate(employee);
+        progression.setSpecialEligibilityDate(eligibilityDate);
+        progression.setQualifiedForSpecial(
+                employee.getGrade() == Grade.SPECIAL
+                        || (employee.getGrade() == Grade.I
+                        && eligibilityDate != null
+                        && !LocalDate.now().isBefore(eligibilityDate)
+                        && specialRequirementsSatisfied(employee))
+        );
     }
 
     private void syncDesignationRules(Employee employee) {
         EmployeeCareerProgression progression = ensureCareerProgression(employee);
-        Designation designation = employee.getDesignation();
+        ServiceType service = resolveService(employee);
 
-        if (designation == null) {
+        if (service == null) {
             return;
         }
 
-        progression.setGrade2RequiredYears(designation.getGrade2RequiredYears());
-        progression.setGrade1RequiredYears(designation.getGrade1RequiredYears());
+        progression.setGrade2RequiredYears(
+                normalizeRequiredYears(service.getGrade2RequiredYears())
+        );
+        progression.setGrade1RequiredYears(
+                normalizeRequiredYears(service.getGrade1RequiredYears())
+        );
+        progression.setSupraRequiredYears(
+                serviceAllowsSupra(service)
+                        ? normalizeRequiredYears(service.getSupraRequiredYears())
+                        : null
+        );
+        progression.setSpecialRequiredYears(
+                serviceAllowsSpecial(service)
+                        ? normalizeRequiredYears(service.getSpecialRequiredYears())
+                        : null
+        );
     }
 
     public void calculatePermanentEligibility(Employee employee) {
@@ -75,7 +145,7 @@ public class CareerProgressionService {
         LocalDate eligibilityDate = calculateGrade2EligibilityDate(employee);
         progression.setGrade2EligibilityDate(eligibilityDate);
         progression.setQualifiedForGrade2(
-                employee.getGrade() == Grade.II
+                hasAchievedGrade(employee, Grade.II)
                         || isQualifiedForGrade2(employee, eligibilityDate)
         );
     }
@@ -85,7 +155,7 @@ public class CareerProgressionService {
         LocalDate eligibilityDate = calculateGrade1EligibilityDate(employee);
         progression.setGrade1EligibilityDate(eligibilityDate);
         progression.setQualifiedForGrade1(
-                employee.getGrade() == Grade.I
+                hasAchievedGrade(employee, Grade.I)
                         || (employee.getGrade() == Grade.II
                         && eligibilityDate != null
                         && !LocalDate.now().isBefore(eligibilityDate)
@@ -110,8 +180,8 @@ public class CareerProgressionService {
                 && customRequirementsCompleted(
                         employee,
                         RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
-                        employee.getDesignation() != null
-                                ? employee.getDesignation().getPermanentRequirements()
+                        resolveService(employee) != null
+                                ? resolveService(employee).getPermanentRequirements()
                                 : List.of()
                 )
                 && completedThreeYears(employee);
@@ -149,8 +219,8 @@ public class CareerProgressionService {
                 && customRequirementsCompleted(
                         employee,
                         RequirementType.CUSTOM_GRADE_2_REQUIREMENT,
-                        employee.getDesignation() != null
-                                ? employee.getDesignation().getGrade2Requirements()
+                        resolveService(employee) != null
+                                ? resolveService(employee).getGrade2Requirements()
                                 : List.of()
                 )
                 && eligibilityDate != null
@@ -186,6 +256,76 @@ public class CareerProgressionService {
                 && effectiveDate != null
                 && !effectiveDate.isBefore(eligibilityDate)
                 && grade1RequirementsSatisfied(employee);
+    }
+
+    public boolean isQualifiedForSupraOn(
+            Employee employee,
+            LocalDate effectiveDate
+    ) {
+        return isQualifiedForSupraPromotion(
+                employee,
+                Grade.I,
+                Grade.SUPRA,
+                effectiveDate
+        );
+    }
+
+    public boolean isQualifiedForSupraPromotion(
+            Employee employee,
+            Grade oldGrade,
+            Grade newGrade,
+            LocalDate effectiveDate
+    ) {
+        if (oldGrade != Grade.I || newGrade != Grade.SUPRA) {
+            return true;
+        }
+
+        ServiceType service = resolveService(employee);
+        if (!serviceAllowsSupra(service)) {
+            return false;
+        }
+
+        LocalDate eligibilityDate = calculateSupraEligibilityDate(employee);
+        return employee != null
+                && eligibilityDate != null
+                && effectiveDate != null
+                && !effectiveDate.isBefore(eligibilityDate)
+                && supraRequirementsSatisfied(employee);
+    }
+
+    public boolean isQualifiedForSpecialOn(
+            Employee employee,
+            LocalDate effectiveDate
+    ) {
+        return isQualifiedForSpecialPromotion(
+                employee,
+                Grade.I,
+                Grade.SPECIAL,
+                effectiveDate
+        );
+    }
+
+    public boolean isQualifiedForSpecialPromotion(
+            Employee employee,
+            Grade oldGrade,
+            Grade newGrade,
+            LocalDate effectiveDate
+    ) {
+        if (oldGrade != Grade.I || newGrade != Grade.SPECIAL) {
+            return true;
+        }
+
+        ServiceType service = resolveService(employee);
+        if (!serviceAllowsSpecial(service)) {
+            return false;
+        }
+
+        LocalDate eligibilityDate = calculateSpecialEligibilityDate(employee);
+        return employee != null
+                && eligibilityDate != null
+                && effectiveDate != null
+                && !effectiveDate.isBefore(eligibilityDate)
+                && specialRequirementsSatisfied(employee);
     }
 
     public void validateAssignmentEffectiveDate(
@@ -243,6 +383,54 @@ public class CareerProgressionService {
                                 + "for the selected effective date."
                 );
             }
+            return;
+        }
+
+        if (oldGrade == Grade.I && newGrade == Grade.SUPRA) {
+            LocalDate minimumDate = calculateSupraEligibilityDate(employee);
+            if (minimumDate != null && effectiveDate.isBefore(minimumDate)) {
+                throw new RuntimeException(
+                        "Effective date cannot be earlier than "
+                                + minimumDate
+                                + ". Supra promotion requires the service period "
+                                + "from Grade I achievement."
+                );
+            }
+            if (!isQualifiedForSupraPromotion(
+                    employee,
+                    oldGrade,
+                    newGrade,
+                    effectiveDate
+            )) {
+                throw new RuntimeException(
+                        "Employee does not meet Supra promotion requirements "
+                                + "for the selected effective date."
+                );
+            }
+            return;
+        }
+
+        if (oldGrade == Grade.I && newGrade == Grade.SPECIAL) {
+            LocalDate minimumDate = calculateSpecialEligibilityDate(employee);
+            if (minimumDate != null && effectiveDate.isBefore(minimumDate)) {
+                throw new RuntimeException(
+                        "Effective date cannot be earlier than "
+                                + minimumDate
+                                + ". Special promotion requires the service period "
+                                + "from Grade I achievement."
+                );
+            }
+            if (!isQualifiedForSpecialPromotion(
+                    employee,
+                    oldGrade,
+                    newGrade,
+                    effectiveDate
+            )) {
+                throw new RuntimeException(
+                        "Employee does not meet Special promotion requirements "
+                                + "for the selected effective date."
+                );
+            }
         }
     }
 
@@ -278,12 +466,8 @@ public class CareerProgressionService {
             return null;
         }
 
-        Integer requiredYears = getGrade2RequiredYears(employee);
-        if (requiredYears == null) {
-            return null;
-        }
-
-        return getGrade2BaseDate(employee).plusYears(requiredYears);
+        return getGrade2BaseDate(employee)
+                .plusYears(normalizeRequiredYears(getGrade2RequiredYears(employee)));
     }
 
     public LocalDate calculateGrade1EligibilityDate(Employee employee) {
@@ -295,12 +479,83 @@ public class CareerProgressionService {
             return null;
         }
 
-        Integer requiredYears = getGrade1RequiredYears(employee);
-        if (requiredYears == null) {
+        return baseDate.plusYears(normalizeRequiredYears(getGrade1RequiredYears(employee)));
+    }
+
+    public LocalDate calculateSupraEligibilityDate(Employee employee) {
+        LocalDate baseDate = getGrade1AchievedDate(employee);
+        if (baseDate == null && employee != null) {
+            baseDate = employee.getAppointmentDateToPresentClassGrade();
+        }
+        if (baseDate == null) {
             return null;
         }
 
-        return baseDate.plusYears(requiredYears);
+        ServiceType service = resolveService(employee);
+        if (!serviceAllowsSupra(service)) {
+            return null;
+        }
+
+        return baseDate.plusYears(
+                normalizeRequiredYears(service.getSupraRequiredYears())
+        );
+    }
+
+    public LocalDate calculateSpecialEligibilityDate(Employee employee) {
+        LocalDate baseDate = getGrade1AchievedDate(employee);
+        if (baseDate == null && employee != null) {
+            baseDate = employee.getAppointmentDateToPresentClassGrade();
+        }
+        if (baseDate == null) {
+            return null;
+        }
+
+        ServiceType service = resolveService(employee);
+        if (!serviceAllowsSpecial(service)) {
+            return null;
+        }
+
+        return baseDate.plusYears(
+                normalizeRequiredYears(service.getSpecialRequiredYears())
+        );
+    }
+
+    public LocalDate getMinimumSupraPromotionDate(
+            LocalDate grade1AchievedDate,
+            ServiceType service
+    ) {
+        if (grade1AchievedDate == null || service == null || !serviceAllowsSupra(service)) {
+            return null;
+        }
+
+        return grade1AchievedDate.plusYears(
+                normalizeRequiredYears(service.getSupraRequiredYears())
+        );
+    }
+
+    public LocalDate getMinimumSpecialPromotionDate(
+            LocalDate grade1AchievedDate,
+            ServiceType service
+    ) {
+        if (grade1AchievedDate == null || service == null || !serviceAllowsSpecial(service)) {
+            return null;
+        }
+
+        return grade1AchievedDate.plusYears(
+                normalizeRequiredYears(service.getSpecialRequiredYears())
+        );
+    }
+
+    public boolean serviceAllowsSupra(ServiceType service) {
+        return service != null
+                && service.getAllowedGrades() != null
+                && service.getAllowedGrades().contains(Grade.SUPRA);
+    }
+
+    public boolean serviceAllowsSpecial(ServiceType service) {
+        return service != null
+                && service.getAllowedGrades() != null
+                && service.getAllowedGrades().contains(Grade.SPECIAL);
     }
 
     public LocalDate getMinimumPermanentConfirmationDate(LocalDate firstAppointmentDate) {
@@ -314,32 +569,43 @@ public class CareerProgressionService {
             LocalDate firstAppointmentDate,
             Designation designation
     ) {
-        if (firstAppointmentDate == null || designation == null) {
+        return getMinimumGrade2PromotionDate(
+                firstAppointmentDate,
+                resolveService(designation)
+        );
+    }
+
+    public LocalDate getMinimumGrade2PromotionDate(
+            LocalDate firstAppointmentDate,
+            ServiceType service
+    ) {
+        if (firstAppointmentDate == null || service == null) {
             return null;
         }
 
-        Integer requiredYears = designation.getGrade2RequiredYears();
-        if (requiredYears == null) {
-            return null;
-        }
-
-        return firstAppointmentDate.plusYears(requiredYears);
+        return firstAppointmentDate.plusYears(
+                normalizeRequiredYears(service.getGrade2RequiredYears())
+        );
     }
 
     public LocalDate getMinimumGrade1PromotionDate(
             LocalDate grade2AchievedDate,
             Designation designation
     ) {
-        if (grade2AchievedDate == null || designation == null) {
+        return getMinimumGrade1PromotionDate(grade2AchievedDate, resolveService(designation));
+    }
+
+    public LocalDate getMinimumGrade1PromotionDate(
+            LocalDate grade2AchievedDate,
+            ServiceType service
+    ) {
+        if (grade2AchievedDate == null || service == null) {
             return null;
         }
 
-        Integer requiredYears = designation.getGrade1RequiredYears();
-        if (requiredYears == null) {
-            return null;
-        }
-
-        return grade2AchievedDate.plusYears(requiredYears);
+        return grade2AchievedDate.plusYears(
+                normalizeRequiredYears(service.getGrade1RequiredYears())
+        );
     }
 
     public LocalDate getThreeYearRequirementDate(Employee employee) {
@@ -389,8 +655,8 @@ public class CareerProgressionService {
                 && customRequirementsCompleted(
                         employee,
                         RequirementType.CUSTOM_GRADE_2_REQUIREMENT,
-                        employee.getDesignation() != null
-                                ? employee.getDesignation().getGrade2Requirements()
+                        resolveService(employee) != null
+                                ? resolveService(employee).getGrade2Requirements()
                                 : List.of()
                 )
                 && eligibilityDate != null
@@ -400,10 +666,27 @@ public class CareerProgressionService {
     private boolean impliesPermanentConfirmation(Employee employee) {
         return employee != null
                 && employee.getEmploymentType() == EmploymentType.PERMANENT
-                && (employee.getGrade() == Grade.II
-                || employee.getGrade() == Grade.I
-                || employee.getGrade() == Grade.SUPRA
-                || employee.getGrade() == Grade.SPECIAL);
+                && hasAchievedGrade(employee, Grade.II);
+    }
+
+    private boolean hasAchievedGrade(Employee employee, Grade minimumGrade) {
+        if (employee == null || minimumGrade == null) {
+            return false;
+        }
+
+        Grade current = employee.getGrade() != null ? employee.getGrade() : Grade.NONE;
+        return gradeRank(current) <= gradeRank(minimumGrade);
+    }
+
+    private int gradeRank(Grade grade) {
+        return switch (grade) {
+            case SUPRA -> 0;
+            case SPECIAL -> 1;
+            case I -> 2;
+            case II -> 3;
+            case III -> 4;
+            case NONE -> 5;
+        };
     }
 
     private LocalDate getGrade2BaseDate(Employee employee) {
@@ -481,26 +764,83 @@ public class CareerProgressionService {
                 && customRequirementsCompleted(
                         employee,
                         RequirementType.CUSTOM_GRADE_1_REQUIREMENT,
-                        employee.getDesignation() != null
-                                ? employee.getDesignation().getGrade1Requirements()
+                        resolveService(employee) != null
+                                ? resolveService(employee).getGrade1Requirements()
                                 : List.of()
                 );
     }
 
+    private boolean priorPromotionRequirementsSatisfied(Employee employee) {
+        if (employee == null) {
+            return false;
+        }
+
+        ServiceType service = resolveService(employee);
+        return isRequirementCompleted(employee, RequirementType.EB_GRADE_3)
+                && isRequirementCompleted(employee, RequirementType.GOVERNMENT_LANGUAGE_QUALIFICATION)
+                && isRequirementCompleted(employee, RequirementType.MEDICAL_REPORT)
+                && educationRequirementsSatisfied(employee)
+                && isRequirementCompleted(employee, RequirementType.BIRTH_CERTIFICATE)
+                && customRequirementsCompleted(
+                        employee,
+                        RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                        service != null ? service.getPermanentRequirements() : List.of()
+                )
+                && isRequirementCompleted(employee, RequirementType.EB_GRADE_2)
+                && customRequirementsCompleted(
+                        employee,
+                        RequirementType.CUSTOM_GRADE_2_REQUIREMENT,
+                        service != null ? service.getGrade2Requirements() : List.of()
+                )
+                && grade1RequirementsSatisfied(employee);
+    }
+
+    private boolean supraRequirementsSatisfied(Employee employee) {
+        if (employee == null || !priorPromotionRequirementsSatisfied(employee)) {
+            return false;
+        }
+
+        ServiceType service = resolveService(employee);
+        return isRequirementCompleted(employee, RequirementType.SUPRA_REQUIREMENT)
+                && customRequirementsCompleted(
+                        employee,
+                        RequirementType.CUSTOM_SUPRA_REQUIREMENT,
+                        service != null ? service.getSupraRequirements() : List.of()
+                );
+    }
+
+    private boolean specialRequirementsSatisfied(Employee employee) {
+        if (employee == null || !priorPromotionRequirementsSatisfied(employee)) {
+            return false;
+        }
+
+        ServiceType service = resolveService(employee);
+        return isRequirementCompleted(employee, RequirementType.MASTERS_DEGREE)
+                && customRequirementsCompleted(
+                        employee,
+                        RequirementType.CUSTOM_SPECIAL_REQUIREMENT,
+                        service != null ? service.getSpecialRequirements() : List.of()
+                );
+    }
+
     private Integer getGrade2RequiredYears(Employee employee) {
-        if (employee.getDesignation() != null
-                && employee.getDesignation().getGrade2RequiredYears() != null) {
-            return employee.getDesignation().getGrade2RequiredYears();
+        ServiceType service = resolveService(employee);
+        if (service != null && service.getGrade2RequiredYears() != null) {
+            return service.getGrade2RequiredYears();
         }
         return ensureCareerProgression(employee).getGrade2RequiredYears();
     }
 
     private Integer getGrade1RequiredYears(Employee employee) {
-        if (employee.getDesignation() != null
-                && employee.getDesignation().getGrade1RequiredYears() != null) {
-            return employee.getDesignation().getGrade1RequiredYears();
+        ServiceType service = resolveService(employee);
+        if (service != null && service.getGrade1RequiredYears() != null) {
+            return service.getGrade1RequiredYears();
         }
         return ensureCareerProgression(employee).getGrade1RequiredYears();
+    }
+
+    private int normalizeRequiredYears(Integer years) {
+        return years != null ? years : 0;
     }
 
     private boolean customRequirementsCompleted(
@@ -519,16 +859,40 @@ public class CareerProgressionService {
     }
 
     private String customRequirementName(Object definition) {
-        if (definition instanceof DesignationPermanentRequirement requirement) {
+        if (definition instanceof ServicePermanentRequirement requirement) {
             return requirement.getRequirementName();
         }
-        if (definition instanceof DesignationGrade2Requirement requirement) {
+        if (definition instanceof ServiceGrade2Requirement requirement) {
             return requirement.getRequirementName();
         }
-        if (definition instanceof DesignationGrade1Requirement requirement) {
+        if (definition instanceof ServiceGrade1Requirement requirement) {
+            return requirement.getRequirementName();
+        }
+        if (definition instanceof ServiceSupraRequirement requirement) {
+            return requirement.getRequirementName();
+        }
+        if (definition instanceof ServiceSpecialRequirement requirement) {
             return requirement.getRequirementName();
         }
         return null;
+    }
+
+    private ServiceType resolveService(Employee employee) {
+        if (employee == null) {
+            return null;
+        }
+        if (employee.getDesignation() != null
+                && employee.getDesignation().getService() != null) {
+            return employee.getDesignation().getService();
+        }
+        return employee.getService();
+    }
+
+    private ServiceType resolveService(Designation designation) {
+        if (designation == null) {
+            return null;
+        }
+        return designation.getService();
     }
 
     private boolean isRequirementCompleted(

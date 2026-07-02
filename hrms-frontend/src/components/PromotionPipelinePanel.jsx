@@ -212,6 +212,28 @@ export default function PromotionPipelinePanel({ summary, loading }) {
             onClick: () => navigate(buildEmployeeListUrl({
                 gradePromotion: "QUALIFIED_GRADE_2_TO_1"
             }))
+        },
+        {
+            step: "4",
+            title: "Grade I → Supra",
+            description: "Eligible for Supra promotion",
+            count: summary?.eligibleGrade1ToSupra,
+            color: KPI_COLORS.gradeSupra,
+            icon: TrendingUpIcon,
+            onClick: () => navigate(buildEmployeeListUrl({
+                gradePromotion: "QUALIFIED_GRADE_1_TO_SUPRA"
+            }))
+        },
+        {
+            step: "5",
+            title: "Grade I → Special",
+            description: "Eligible for Special promotion",
+            count: summary?.eligibleGrade1ToSpecial,
+            color: KPI_COLORS.gradeSpecial,
+            icon: TrendingUpIcon,
+            onClick: () => navigate(buildEmployeeListUrl({
+                gradePromotion: "QUALIFIED_GRADE_1_TO_SPECIAL"
+            }))
         }
     ];
 

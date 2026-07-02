@@ -20,8 +20,8 @@ import { useState } from "react";
 import toast from "react-hot-toast";
 
 import {
-    ACTION_TYPE_LABELS,
     getActionDetailLines,
+    getActionTypeLabel,
     getApiErrorMessage
 } from "../constants/hrms";
 import { deleteEmployeeAction } from "../services/employeeLifecycleService";
@@ -37,7 +37,8 @@ const actionColor = {
     PERMANENT_CONFIRMATION: "success",
     RETIREMENT_OR_RESIGNATION: "default",
     DEATH: "default",
-    DISMISSAL: "error"
+    DISMISSAL: "error",
+    VACATION_OF_POST: "error"
 };
 
 const formatDisplayDate = (date) =>
@@ -95,7 +96,7 @@ function TimelineCard({
 }) {
     const color = actionColor[action.actionType] || "default";
     const detailLines = getActionDetailLines(action);
-    const label = ACTION_TYPE_LABELS[action.actionType] || action.actionType;
+    const label = getActionTypeLabel(action);
 
     return (
         <Box sx={{ display: "flex", gap: 2 }}>
@@ -226,7 +227,11 @@ export default function EmployeeActionHistoryTable({
         setDeleting(true);
         try {
             await deleteEmployeeAction(actionToDelete.id);
-            toast.success("Lifecycle action deleted successfully");
+            toast.success(
+                actionToDelete.trainingGraduation
+                    ? "Training appointment reverted successfully"
+                    : "Lifecycle action deleted successfully"
+            );
             onRefresh();
             setDeleteDialogOpen(false);
         } catch (error) {
@@ -301,11 +306,13 @@ export default function EmployeeActionHistoryTable({
                 onClose={() => setDeleteDialogOpen(false)}
             >
                 <DialogTitle>
-                    Delete {ACTION_TYPE_LABELS[actionToDelete?.actionType] || "Action"}
+                    Delete {getActionTypeLabel(actionToDelete) || "Action"}
                 </DialogTitle>
                 <DialogContent>
                     <Typography>
-                        This will recalculate employee history. Continue?
+                        {actionToDelete?.trainingGraduation
+                            ? "This will undo the training-to-permanent appointment and restore the employee as a training employee. Continue?"
+                            : "This will recalculate employee history. Continue?"}
                     </Typography>
                 </DialogContent>
                 <DialogActions>

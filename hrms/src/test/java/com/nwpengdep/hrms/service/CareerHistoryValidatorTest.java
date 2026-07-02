@@ -9,6 +9,7 @@ import static org.mockito.Mockito.mock;
 
 import java.time.LocalDate;
 import java.util.EnumSet;
+import java.util.Set;
 import java.util.List;
 import java.util.Optional;
 
@@ -24,10 +25,12 @@ import com.nwpengdep.hrms.entity.Grade;
 import com.nwpengdep.hrms.entity.ServiceLevel;
 import com.nwpengdep.hrms.entity.ServiceType;
 import com.nwpengdep.hrms.repository.DesignationRepository;
+import com.nwpengdep.hrms.repository.ServiceTypeRepository;
 
 class CareerHistoryValidatorTest {
 
     private DesignationRepository designationRepository;
+    private ServiceTypeRepository serviceTypeRepository;
     private OfficeService officeService;
     private CareerHistoryValidator validator;
 
@@ -39,25 +42,25 @@ class CareerHistoryValidatorTest {
     @BeforeEach
     void setUp() {
         designationRepository = mock(DesignationRepository.class);
+        serviceTypeRepository = mock(ServiceTypeRepository.class);
         officeService = mock(OfficeService.class);
         validator = new CareerHistoryValidator(
                 designationRepository,
+                serviceTypeRepository,
                 new DesignationAssignmentValidator(),
                 new CareerProgressionService(),
                 officeService
         );
 
         ServiceType serviceA = serviceType(1L);
+        serviceA.setGrade2RequiredYears(5);
+        serviceA.setGrade1RequiredYears(4);
         ServiceType serviceB = serviceType(2L);
 
         primaryLevel = serviceLevel(10L, "Primary");
 
         engineerServiceA = designation(1L, serviceA, primaryLevel);
-        engineerServiceA.setGrade2RequiredYears(5);
-        engineerServiceA.setGrade1RequiredYears(4);
         seniorEngineerServiceA = designation(2L, serviceA, primaryLevel);
-        seniorEngineerServiceA.setGrade2RequiredYears(5);
-        seniorEngineerServiceA.setGrade1RequiredYears(4);
         clerkServiceB = designation(3L, serviceB, primaryLevel);
 
         lenient().when(designationRepository.findById(anyLong()))
@@ -68,6 +71,43 @@ class CareerHistoryValidatorTest {
                 .thenReturn(Optional.of(seniorEngineerServiceA));
         lenient().when(designationRepository.findById(3L))
                 .thenReturn(Optional.of(clerkServiceB));
+        lenient().when(serviceTypeRepository.findById(1L))
+                .thenReturn(Optional.of(serviceA));
+        lenient().when(serviceTypeRepository.findById(2L))
+                .thenReturn(Optional.of(serviceB));
+    }
+
+    @Test
+    void customFirstAppointmentAndPromotionInSameServicePasses() {
+        CareerHistoryEventRequest first =
+                event(EmployeeActionType.NEW_APPOINTMENT, "1990-01-01");
+        first.setRecordedDesignationName("Assistant Engineer (Historical)");
+        first.setServiceId(1L);
+        first.setServiceLevelId(10L);
+        first.setGrade(Grade.III);
+
+        CareerHistoryEventRequest promotion =
+                event(EmployeeActionType.PROMOTION, "1995-01-01");
+        promotion.setRecordedDesignationName("Engineer (Historical)");
+        promotion.setServiceLevelId(10L);
+        promotion.setGrade(Grade.II);
+
+        assertDoesNotThrow(() -> validator.validate(List.of(first, promotion)));
+    }
+
+    @Test
+    void customFirstAppointmentRequiresService() {
+        CareerHistoryEventRequest first =
+                event(EmployeeActionType.NEW_APPOINTMENT, "1990-01-01");
+        first.setRecordedDesignationName("Assistant Engineer (Historical)");
+        first.setServiceLevelId(10L);
+        first.setGrade(Grade.III);
+
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> validator.validate(List.of(first))
+        );
+        assertTrue(exception.getMessage().contains("service"));
     }
 
     @Test
@@ -132,7 +172,38 @@ class CareerHistoryValidatorTest {
                 RuntimeException.class,
                 () -> validator.validate(events)
         );
-        assertTrue(exception.getMessage().contains("skips grade steps"));
+        assertTrue(exception.getMessage().contains("invalid grade step"));
+    }
+
+    @Test
+    void supraToSpecialStepRejected() {
+        ServiceType supraService = serviceType(1L, Grade.SUPRA);
+        supraService.setGrade2RequiredYears(5);
+        supraService.setGrade1RequiredYears(4);
+        supraService.setSupraRequiredYears(2);
+        lenient().when(designationRepository.findById(1L))
+                .thenReturn(Optional.of(designation(1L, supraService, primaryLevel)));
+        lenient().when(serviceTypeRepository.findById(1L))
+                .thenReturn(Optional.of(supraService));
+
+        List<CareerHistoryEventRequest> events = List.of(
+                appointment("2010-01-01", 1L),
+                event(EmployeeActionType.PERMANENT_CONFIRMATION, "2013-01-01"),
+                gradeUpdate("2015-01-01", Grade.II),
+                gradeUpdate("2019-01-01", Grade.I),
+                gradeUpdate("2021-01-01", Grade.SUPRA),
+                gradeUpdate("2022-01-01", Grade.SPECIAL)
+        );
+
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> validator.validate(events)
+        );
+        assertTrue(
+                exception.getMessage().toLowerCase().contains("invalid grade step")
+                || exception.getMessage().toLowerCase().contains("not allowed"),
+                () -> exception.getMessage()
+        );
     }
 
     @Test
@@ -215,6 +286,8 @@ class CareerHistoryValidatorTest {
                 event(EmployeeActionType.TRANSFER_OUT, "2020-01-01");
         transferOut.setToDepartment("Western Province Engineering Department");
         transferOut.setToOffice("Kurunegala Office");
+        transferOut.setDesignationId(1L);
+        transferOut.setServiceLevelId(10L);
 
         List<CareerHistoryEventRequest> events = List.of(
                 appointment("2015-01-01", 1L),
@@ -243,6 +316,20 @@ class CareerHistoryValidatorTest {
         List<CareerHistoryEventRequest> events = List.of(
                 appointment("2015-01-01", 1L),
                 event(EmployeeActionType.DISMISSAL, "2020-01-01")
+        );
+
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> validator.validate(events)
+        );
+        assertTrue(exception.getMessage().contains("reason"));
+    }
+
+    @Test
+    void vacationOfPostRequiresReason() {
+        List<CareerHistoryEventRequest> events = List.of(
+                appointment("2015-01-01", 1L),
+                event(EmployeeActionType.VACATION_OF_POST, "2020-01-01")
         );
 
         RuntimeException exception = assertThrows(
@@ -396,8 +483,21 @@ class CareerHistoryValidatorTest {
     }
 
     private ServiceType serviceType(Long id) {
+        return serviceType(id, Grade.SUPRA);
+    }
+
+    private ServiceType serviceType(Long id, Grade... terminalGrades) {
         ServiceType serviceType = new ServiceType();
         serviceType.setId(id);
+        EnumSet<Grade> allowedGrades = EnumSet.of(
+                Grade.III,
+                Grade.II,
+                Grade.I
+        );
+        for (Grade terminalGrade : terminalGrades) {
+            allowedGrades.add(terminalGrade);
+        }
+        serviceType.setAllowedGrades(allowedGrades);
         return serviceType;
     }
 
@@ -410,13 +510,16 @@ class CareerHistoryValidatorTest {
         designation.setId(id);
         designation.setService(service);
         designation.setServiceLevel(serviceLevel);
-        designation.setAllowedGrades(EnumSet.of(
-                Grade.III,
-                Grade.II,
-                Grade.I,
-                Grade.SUPRA,
-                Grade.SPECIAL
-        ));
+        designation.setAllowedGrades(
+                service != null && service.getAllowedGrades() != null
+                        ? EnumSet.copyOf(service.getAllowedGrades())
+                        : EnumSet.of(
+                                Grade.III,
+                                Grade.II,
+                                Grade.I,
+                                Grade.SUPRA
+                        )
+        );
         return designation;
     }
 

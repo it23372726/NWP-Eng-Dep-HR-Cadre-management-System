@@ -14,6 +14,10 @@ import {
 
 import { useEffect, useState } from "react";
 
+import {
+    getEmployeeServiceRules,
+    resolveEmployeeDesignationName
+} from "../constants/hrms";
 import FormSection from "./FormSection";
 import { dialogActionsSx } from "../utils/formLayout";
 import {
@@ -26,6 +30,7 @@ import {
 } from "../utils/employeeQualificationForm";
 
 const FIXED_REQUIREMENT_FIELD_NAMES = {
+    TRAINING_EXAM: "trainingExamPassed",
     EB_GRADE_3: "ebGrade3Passed",
     GOVERNMENT_LANGUAGE_QUALIFICATION: "languageQualificationPassed",
     MEDICAL_REPORT: "medicalReportCompleted",
@@ -34,7 +39,9 @@ const FIXED_REQUIREMENT_FIELD_NAMES = {
     DEGREE_CERTIFICATE: "degreeApproved",
     BIRTH_CERTIFICATE: "birthCertificateApproved",
     EB_GRADE_2: "ebGrade2Passed",
-    EB_GRADE_1: "ebGrade1Passed"
+    EB_GRADE_1: "ebGrade1Passed",
+    SUPRA_REQUIREMENT: "supraExamPassed",
+    MASTERS_DEGREE: "mastersDegreeCompleted"
 };
 
 const normalizeRequirements = (requirements) => {
@@ -151,23 +158,43 @@ function renderCustomRequirementCheckboxes(
     });
 }
 
-function renderSectionContent(section, designation, formData, employee, handleChange) {
+function renderSectionContent(section, employee, formData, handleChange) {
+    const service = getEmployeeServiceRules(employee);
+
     return (
         <>
             {section.showGrade2Years
-                && designation?.grade2RequiredYears != null && (
+                && service?.grade2RequiredYears != null && (
                 <Chip
                     size="small"
-                    label={`Required service before Grade II: ${designation.grade2RequiredYears} year(s) from first appointment`}
+                    label={`Required service before Grade II: ${service.grade2RequiredYears} year(s) from first appointment`}
                     variant="outlined"
                     sx={{ mb: 2 }}
                 />
             )}
             {section.showGrade1Years
-                && designation?.grade1RequiredYears != null && (
+                && service?.grade1RequiredYears != null && (
                 <Chip
                     size="small"
-                    label={`Required service before Grade I: ${designation.grade1RequiredYears} year(s) in present Grade II class`}
+                    label={`Required service before Grade I: ${service.grade1RequiredYears} year(s) in present Grade II class`}
+                    variant="outlined"
+                    sx={{ mb: 2 }}
+                />
+            )}
+            {section.showSupraYears
+                && service?.supraRequiredYears != null && (
+                <Chip
+                    size="small"
+                    label={`Required service before Supra: ${service.supraRequiredYears} year(s) in present Grade I class`}
+                    variant="outlined"
+                    sx={{ mb: 2 }}
+                />
+            )}
+            {section.showSpecialYears
+                && service?.specialRequiredYears != null && (
+                <Chip
+                    size="small"
+                    label={`Required service before Special: ${service.specialRequiredYears} year(s) in present Grade I class`}
                     variant="outlined"
                     sx={{ mb: 2 }}
                 />
@@ -182,7 +209,7 @@ function renderSectionContent(section, designation, formData, employee, handleCh
                 )}
                 {renderCustomRequirementCheckboxes(
                     section.customType,
-                    designation?.[section.customField],
+                    service?.[section.customField],
                     formData,
                     employee,
                     handleChange,
@@ -190,9 +217,9 @@ function renderSectionContent(section, designation, formData, employee, handleCh
                 )}
             </Grid>
             {section.customType
-                && normalizeRequirements(designation?.[section.customField]).length === 0 && (
+                && normalizeRequirements(service?.[section.customField]).length === 0 && (
                 <Alert severity="info" sx={{ mt: 1 }}>
-                    No custom requirements are configured for this designation
+                    No custom requirements are configured for this service
                     in this section.
                 </Alert>
             )}
@@ -208,7 +235,7 @@ export default function EmployeeQualificationsForm({
 }) {
     const [formData, setFormData] = useState({});
     const context = getQualificationUpdateContext(employee);
-    const designation = employee?.designation;
+    const service = getEmployeeServiceRules(employee);
 
     useEffect(() => {
         if (open && employee) {
@@ -244,12 +271,14 @@ export default function EmployeeQualificationsForm({
     };
 
     const submitForm = () => {
-        if (!employee || !context.canUpdate) {
+        if (!employee || !context.canSave) {
             return;
         }
 
         handleSubmit(buildQualificationUpdatePayload(employee, formData));
     };
+
+    const isReadOnly = context.canUpdate && !context.canSave;
 
     return (
         <Dialog
@@ -258,9 +287,12 @@ export default function EmployeeQualificationsForm({
             fullWidth
             maxWidth="md"
             scroll="paper"
+            onTransitionExited={() => {
+                document.activeElement?.blur();
+            }}
         >
             <DialogTitle sx={{ pb: 1 }}>
-                Update Qualifications
+                {isReadOnly ? "View Qualifications" : "Update Qualifications"}
             </DialogTitle>
 
             <DialogContent
@@ -277,6 +309,11 @@ export default function EmployeeQualificationsForm({
                     </Alert>
                 ) : (
                     <>
+                        {isReadOnly && (
+                            <Alert severity="info" sx={{ mb: 2 }}>
+                                {context.message}
+                            </Alert>
+                        )}
                         <Stack
                             direction="row"
                             spacing={1}
@@ -290,9 +327,16 @@ export default function EmployeeQualificationsForm({
                             />
                             <Chip
                                 size="small"
-                                label={designation?.designationName || "Designation"}
+                                label={resolveEmployeeDesignationName(employee) || "Designation"}
                                 variant="outlined"
                             />
+                            {service?.serviceCode && (
+                                <Chip
+                                    size="small"
+                                    label={service.serviceCode}
+                                    variant="outlined"
+                                />
+                            )}
                         </Stack>
 
                         <Stack spacing={3}>
@@ -302,11 +346,17 @@ export default function EmployeeQualificationsForm({
                                     title={section.title}
                                     description={section.description}
                                 >
+                                    {context.editableSectionId
+                                        && section.id !== context.editableSectionId && (
+                                        <Alert severity="info" sx={{ mb: 1.5 }}>
+                                            These requirements are locked for employees
+                                            who have already passed this career stage.
+                                        </Alert>
+                                    )}
                                     {renderSectionContent(
                                         section,
-                                        designation,
-                                        formData,
                                         employee,
+                                        formData,
                                         handleChange
                                     )}
                                 </FormSection>
@@ -323,7 +373,7 @@ export default function EmployeeQualificationsForm({
                 <Button
                     variant="contained"
                     onClick={submitForm}
-                    disabled={!context.canUpdate}
+                    disabled={!context.canSave}
                 >
                     Save Qualifications
                 </Button>

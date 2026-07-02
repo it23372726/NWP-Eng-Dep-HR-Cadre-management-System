@@ -38,6 +38,9 @@ public class EmployeeAction {
     @JoinColumn(name = "new_designation_id")
     private Designation newDesignation;
 
+    @Column(name = "recorded_new_designation_name")
+    private String recordedNewDesignationName;
+
     @Enumerated(EnumType.STRING)
     private Grade oldGrade;
 
@@ -78,6 +81,10 @@ public class EmployeeAction {
     private LocalDateTime editedAt;
 
     private Boolean deleted;
+
+    @Column(name = "training_graduation", nullable = false)
+    @Builder.Default
+    private Boolean trainingGraduation = false;
 
     private String deletedBy;
 

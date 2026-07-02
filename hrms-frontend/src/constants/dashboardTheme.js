@@ -21,7 +21,27 @@ export const SERVICE_COLOR_PALETTE = [
     "#BE185D",
     "#B45309",
     "#1B7A46",
-    "#4F46E5"
+    "#4F46E5",
+    "#DC2626",
+    "#EA580C",
+    "#CA8A04",
+    "#65A30D",
+    "#0891B2",
+    "#2DD4BF",
+    "#8B5CF6",
+    "#DB2777",
+    "#E11D48",
+    "#F97316",
+    "#14B8A6",
+    "#6366F1",
+    "#A855F7",
+    "#EC4899",
+    "#F43F5E",
+    "#0E7490",
+    "#15803D",
+    "#A16207",
+    "#9F1239",
+    "#5B21B6"
 ];
 
 export const SERVICE_LEVEL_COLORS = {
@@ -34,7 +54,11 @@ export const SERVICE_LEVEL_COLORS = {
 export const PERMANENT_STATUS_COLORS = {
     Probation: "#F59E0B",
     "Qualified for Permanent": "#3B82F6",
-    "Confirmed Permanent": "#1B7A46"
+    "Confirmed Permanent": "#1B7A46",
+    Acting: "#7C3AED",
+    Contract: "#475569",
+    Casual: "#94A3B8",
+    Substitute: "#0D9488"
 };
 
 export const GRADE_COLORS = [
@@ -44,6 +68,15 @@ export const GRADE_COLORS = [
     "#1D4ED8",
     "#1E3A8A"
 ];
+
+export const GRADE_NAMED_COLORS = {
+    "Grade Supra": "#1E3A8A",
+    "Grade Special": "#1D4ED8",
+    "Grade I": "#3B82F6",
+    "Grade II": "#60A5FA",
+    "Grade III": "#93C5FD",
+    "Grade None": "#94A3B8"
+};
 
 export const DISTRICT_COLORS = {
     Kurunegala: "#1E40AF",
@@ -56,7 +89,9 @@ export const KPI_COLORS = {
     retirement: "#7C3AED",
     permanent: "#3B82F6",
     grade3to2: "#0891B2",
-    grade2to1: "#0F766E"
+    grade2to1: "#0F766E",
+    gradeSupra: "#1E3A8A",
+    gradeSpecial: "#1D4ED8"
 };
 
 export const CHART_HEIGHT = 320;
@@ -99,14 +134,63 @@ export function getServiceColor(serviceCode, index = 0) {
         return SERVICE_COLORS[key];
     }
 
-    const matchedKey = Object.keys(SERVICE_COLORS).find(
-        (code) => key.includes(code) || code.includes(key)
-    );
-    if (matchedKey) {
-        return SERVICE_COLORS[matchedKey];
+    return SERVICE_COLOR_PALETTE[index % SERVICE_COLOR_PALETTE.length];
+}
+
+export function buildChartColorMap(categories = [], knownColors = {}) {
+    const colorMap = new Map();
+    const usedColors = new Set();
+
+    const assignColor = (category, color) => {
+        if (!color || usedColors.has(color)) {
+            return false;
+        }
+
+        usedColors.add(color);
+        colorMap.set(category, color);
+        return true;
+    };
+
+    for (const category of categories) {
+        assignColor(category, knownColors[category]);
     }
 
-    return SERVICE_COLOR_PALETTE[index % SERVICE_COLOR_PALETTE.length];
+    let paletteIndex = 0;
+    for (const category of categories) {
+        if (colorMap.has(category)) {
+            continue;
+        }
+
+        while (paletteIndex < SERVICE_COLOR_PALETTE.length) {
+            const paletteColor = SERVICE_COLOR_PALETTE[paletteIndex];
+            paletteIndex += 1;
+
+            if (assignColor(category, paletteColor)) {
+                break;
+            }
+        }
+
+        if (!colorMap.has(category)) {
+            const index = categories.indexOf(category);
+            const hue = Math.round((index * 137.508) % 360);
+            assignColor(category, `hsl(${hue}, 62%, 42%)`);
+        }
+    }
+
+    return colorMap;
+}
+
+export function buildServiceChartColorMap(categories = []) {
+    const knownColors = Object.fromEntries(
+        categories
+            .map((category) => {
+                const key = normalizeServiceKey(category);
+                return SERVICE_COLORS[key] ? [category, SERVICE_COLORS[key]] : null;
+            })
+            .filter(Boolean)
+    );
+
+    return buildChartColorMap(categories, knownColors);
 }
 
 export function getServiceLevelColor(level) {

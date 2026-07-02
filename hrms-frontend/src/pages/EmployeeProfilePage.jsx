@@ -18,7 +18,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 
-import { getEmployeeById, saveEmployeePhoto, updateEmployee, getVehiclePermitStatus, recordVehiclePermitCollection, downloadEmployeeSummaryPdf } from "../services/employeeService";
+import { getEmployeeById, saveEmployeePhoto, updateEmployee, getVehiclePermitStatus, recordVehiclePermitCollection, updateVehiclePermitCollection, undoVehiclePermitCollection, downloadEmployeeSummaryPdf, downloadEmployeeDependentDetailsPdf } from "../services/employeeService";
 import { triggerDownload } from "../services/allEmployeeDetailsReportService";
 import { getDesignations } from "../services/designationService";
 import {
@@ -29,7 +29,10 @@ import {
     retireEmployee,
     markEmployeeDeath,
     dismissEmployee,
+    vacatePostEmployee,
     appointNewEmployee,
+    graduateTrainingToPermanent,
+    revertTrainingGraduation,
     makeEmployeePermanent,
     deleteEmployeePermanently
 } from "../services/employeeLifecycleService";
@@ -37,11 +40,16 @@ import {
 import EmployeeStatusChip from "../components/EmployeeStatusChip";
 import EmployeeActionHistoryTable from "../components/EmployeeActionHistoryTable";
 import EmployeeProfilePersonalTab from "../components/EmployeeProfilePersonalTab";
+import EmployeeProfileBenefitsTab from "../components/EmployeeProfileBenefitsTab";
 import RevokePrivateVehicleDialog from "../components/RevokePrivateVehicleDialog";
 import RecordVehiclePermitDialog from "../components/RecordVehiclePermitDialog";
+import UndoVehiclePermitDialog from "../components/UndoVehiclePermitDialog";
+import RecordSalaryIncrementDialog from "../components/RecordSalaryIncrementDialog";
+import UndoSalaryIncrementDialog from "../components/UndoSalaryIncrementDialog";
 import TransferOutDialog from "../components/lifecycle/TransferOutDialog";
 import OfficeChangeDialog from "../components/lifecycle/OfficeChangeDialog";
 import NewAppointmentDialog from "../components/lifecycle/NewAppointmentDialog";
+import TrainingAppointmentDialog from "../components/lifecycle/TrainingAppointmentDialog";
 import PromotionDialog from "../components/lifecycle/PromotionDialog";
 import SimpleLifecycleDialog from "../components/lifecycle/SimpleLifecycleDialog";
 import MakePermanentDialog from "../components/lifecycle/MakePermanentDialog";
@@ -53,11 +61,26 @@ import EmployeeQualificationsForm from "../components/EmployeeQualificationsForm
 import { getQualificationUpdateContext } from "../utils/employeeQualificationForm";
 import {
     getApiErrorMessage,
-    isRequirementCompleted
+    canShowDependentDetails,
+    isContractEmployee,
+    isRequirementCompleted,
+    isTrainingEmployee,
+    isTrainingGraduationEligible,
+    getTrainingGraduationBlockReason,
+    resolveEmployeeDesignationName,
+    resolveEmployeeService
 } from "../constants/hrms";
+import { normalizeRequiredYears } from "../utils/gradeAchievementDates";
 import { getLatestEventDate } from "../utils/timelineDates";
 import { buildRevokePrivateVehiclePayload } from "../utils/employeeFormUtils";
+import { isMarriedStatus } from "../utils/employeeDependentForm";
 import { isSeniorEmployee } from "../utils/vehiclePermit";
+import {
+    getSalaryIncrementStatus,
+    recordSalaryIncrement,
+    updateSalaryIncrement,
+    undoSalaryIncrement
+} from "../services/salaryIncrementService";
 
 const getThreeYearRequirementDate = (dateOfFirstAppointment) => {
     if (!dateOfFirstAppointment) {
@@ -104,28 +127,46 @@ export default function EmployeeProfilePage() {
     const [openTransferOut, setOpenTransferOut] = useState(false);
     const [openOfficeChange, setOpenOfficeChange] = useState(false);
     const [openNewAppointment, setOpenNewAppointment] = useState(false);
+    const [openTrainingAppointment, setOpenTrainingAppointment] = useState(false);
+    const [openRevertTraining, setOpenRevertTraining] = useState(false);
     const [openPromote, setOpenPromote] = useState(false);
     const [openRetire, setOpenRetire] = useState(false);
     const [openDeath, setOpenDeath] = useState(false);
     const [openDismiss, setOpenDismiss] = useState(false);
+    const [openVacationOfPost, setOpenVacationOfPost] = useState(false);
     const [openMakePermanent, setOpenMakePermanent] = useState(false);
     const [openDelete, setOpenDelete] = useState(false);
     const [openEdit, setOpenEdit] = useState(false);
     const [openQualifications, setOpenQualifications] = useState(false);
     const [openRevokePrivateVehicle, setOpenRevokePrivateVehicle] = useState(false);
     const [openRecordVehiclePermit, setOpenRecordVehiclePermit] = useState(false);
+    const [openEditVehiclePermit, setOpenEditVehiclePermit] = useState(false);
+    const [openUndoVehiclePermit, setOpenUndoVehiclePermit] = useState(false);
+    const [openRecordSalaryIncrement, setOpenRecordSalaryIncrement] = useState(false);
+    const [openEditSalaryIncrement, setOpenEditSalaryIncrement] = useState(false);
+    const [openUndoSalaryIncrement, setOpenUndoSalaryIncrement] = useState(false);
     const [savingEmployee, setSavingEmployee] = useState(false);
     const [revokingPrivateVehicle, setRevokingPrivateVehicle] = useState(false);
     const [recordingVehiclePermit, setRecordingVehiclePermit] = useState(false);
+    const [undoingVehiclePermit, setUndoingVehiclePermit] = useState(false);
+    const [recordingSalaryIncrement, setRecordingSalaryIncrement] = useState(false);
+    const [undoingSalaryIncrement, setUndoingSalaryIncrement] = useState(false);
     const [vehiclePermitStatus, setVehiclePermitStatus] = useState(null);
+    const [salaryIncrementStatus, setSalaryIncrementStatus] = useState(null);
     const [anchorEl, setAnchorEl] = useState(null);
     const [activeTab, setActiveTab] = useState(0);
     const [downloadingSummaryPdf, setDownloadingSummaryPdf] = useState(false);
+    const [downloadingDependentDetailsPdf, setDownloadingDependentDetailsPdf] = useState(false);
 
     const isActive = employee?.status === "ACTIVE";
+    const isContract = isContractEmployee(employee?.employmentType);
+    const isTraining = isTrainingEmployee(employee);
+    const isSimplifiedLifecycle = isContract || isTraining;
+    const canAppointTrainingAsPermanent = isTrainingGraduationEligible(employee);
 
     useEffect(() => {
         loadProfile();
+        setActiveTab(0);
     }, [id]);
 
     const loadProfile = async () => {
@@ -145,6 +186,14 @@ export default function EmployeeProfilePage() {
                 setVehiclePermitStatus(status);
             } else {
                 setVehiclePermitStatus(null);
+            }
+
+            if (!isContractEmployee(selectedEmployee.employmentType)
+                && selectedEmployee.incremantDate) {
+                const incrementStatus = await getSalaryIncrementStatus(id);
+                setSalaryIncrementStatus(incrementStatus);
+            } else {
+                setSalaryIncrementStatus(null);
             }
         } catch {
             toast.error("Failed to load profile");
@@ -174,11 +223,28 @@ export default function EmployeeProfilePage() {
         try {
             const blob = await downloadEmployeeSummaryPdf(employee.id);
             const identifier = employee.employeeNo || employee.id;
-            triggerDownload(blob, `employee-summary-${identifier}.pdf`);
+            triggerDownload(blob, `employment-summary-${identifier}.pdf`);
         } catch (error) {
-            toast.error(getApiErrorMessage(error) || "Failed to download summary PDF");
+            toast.error(getApiErrorMessage(error) || "Failed to download employment summary PDF");
         } finally {
             setDownloadingSummaryPdf(false);
+        }
+    };
+
+    const handleDownloadDependentDetailsPdf = async () => {
+        if (downloadingDependentDetailsPdf || !employee) {
+            return;
+        }
+
+        setDownloadingDependentDetailsPdf(true);
+        try {
+            const blob = await downloadEmployeeDependentDetailsPdf(employee.id);
+            const identifier = employee.employeeNo || employee.id;
+            triggerDownload(blob, `dependent-details-${identifier}.pdf`);
+        } catch (error) {
+            toast.error(getApiErrorMessage(error) || "Failed to download dependent details PDF");
+        } finally {
+            setDownloadingDependentDetailsPdf(false);
         }
     };
 
@@ -252,16 +318,120 @@ export default function EmployeeProfilePage() {
         }
     };
 
+    const handleEditVehiclePermit = async (collectedDate) => {
+        if (recordingVehiclePermit) {
+            return;
+        }
+
+        setRecordingVehiclePermit(true);
+        try {
+            const status = await updateVehiclePermitCollection(employee.id, collectedDate);
+            setVehiclePermitStatus(status);
+            toast.success("Vehicle permit collection updated");
+            setOpenEditVehiclePermit(false);
+            loadProfile();
+        } catch (error) {
+            toast.error(getApiErrorMessage(error));
+        } finally {
+            setRecordingVehiclePermit(false);
+        }
+    };
+
+    const handleUndoVehiclePermit = async () => {
+        if (undoingVehiclePermit) {
+            return;
+        }
+
+        setUndoingVehiclePermit(true);
+        try {
+            const status = await undoVehiclePermitCollection(employee.id);
+            setVehiclePermitStatus(status);
+            toast.success("Vehicle permit collection undone");
+            setOpenUndoVehiclePermit(false);
+            loadProfile();
+        } catch (error) {
+            toast.error(getApiErrorMessage(error));
+        } finally {
+            setUndoingVehiclePermit(false);
+        }
+    };
+
+    const handleRecordSalaryIncrement = async (doneDate, { catchUpToCurrentYear = false } = {}) => {
+        if (recordingSalaryIncrement) {
+            return;
+        }
+
+        setRecordingSalaryIncrement(true);
+        try {
+            const status = await recordSalaryIncrement(employee.id, doneDate, {
+                catchUpToCurrentYear
+            });
+            setSalaryIncrementStatus(status);
+            toast.success(
+                catchUpToCurrentYear
+                    ? "Salary increments caught up through current year"
+                    : "Salary increment recorded"
+            );
+            setOpenRecordSalaryIncrement(false);
+            loadProfile();
+        } catch (error) {
+            toast.error(getApiErrorMessage(error));
+        } finally {
+            setRecordingSalaryIncrement(false);
+        }
+    };
+
+    const handleEditSalaryIncrement = async (doneDate) => {
+        if (recordingSalaryIncrement) {
+            return;
+        }
+
+        setRecordingSalaryIncrement(true);
+        try {
+            const status = await updateSalaryIncrement(employee.id, doneDate);
+            setSalaryIncrementStatus(status);
+            toast.success("Salary increment date updated");
+            setOpenEditSalaryIncrement(false);
+            loadProfile();
+        } catch (error) {
+            toast.error(getApiErrorMessage(error));
+        } finally {
+            setRecordingSalaryIncrement(false);
+        }
+    };
+
+    const handleUndoSalaryIncrement = async () => {
+        if (undoingSalaryIncrement) {
+            return;
+        }
+
+        setUndoingSalaryIncrement(true);
+        try {
+            const status = await undoSalaryIncrement(employee.id);
+            setSalaryIncrementStatus(status);
+            toast.success("Salary increment undone");
+            setOpenUndoSalaryIncrement(false);
+            loadProfile();
+        } catch (error) {
+            toast.error(getApiErrorMessage(error));
+        } finally {
+            setUndoingSalaryIncrement(false);
+        }
+    };
+
     if (!employee) {
         return <Typography>Loading...</Typography>;
     }
 
-    const grade2RequiredYears =
-        employee.designation?.grade2RequiredYears
-        ?? employee.careerProgression?.grade2RequiredYears;
-    const grade1RequiredYears =
-        employee.designation?.grade1RequiredYears
-        ?? employee.careerProgression?.grade1RequiredYears;
+    const employeeService = resolveEmployeeService(employee);
+    const grade2RequiredYears = normalizeRequiredYears(
+        employeeService?.grade2RequiredYears
+        ?? employee.careerProgression?.grade2RequiredYears
+    );
+    const grade1RequiredYears = normalizeRequiredYears(
+        employeeService?.grade1RequiredYears
+        ?? employee.careerProgression?.grade1RequiredYears
+    );
     const canMakePermanent =
         meetsGradeThreePermanentRequirements(employee)
         && employee.careerProgression?.qualifiedForPermanent
@@ -273,6 +443,9 @@ export default function EmployeeProfilePage() {
     const qualificationContext = getQualificationUpdateContext(employee);
     const canUpdateQualifications =
         isActive && qualificationContext.canUpdate;
+    const qualificationsActionLabel = qualificationContext.canSave
+        ? "Update Qualifications"
+        : "View Qualifications";
 
     return (
         <Box>
@@ -300,12 +473,13 @@ export default function EmployeeProfilePage() {
                             <EmployeeStatusChip status={employee.status} />
                         </Stack>
                         <Typography color="text.secondary">
-                            {employee.employeeNo} · {employee.designation?.designationName}
+                            {employee.employeeNo} · {resolveEmployeeDesignationName(employee)}
                         </Typography>
                     </Box>
                 </Stack>
 
                 <Stack direction="row" spacing={1} flexWrap="wrap">
+                    {!isSimplifiedLifecycle && (
                     <Button
                         variant="outlined"
                         size="small"
@@ -317,8 +491,25 @@ export default function EmployeeProfilePage() {
                         onClick={handleDownloadSummaryPdf}
                         disabled={downloadingSummaryPdf}
                     >
-                        Download Summary PDF
+                        Employment Summary PDF
                     </Button>
+                    )}
+                    {canShowDependentDetails(employee)
+                        && isMarriedStatus(employee.maritalStatus) && (
+                        <Button
+                            variant="outlined"
+                            size="small"
+                            startIcon={
+                                downloadingDependentDetailsPdf
+                                    ? <CircularProgress size={16} color="inherit" />
+                                    : <FileDownloadIcon />
+                            }
+                            onClick={handleDownloadDependentDetailsPdf}
+                            disabled={downloadingDependentDetailsPdf}
+                        >
+                            Dependent Details PDF
+                        </Button>
+                    )}
                     {isActive && (
                         <>
                         <Button
@@ -333,11 +524,11 @@ export default function EmployeeProfilePage() {
                                 variant="outlined"
                                 size="small"
                                 onClick={() => {
-                                    setActiveTab(1);
+                                    setActiveTab(isContract ? 1 : 2);
                                     setOpenQualifications(true);
                                 }}
                             >
-                                Update Qualifications
+                                {qualificationsActionLabel}
                             </Button>
                         )}
                         <Button
@@ -355,6 +546,55 @@ export default function EmployeeProfilePage() {
                                 sx: { minWidth: 240 }
                             }}
                         >
+                            {isTraining && (
+                            <>
+                            <Box sx={{ px: 2, py: 1 }}>
+                                <Typography variant="caption" sx={{ fontWeight: "bold", color: "text.secondary" }}>
+                                    Employment Actions
+                                </Typography>
+                            </Box>
+                            <MenuItem
+                                onClick={() => {
+                                    if (!canAppointTrainingAsPermanent) {
+                                        toast.error(
+                                            getTrainingGraduationBlockReason(employee)
+                                                || "Training graduation requirements are not satisfied"
+                                        );
+                                        setAnchorEl(null);
+                                        return;
+                                    }
+                                    setOpenTrainingAppointment(true);
+                                    setAnchorEl(null);
+                                }}
+                                disabled={!canAppointTrainingAsPermanent}
+                            >
+                                <ListItemIcon sx={{ color: "success.main" }}>✓</ListItemIcon>
+                                <ListItemText>Appoint as Permanent</ListItemText>
+                            </MenuItem>
+                            <Divider />
+                            </>
+                            )}
+                            {employee?.canRevertTrainingGraduation && (
+                            <>
+                            <Box sx={{ px: 2, py: 1 }}>
+                                <Typography variant="caption" sx={{ fontWeight: "bold", color: "text.secondary" }}>
+                                    Training Reversal
+                                </Typography>
+                            </Box>
+                            <MenuItem
+                                onClick={() => {
+                                    setOpenRevertTraining(true);
+                                    setAnchorEl(null);
+                                }}
+                            >
+                                <ListItemIcon sx={{ color: "warning.main" }}>↩</ListItemIcon>
+                                <ListItemText>Revert to Training</ListItemText>
+                            </MenuItem>
+                            <Divider />
+                            </>
+                            )}
+                            {!isSimplifiedLifecycle && (
+                            <>
                             <Box sx={{ px: 2, py: 1 }}>
                                 <Typography variant="caption" sx={{ fontWeight: "bold", color: "text.secondary" }}>
                                     Employment Actions
@@ -423,6 +663,8 @@ export default function EmployeeProfilePage() {
                                 </MenuItem>
                             )}
                             <Divider />
+                            </>
+                            )}
                             <Box sx={{ px: 2, py: 1 }}>
                                 <Typography variant="caption" sx={{ fontWeight: "bold", color: "text.secondary" }}>
                                     System Actions
@@ -447,6 +689,15 @@ export default function EmployeeProfilePage() {
                             </MenuItem>
                             <MenuItem
                                 onClick={() => {
+                                    setOpenVacationOfPost(true);
+                                    setAnchorEl(null);
+                                }}
+                            >
+                                <ListItemIcon sx={{ color: "error.main" }}>✕</ListItemIcon>
+                                <ListItemText>Vacation of Post</ListItemText>
+                            </MenuItem>
+                            <MenuItem
+                                onClick={() => {
                                     setOpenDelete(true);
                                     setAnchorEl(null);
                                 }}
@@ -467,9 +718,14 @@ export default function EmployeeProfilePage() {
                     variant="scrollable"
                     scrollButtons="auto"
                 >
-                    <Tab label="Personal Information" />
-                    <Tab label="Qualifications & Requirements" />
-                    <Tab label="Lifecycle Action History" />
+                    <Tab label="Employee's Information" />
+                    <Tab label="Benefits & Allowances" />
+                    {!isContract && (
+                        <Tab label="Qualifications & Requirements" />
+                    )}
+                    {!isSimplifiedLifecycle && (
+                        <Tab label="Lifecycle Action History" />
+                    )}
                 </Tabs>
             </Box>
 
@@ -481,6 +737,12 @@ export default function EmployeeProfilePage() {
                     threeYearDate={threeYearDate}
                     canMakePermanent={canMakePermanent}
                     onMakePermanent={() => setOpenMakePermanent(true)}
+                />
+            )}
+
+            {activeTab === 1 && (
+                <EmployeeProfileBenefitsTab
+                    employee={employee}
                     onRevokePrivateVehicle={
                         isActive && employee.privateVehicleUsedForGovWork
                             ? () => setOpenRevokePrivateVehicle(true)
@@ -492,10 +754,40 @@ export default function EmployeeProfilePage() {
                             ? () => setOpenRecordVehiclePermit(true)
                             : null
                     }
+                    onEditVehiclePermit={
+                        isActive && (vehiclePermitStatus?.lastCollectedDate
+                            ?? employee.vehiclePermitCollectedDate)
+                            ? () => setOpenEditVehiclePermit(true)
+                            : null
+                    }
+                    onUndoVehiclePermit={
+                        isActive && (vehiclePermitStatus?.lastCollectedDate
+                            ?? employee.vehiclePermitCollectedDate)
+                            ? () => setOpenUndoVehiclePermit(true)
+                            : null
+                    }
+                    salaryIncrementStatus={salaryIncrementStatus}
+                    onRecordSalaryIncrement={
+                        isActive && salaryIncrementStatus?.canRecordNow
+                            ? () => setOpenRecordSalaryIncrement(true)
+                            : null
+                    }
+                    onEditSalaryIncrement={
+                        isActive && (salaryIncrementStatus?.lastDoneDate
+                            ?? employee.salaryIncrementDoneDate)
+                            ? () => setOpenEditSalaryIncrement(true)
+                            : null
+                    }
+                    onUndoSalaryIncrement={
+                        isActive && (salaryIncrementStatus?.lastDoneDate
+                            ?? employee.salaryIncrementDoneDate)
+                            ? () => setOpenUndoSalaryIncrement(true)
+                            : null
+                    }
                 />
             )}
 
-            {activeTab === 1 && (
+            {activeTab === 2 && !isContract && (
                 <EmployeeQualificationsCard
                     employee={employee}
                     embedded
@@ -504,10 +796,11 @@ export default function EmployeeProfilePage() {
                             ? () => setOpenQualifications(true)
                             : null
                     }
+                    qualificationsActionLabel={qualificationsActionLabel}
                 />
             )}
 
-            {activeTab === 2 && (
+            {activeTab === 3 && !isSimplifiedLifecycle && (
                 <EmployeeActionHistoryTable
                     actions={actionHistory}
                     designations={designations}
@@ -519,9 +812,11 @@ export default function EmployeeProfilePage() {
             <TransferOutDialog
                 open={openTransferOut}
                 onClose={() => setOpenTransferOut(false)}
+                employee={employee}
                 employeeName={employee.fullName}
                 currentDepartment={employee.currentDepartment}
                 currentOffice={employee.currentOffice}
+                currentDistrictOfWorking={employee.currentDistrictOfWorking}
                 previousEventDate={previousEventDate}
                 onSubmit={(data) =>
                     handleLifecycle(
@@ -633,6 +928,27 @@ export default function EmployeeProfilePage() {
                 }
             />
 
+            <SimpleLifecycleDialog
+                open={openVacationOfPost}
+                onClose={() => setOpenVacationOfPost(false)}
+                title="Vacation of Post"
+                description="Employee will be marked inactive for absence without notifying Council. Reason is required."
+                severity="error"
+                confirmLabel="Confirm Vacation of Post"
+                confirmColor="error"
+                requireReason
+                previousEventDate={previousEventDate}
+                onSubmit={(data) =>
+                    handleLifecycle(
+                        async () => {
+                            await vacatePostEmployee(employee.id, data);
+                            setOpenVacationOfPost(false);
+                        },
+                        "Vacation of post recorded"
+                    )
+                }
+            />
+
             <NewAppointmentDialog
                 open={openNewAppointment}
                 onClose={() => setOpenNewAppointment(false)}
@@ -648,6 +964,43 @@ export default function EmployeeProfilePage() {
                             setOpenNewAppointment(false);
                         },
                         "New appointment recorded"
+                    )
+                }
+            />
+
+            <TrainingAppointmentDialog
+                open={openTrainingAppointment}
+                onClose={() => setOpenTrainingAppointment(false)}
+                employee={employee}
+                previousEventDate={previousEventDate}
+                canAppoint={canAppointTrainingAsPermanent}
+                onSubmit={(data) =>
+                    handleLifecycle(
+                        async () => {
+                            await graduateTrainingToPermanent(employee.id, data);
+                            setOpenTrainingAppointment(false);
+                        },
+                        "Training employee appointed as permanent"
+                    )
+                }
+            />
+
+            <SimpleLifecycleDialog
+                open={openRevertTraining}
+                onClose={() => setOpenRevertTraining(false)}
+                title="Revert to Training"
+                description="This will undo the training-to-permanent appointment and restore the employee as a training employee. This is only available when no other lifecycle actions were recorded after that appointment."
+                severity="warning"
+                confirmLabel="Revert to Training"
+                confirmColor="warning"
+                hideDateField
+                onSubmit={() =>
+                    handleLifecycle(
+                        async () => {
+                            await revertTrainingGraduation(employee.id);
+                            setOpenRevertTraining(false);
+                        },
+                        "Employee reverted to training status"
                     )
                 }
             />
@@ -716,6 +1069,61 @@ export default function EmployeeProfilePage() {
                 onConfirm={handleRecordVehiclePermit}
                 vehiclePermitStatus={vehiclePermitStatus}
                 saving={recordingVehiclePermit}
+            />
+
+            <RecordVehiclePermitDialog
+                open={openEditVehiclePermit}
+                onClose={() => setOpenEditVehiclePermit(false)}
+                onConfirm={handleEditVehiclePermit}
+                vehiclePermitStatus={vehiclePermitStatus}
+                saving={recordingVehiclePermit}
+                mode="edit"
+            />
+
+            <UndoVehiclePermitDialog
+                open={openUndoVehiclePermit}
+                onClose={() => setOpenUndoVehiclePermit(false)}
+                onConfirm={handleUndoVehiclePermit}
+                lastCollectedDate={
+                    vehiclePermitStatus?.lastCollectedDate
+                    ?? employee.vehiclePermitCollectedDate
+                }
+                saving={undoingVehiclePermit}
+            />
+
+            <RecordSalaryIncrementDialog
+                open={openRecordSalaryIncrement}
+                onClose={() => setOpenRecordSalaryIncrement(false)}
+                onConfirm={handleRecordSalaryIncrement}
+                salaryIncrementStatus={salaryIncrementStatus}
+                employee={employee}
+                saving={recordingSalaryIncrement}
+            />
+
+            <RecordSalaryIncrementDialog
+                open={openEditSalaryIncrement}
+                onClose={() => setOpenEditSalaryIncrement(false)}
+                onConfirm={handleEditSalaryIncrement}
+                salaryIncrementStatus={salaryIncrementStatus}
+                employee={employee}
+                saving={recordingSalaryIncrement}
+                mode="edit"
+            />
+
+            <UndoSalaryIncrementDialog
+                open={openUndoSalaryIncrement}
+                onClose={() => setOpenUndoSalaryIncrement(false)}
+                onConfirm={handleUndoSalaryIncrement}
+                lastDoneDate={
+                    salaryIncrementStatus?.lastDoneDate
+                    ?? employee.salaryIncrementDoneDate
+                }
+                lastDueYear={
+                    salaryIncrementStatus?.lastDueYear
+                    ?? employee.salaryIncrementLastDueYear
+                }
+                salaryIncrementStatus={salaryIncrementStatus}
+                saving={undoingSalaryIncrement}
             />
         </Box>
     );

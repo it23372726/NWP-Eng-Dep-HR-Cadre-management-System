@@ -32,6 +32,7 @@ import {
 import { getDesignations } from "../services/designationService";
 import { getApiErrorMessage } from "../constants/hrms";
 import { formatMonthDayDisplay } from "../utils/monthDayDate";
+import { sortDesignationsForReport } from "../utils/reportSortOrder";
 
 const COLUMNS = [
     { key: "serialNo", label: "S/N", align: "center", width: 60 },
@@ -45,11 +46,6 @@ const COLUMNS = [
     { key: "salaryCode", label: "Salary Code", align: "center", width: 100 },
     { key: "grade", label: "Grade", align: "center", width: 100 },
     { key: "natureOfAppointment", label: "Nature of Appointment", align: "center", width: 150 },
-    { key: "employmentType", label: "Employment Type", align: "center", width: 130 },
-    { key: "permanentStatus", label: "Permanent Status", align: "center", width: 140 },
-    { key: "qualifiedForPermanent", label: "Qualified For Permanent", align: "center", width: 150 },
-    { key: "permanentQualificationDate", label: "Qualification Date", align: "center", width: 120 },
-    { key: "permanentConfirmationDate", label: "Permanent Confirmation Date", align: "center", width: 140 },
     { key: "dateOfFirstAppointment", label: "Date of First Appointment", align: "center", width: 120 },
     { key: "incremantDate", label: "Increment Date", align: "center", width: 120 },
     { key: "enteredDateToAllIslandService", label: "Entered Date to All Island Service", align: "center", width: 120 },
@@ -140,10 +136,7 @@ export default function AllEmployeeDetailsReportPage() {
     const loadDesignations = async () => {
         try {
             const data = await getDesignations();
-            const sorted = [...data].sort((a, b) =>
-                (a.designationName || "").localeCompare(b.designationName || "")
-            );
-            setDesignations(sorted);
+            setDesignations(sortDesignationsForReport(data));
         } catch (error) {
             toast.error(getApiErrorMessage(error));
         }

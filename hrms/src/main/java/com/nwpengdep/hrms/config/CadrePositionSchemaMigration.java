@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.annotation.Order;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -18,6 +19,7 @@ public class CadrePositionSchemaMigration {
     private final JdbcTemplate jdbcTemplate;
 
     @EventListener(ApplicationReadyEvent.class)
+    @Order(1)
     public void migrateCadreConstraints() {
         try {
             migrateCadrePositionsTable();
@@ -39,6 +41,7 @@ public class CadrePositionSchemaMigration {
         dropObsoleteCadreIndexes();
         dropCadreServiceColumnIfPresent();
         ensureDesignationOnlyUnique();
+        ensureDisplayOrderColumn();
     }
 
     private boolean tableExists(String tableName) {
@@ -204,6 +207,27 @@ public class CadrePositionSchemaMigration {
                     UNIQUE (designation_id)
                     """);
             log.info("Added unique constraint uk_cadre_designation");
+        }
+    }
+
+    private void ensureDisplayOrderColumn() {
+        Integer columnCount = jdbcTemplate.queryForObject(
+                """
+                        SELECT COUNT(*)
+                        FROM information_schema.COLUMNS
+                        WHERE TABLE_SCHEMA = DATABASE()
+                          AND TABLE_NAME = 'cadre_positions'
+                          AND COLUMN_NAME = 'display_order'
+                        """,
+                Integer.class
+        );
+
+        if (columnCount != null && columnCount == 0) {
+            jdbcTemplate.execute("""
+                    ALTER TABLE cadre_positions
+                    ADD COLUMN display_order INT NULL
+                    """);
+            log.info("Added display_order column to cadre_positions");
         }
     }
 }

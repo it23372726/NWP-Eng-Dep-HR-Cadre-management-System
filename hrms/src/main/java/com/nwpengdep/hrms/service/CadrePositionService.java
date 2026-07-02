@@ -9,11 +9,19 @@ import com.nwpengdep.hrms.entity.EmployeeStatus;
 import com.nwpengdep.hrms.repository.CadrePositionRepository;
 import com.nwpengdep.hrms.repository.DesignationRepository;
 import com.nwpengdep.hrms.repository.EmployeeRepository;
+import com.nwpengdep.hrms.service.report.ReportSortOrder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -35,6 +43,7 @@ public class CadrePositionService {
         CadrePosition cadre = CadrePosition.builder()
                 .designation(designation)
                 .approvedCount(request.getApprovedCount())
+                .displayOrder(nextDisplayOrder())
                 .build();
 
         return cadreRepository.save(cadre);
@@ -61,7 +70,60 @@ public class CadrePositionService {
     }
 
     public List<CadrePosition> getAllCadres() {
-        return cadreRepository.findAll();
+        List<CadrePosition> cadres = new ArrayList<>(cadreRepository.findAll());
+        sortCadresForDisplay(cadres);
+        return cadres;
+    }
+
+    public List<Designation> getDesignationsInDisplayOrder() {
+        List<CadrePosition> cadres = new ArrayList<>(cadreRepository.findAll());
+        sortCadresForDisplay(cadres);
+
+        Set<Long> cadreDesignationIds = new HashSet<>();
+        List<Designation> orderedDesignations = new ArrayList<>();
+
+        for (CadrePosition cadre : cadres) {
+            Designation designation = cadre.getDesignation();
+            orderedDesignations.add(designation);
+            cadreDesignationIds.add(designation.getId());
+        }
+
+        List<Designation> remainingDesignations = designationRepository.findAll()
+                .stream()
+                .filter(designation -> !cadreDesignationIds.contains(designation.getId()))
+                .collect(Collectors.toCollection(ArrayList::new));
+        remainingDesignations.sort(ReportSortOrder.designationComparator());
+        orderedDesignations.addAll(remainingDesignations);
+
+        return orderedDesignations;
+    }
+
+    @Transactional
+    public void reorderCadres(List<Long> orderedCadreIds) {
+        List<CadrePosition> cadres = cadreRepository.findAll();
+        Set<Long> existingIds = cadres.stream()
+                .map(CadrePosition::getId)
+                .collect(Collectors.toSet());
+        Set<Long> providedIds = new HashSet<>(orderedCadreIds);
+
+        if (!existingIds.equals(providedIds)) {
+            throw new RuntimeException(
+                    "Ordered list must include every cadre position exactly once"
+            );
+        }
+
+        Map<Long, CadrePosition> cadresById = cadres.stream()
+                .collect(Collectors.toMap(CadrePosition::getId, cadre -> cadre));
+
+        for (int index = 0; index < orderedCadreIds.size(); index++) {
+            CadrePosition cadre = cadresById.get(orderedCadreIds.get(index));
+            if (cadre == null) {
+                throw new RuntimeException("Cadre not found");
+            }
+            cadre.setDisplayOrder(index + 1);
+        }
+
+        cadreRepository.saveAll(cadres);
     }
 
     public void deleteCadre(Long id) {
@@ -69,7 +131,8 @@ public class CadrePositionService {
     }
 
     public List<VacancyReportResponse> getVacancyReport() {
-        List<CadrePosition> cadres = cadreRepository.findAll();
+        List<CadrePosition> cadres = new ArrayList<>(cadreRepository.findAll());
+        sortCadresForDisplay(cadres);
         List<VacancyReportResponse> report = new ArrayList<>();
 
         long totalApproved = 0;
@@ -79,11 +142,12 @@ public class CadrePositionService {
 
         for (CadrePosition cadre : cadres) {
             Designation designation = cadre.getDesignation();
-            long currentCount = employeeRepository.countByDesignationIdAndStatusAndCurrentDepartment(
-                    designation.getId(),
-                    EmployeeStatus.ACTIVE,
-                    DepartmentConstants.NWP_ENGINEERING
-            );
+            long currentCount = employeeRepository
+                    .countCadreEligibleByDesignationIdAndStatusAndCurrentDepartment(
+                            designation.getId(),
+                            EmployeeStatus.ACTIVE,
+                            DepartmentConstants.NWP_ENGINEERING
+                    );
             long approved = cadre.getApprovedCount() != null
                     ? cadre.getApprovedCount().longValue()
                     : 0L;
@@ -133,6 +197,27 @@ public class CadrePositionService {
         );
 
         return report;
+    }
+
+    public void sortCadresForDisplay(List<CadrePosition> cadres) {
+        cadres.sort(Comparator
+                .comparing(
+                        CadrePosition::getDisplayOrder,
+                        Comparator.nullsLast(Integer::compareTo)
+                )
+                .thenComparing(
+                        CadrePosition::getDesignation,
+                        ReportSortOrder.designationComparator()
+                ));
+    }
+
+    private int nextDisplayOrder() {
+        return cadreRepository.findAll()
+                .stream()
+                .map(CadrePosition::getDisplayOrder)
+                .filter(Objects::nonNull)
+                .max(Integer::compareTo)
+                .orElse(0) + 1;
     }
 
     private Designation resolveDesignation(Long designationId) {

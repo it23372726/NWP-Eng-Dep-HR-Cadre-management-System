@@ -32,6 +32,7 @@ const getActionColor = (action) => {
         PERMANENT_CONFIRMATION: "secondary",
         RETIREMENT_OR_RESIGNATION: "error",
         DISMISSAL: "error",
+        VACATION_OF_POST: "error",
         DEATH: "error"
     };
     return map[action] || "default";

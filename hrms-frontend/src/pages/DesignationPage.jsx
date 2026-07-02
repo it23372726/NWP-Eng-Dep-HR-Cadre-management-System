@@ -257,7 +257,7 @@ export default function DesignationPage() {
                                 <TableCell>Designation</TableCell>
                                 <TableCell>Service</TableCell>
                                 <TableCell>Service Level</TableCell>
-                                <TableCell>Allowed Grades</TableCell>
+                                <TableCell>Eligible Grades</TableCell>
                                 <TableCell>Salary Code</TableCell>
                                 <TableCell align="right">Actions</TableCell>
                             </TableRow>

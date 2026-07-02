@@ -39,6 +39,7 @@ public class EmployeeQualificationSchemaMigration {
             backfillDesignationRequirementCompletions();
             addGradeAchievedDateColumns();
             removeLegacyRequirementRecords();
+            ensureDesignationCreatedAtColumn();
         } catch (Exception e) {
             log.warn(
                     "Employee qualification schema migration skipped: {}",
@@ -675,6 +676,16 @@ public class EmployeeQualificationSchemaMigration {
                 "grade1_achieved_date",
                 "DATE NULL"
         );
+        addColumnIfMissing(
+                "employee_career_progression",
+                "supra_achieved_date",
+                "DATE NULL"
+        );
+        addColumnIfMissing(
+                "employee_career_progression",
+                "special_achieved_date",
+                "DATE NULL"
+        );
 
         jdbcTemplate.update("""
                 UPDATE employee_career_progression
@@ -710,6 +721,34 @@ public class EmployeeQualificationSchemaMigration {
                     ) latest ON latest.employee_id = cp.employee_id
                     SET cp.grade1_achieved_date = latest.achieved_date
                     WHERE cp.grade1_achieved_date IS NULL
+                    """);
+
+            jdbcTemplate.update("""
+                    UPDATE employee_career_progression cp
+                    JOIN (
+                        SELECT employee_id, MAX(action_date) AS achieved_date
+                        FROM employee_actions
+                        WHERE (deleted IS NULL OR deleted = 0)
+                          AND old_grade = 'I'
+                          AND new_grade = 'SUPRA'
+                        GROUP BY employee_id
+                    ) latest ON latest.employee_id = cp.employee_id
+                    SET cp.supra_achieved_date = latest.achieved_date
+                    WHERE cp.supra_achieved_date IS NULL
+                    """);
+
+            jdbcTemplate.update("""
+                    UPDATE employee_career_progression cp
+                    JOIN (
+                        SELECT employee_id, MAX(action_date) AS achieved_date
+                        FROM employee_actions
+                        WHERE (deleted IS NULL OR deleted = 0)
+                          AND old_grade = 'I'
+                          AND new_grade = 'SPECIAL'
+                        GROUP BY employee_id
+                    ) latest ON latest.employee_id = cp.employee_id
+                    SET cp.special_achieved_date = latest.achieved_date
+                    WHERE cp.special_achieved_date IS NULL
                     """);
         }
 
@@ -790,5 +829,32 @@ public class EmployeeQualificationSchemaMigration {
                 requirementType,
                 requirementType
         );
+    }
+
+    private void ensureDesignationCreatedAtColumn() {
+        if (!tableExists("designations")) {
+            return;
+        }
+
+        addColumnIfMissing(
+                "designations",
+                "created_at",
+                "DATETIME NULL"
+        );
+
+        jdbcTemplate.update("""
+                UPDATE designations
+                SET created_at = DATE_ADD(
+                    TIMESTAMP('1970-01-01 00:00:00'),
+                    INTERVAL id SECOND
+                )
+                WHERE created_at IS NULL
+                """);
+
+        jdbcTemplate.execute("""
+                ALTER TABLE designations
+                MODIFY COLUMN created_at DATETIME NOT NULL
+                """);
+        log.info("Ensured designations.created_at column");
     }
 }

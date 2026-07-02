@@ -7,10 +7,14 @@ import {
 } from "../constants/dashboardTheme";
 import { buildEmployeeListUrl } from "../utils/dashboardNavigation";
 
-const STATUS_TO_FILTER = {
+const CATEGORY_TO_FILTER = {
     Probation: "PROBATION",
     "Qualified for Permanent": "QUALIFIED_FOR_PERMANENT",
-    "Confirmed Permanent": "PERMANENT"
+    "Confirmed Permanent": "PERMANENT",
+    Acting: "ACTING",
+    Contract: "CONTRACT",
+    Casual: "CASUAL",
+    Substitute: "SUBSTITUTE"
 };
 
 const CustomTooltip = ({ active, payload, totalEmployees }) => {
@@ -62,8 +66,8 @@ export default function PermanentStatusChart({ data, loading }) {
     if (!data || data.length === 0) {
         return (
             <Paper sx={{ p: 3, borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ mb: 2 }}>Permanent Status Overview</Typography>
-                <Alert severity="info">No permanent status data available</Alert>
+                <Typography variant="h6" sx={{ mb: 2 }}>Workforce by Employment Type</Typography>
+                <Alert severity="info">No workforce type data available</Alert>
             </Paper>
         );
     }
@@ -76,7 +80,7 @@ export default function PermanentStatusChart({ data, loading }) {
     }));
 
     const handleSliceClick = (entry) => {
-        const filter = STATUS_TO_FILTER[entry.category];
+        const filter = CATEGORY_TO_FILTER[entry.category];
         if (filter) {
             navigate(buildEmployeeListUrl({ permanentStatus: filter }));
         }
@@ -85,7 +89,7 @@ export default function PermanentStatusChart({ data, loading }) {
     return (
         <Paper sx={{ p: 3, borderRadius: 2, height: "100%" }}>
             <Typography variant="h6" sx={{ mb: 3, fontWeight: 700 }}>
-                Permanent Status Overview
+                Workforce by Employment Type
             </Typography>
             <Box sx={{ width: "100%", height: CHART_HEIGHT }}>
                 <ResponsiveContainer width="100%" height="100%">

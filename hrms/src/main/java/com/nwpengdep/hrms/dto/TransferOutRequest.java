@@ -22,5 +22,12 @@ public class TransferOutRequest {
 
     private District toDistrict;
 
+    private Long newDesignationId;
+
+    private String recordedDesignationName;
+
+    @NotNull(message = "Service level is required")
+    private Long serviceLevelId;
+
     private String remarks;
 }

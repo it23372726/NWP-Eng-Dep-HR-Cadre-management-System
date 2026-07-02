@@ -11,28 +11,76 @@ import PeopleAltIcon from "@mui/icons-material/PeopleAlt";
 import SearchIcon from "@mui/icons-material/Search";
 import ErrorIcon from "@mui/icons-material/Error";
 
-export function EmployeeListSkeleton({ count = 6 }) {
+function ListItemSkeleton() {
+    return (
+        <Paper
+            variant="outlined"
+            sx={{
+                p: 2,
+                display: "flex",
+                alignItems: "center",
+                gap: 2,
+                borderRadius: 2
+            }}
+        >
+            <Skeleton variant="circular" width={52} height={52} />
+            <Box sx={{ flex: 1 }}>
+                <Skeleton width="35%" height={28} sx={{ mb: 0.75 }} />
+                <Skeleton width="55%" height={20} sx={{ mb: 0.75 }} />
+                <Skeleton width="70%" height={20} />
+            </Box>
+        </Paper>
+    );
+}
+
+function CardItemSkeleton() {
+    return (
+        <Paper variant="outlined" sx={{ borderRadius: 2, overflow: "hidden" }}>
+            <Skeleton variant="rectangular" height={4} />
+            <Box sx={{ p: 2 }}>
+                <Stack direction="row" spacing={1.5} sx={{ mb: 2 }}>
+                    <Skeleton variant="circular" width={56} height={56} />
+                    <Box sx={{ flex: 1 }}>
+                        <Skeleton width="70%" height={24} sx={{ mb: 0.5 }} />
+                        <Skeleton width="50%" height={16} />
+                    </Box>
+                </Stack>
+                <Skeleton width="90%" height={18} sx={{ mb: 1 }} />
+                <Skeleton width="75%" height={18} sx={{ mb: 1.5 }} />
+                <Stack direction="row" spacing={0.75}>
+                    <Skeleton variant="rounded" width={72} height={24} />
+                    <Skeleton variant="rounded" width={88} height={24} />
+                </Stack>
+            </Box>
+        </Paper>
+    );
+}
+
+export function EmployeeListSkeleton({ count = 6, variant = "list" }) {
+    if (variant === "grid") {
+        return (
+            <Box
+                sx={{
+                    display: "grid",
+                    gridTemplateColumns: {
+                        xs: "1fr",
+                        sm: "repeat(2, 1fr)",
+                        lg: "repeat(3, 1fr)"
+                    },
+                    gap: 2
+                }}
+            >
+                {Array.from({ length: count }, (_, index) => (
+                    <CardItemSkeleton key={index} />
+                ))}
+            </Box>
+        );
+    }
+
     return (
         <Stack spacing={1.5}>
             {Array.from({ length: count }, (_, index) => (
-                <Paper
-                    key={index}
-                    variant="outlined"
-                    sx={{
-                        p: 2,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 2,
-                        borderRadius: 2
-                    }}
-                >
-                    <Skeleton variant="circular" width={52} height={52} />
-                    <Box sx={{ flex: 1 }}>
-                        <Skeleton width="35%" height={28} sx={{ mb: 0.75 }} />
-                        <Skeleton width="55%" height={20} sx={{ mb: 0.75 }} />
-                        <Skeleton width="70%" height={20} />
-                    </Box>
-                </Paper>
+                <ListItemSkeleton key={index} />
             ))}
         </Stack>
     );

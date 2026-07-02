@@ -10,7 +10,6 @@ import {
     TableContainer,
     TableHead,
     TableRow,
-    TextField,
     Typography,
     CircularProgress
 } from "@mui/material";
@@ -23,6 +22,7 @@ import {
     downloadCadreReportPdf,
     triggerDownload
 } from "../services/cadreReportService";
+import DateInput from "../components/DateInput";
 import { getApiErrorMessage } from "../constants/hrms";
 
 const formatDate = (date) => date.toISOString().split("T")[0];
@@ -303,62 +303,63 @@ export default function CadreReportPage() {
 
             <Paper sx={{ p: 2, mb: 3 }} className="no-print">
                 <Stack
-                    direction={{ xs: "column", md: "row" }}
+                    direction={{ xs: "column", sm: "row" }}
                     spacing={2}
                     sx={{
-                        alignItems: "center",
-                        flexWrap: "wrap",
-                        gap: 1
+                        alignItems: { xs: "stretch", sm: "flex-end" },
+                        flexWrap: "wrap"
                     }}
                 >
-                    <TextField
+                    <DateInput
                         label="Start Date"
-                        type="date"
-                        size="small"
                         value={startDate}
                         onChange={(e) => setStartDate(e.target.value)}
-                        slotProps={{
-                            inputLabel: { shrink: true }
-                        }}
+                        fullWidth={false}
+                        sx={{ width: { xs: "100%", sm: 168 } }}
                     />
-                    <TextField
+                    <DateInput
                         label="End Date"
-                        type="date"
-                        size="small"
                         value={endDate}
                         onChange={(e) => setEndDate(e.target.value)}
-                        slotProps={{
-                            inputLabel: { shrink: true }
-                        }}
+                        fullWidth={false}
+                        sx={{ width: { xs: "100%", sm: 168 } }}
                     />
-                    <Button
-                        variant="contained"
-                        onClick={handleGenerate}
-                        disabled={loading}
+                    <Stack
+                        direction="row"
+                        spacing={1}
+                        flexWrap="wrap"
+                        useFlexGap
+                        sx={{ width: { xs: "100%", sm: "auto" } }}
                     >
-                        {loading ? "Generating…" : "Generate Report"}
-                    </Button>
-                    <Button
-                        variant="outlined"
-                        onClick={handleExportExcel}
-                        disabled={!report || loading}
-                    >
-                        Export Excel
-                    </Button>
-                    <Button
-                        variant="outlined"
-                        onClick={handleExportPdf}
-                        disabled={!report || loading}
-                    >
-                        Export PDF
-                    </Button>
-                    <Button
-                        variant="text"
-                        onClick={() => window.print()}
-                        disabled={!report}
-                    >
-                        Print
-                    </Button>
+                        <Button
+                            variant="contained"
+                            onClick={handleGenerate}
+                            disabled={loading}
+                        >
+                            {loading ? "Generating…" : "Generate Report"}
+                        </Button>
+                        <Button
+                            variant="outlined"
+                            onClick={handleExportExcel}
+                            disabled={!report || loading}
+                        >
+                            Export Excel
+                        </Button>
+                        <Button
+                            variant="outlined"
+                            onClick={handleExportPdf}
+                            disabled={!report || loading}
+                        >
+                            Export PDF
+                        </Button>
+                        <Button
+                            variant="text"
+                            onClick={() => window.print()}
+                            disabled={!report}
+                        >
+                            Print
+                        </Button>
+                    </Stack>
                 </Stack>
             </Paper>
 

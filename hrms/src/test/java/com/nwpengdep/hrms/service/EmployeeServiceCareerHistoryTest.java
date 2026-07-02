@@ -40,11 +40,13 @@ import com.nwpengdep.hrms.repository.DesignationRepository;
 import com.nwpengdep.hrms.repository.EmployeeActionRepository;
 import com.nwpengdep.hrms.repository.EmployeePostingRepository;
 import com.nwpengdep.hrms.repository.EmployeeRepository;
+import com.nwpengdep.hrms.repository.ServiceTypeRepository;
 
 class EmployeeServiceCareerHistoryTest {
 
     private EmployeeRepository employeeRepository;
     private DesignationRepository designationRepository;
+    private ServiceTypeRepository serviceTypeRepository;
     private EmployeeActionRepository employeeActionRepository;
     private EmployeePostingRepository postingRepository;
     private EmployeeActionService employeeActionService;
@@ -54,11 +56,13 @@ class EmployeeServiceCareerHistoryTest {
     private Designation engineer;
     private Designation seniorEngineer;
     private ServiceLevel serviceLevel;
+    private ServiceType service;
 
     @BeforeEach
     void setUp() {
         employeeRepository = mock(EmployeeRepository.class);
         designationRepository = mock(DesignationRepository.class);
+        serviceTypeRepository = mock(ServiceTypeRepository.class);
         employeeActionRepository = mock(EmployeeActionRepository.class);
         postingRepository = mock(EmployeePostingRepository.class);
         ServiceLevelService serviceLevelService = mock(ServiceLevelService.class);
@@ -72,6 +76,7 @@ class EmployeeServiceCareerHistoryTest {
         employeeService = new EmployeeService(
                 employeeRepository,
                 designationRepository,
+                serviceTypeRepository,
                 employeeActionRepository,
                 postingRepository,
                 serviceLevelService,
@@ -81,15 +86,27 @@ class EmployeeServiceCareerHistoryTest {
                 requirementSyncService,
                 new CareerHistoryValidator(
                         designationRepository,
+                        serviceTypeRepository,
                         new DesignationAssignmentValidator(),
                         careerProgressionService,
                         mock(OfficeService.class)
                 ),
-                mock(OfficeService.class)
+                mock(OfficeService.class),
+                new EmployeeServiceResolver(),
+                mock(TrainingGraduationService.class)
         );
 
         ServiceType service = new ServiceType();
         service.setId(1L);
+        service.setServiceCode("SLEgS");
+        service.setAllowedGrades(EnumSet.of(
+                Grade.III,
+                Grade.II,
+                Grade.I,
+                Grade.SUPRA,
+                Grade.SPECIAL
+        ));
+        this.service = service;
 
         engineer = new Designation();
         engineer.setId(1L);
@@ -125,6 +142,8 @@ class EmployeeServiceCareerHistoryTest {
                 .thenReturn(Optional.of(engineer));
         lenient().when(designationRepository.findById(2L))
                 .thenReturn(Optional.of(seniorEngineer));
+        lenient().when(serviceTypeRepository.findById(1L))
+                .thenReturn(Optional.of(service));
         lenient().when(serviceLevelService.resolve(10L))
                 .thenReturn(serviceLevel);
         lenient().when(careerProgressionService.ensureCareerProgression(any()))
@@ -187,6 +206,7 @@ class EmployeeServiceCareerHistoryTest {
                 isNull(),
                 eq(engineer),
                 isNull(),
+                isNull(),
                 eq(Grade.III),
                 isNull(),
                 isNull(),
@@ -208,10 +228,11 @@ class EmployeeServiceCareerHistoryTest {
         );
         order.verify(employeeActionService).recordActionWithGrades(
                 any(Employee.class),
-                eq(EmployeeActionType.PROMOTION),
+                eq(EmployeeActionType.ASSIGNMENT_GRADE_UPDATE),
                 eq(LocalDate.parse("2020-01-01")),
                 eq(engineer),
-                eq(seniorEngineer),
+                eq(engineer),
+                isNull(),
                 eq(Grade.III),
                 eq(Grade.II),
                 isNull(),
@@ -220,7 +241,38 @@ class EmployeeServiceCareerHistoryTest {
                 isNull(),
                 any()
         );
+        order.verify(employeeActionService).recordActionWithGrades(
+                any(Employee.class),
+                eq(EmployeeActionType.PROMOTION),
+                eq(LocalDate.parse("2020-01-01")),
+                eq(engineer),
+                eq(seniorEngineer),
+                isNull(),
+                eq(Grade.II),
+                eq(Grade.II),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                any()
+        );
         order.verify(employeeActionService).recalculateEmployeeState(1L);
+    }
+
+    @Test
+    void createsEmployeeWithCustomDesignationHistory() {
+        EmployeeRequest request = baseRequest();
+        CareerHistoryEventRequest first =
+                appointment("1990-01-01", null, 10L);
+        first.setRecordedDesignationName("Historical Assistant Engineer");
+        first.setServiceId(1L);
+        request.setCareerHistory(List.of(first));
+
+        Employee result = employeeService.createEmployee(request);
+
+        assertEquals(null, result.getDesignation());
+        assertEquals("Historical Assistant Engineer", result.getRecordedDesignationName());
+        assertEquals(service, result.getService());
     }
 
     @Test
@@ -264,6 +316,7 @@ class EmployeeServiceCareerHistoryTest {
                 eq(LocalDate.parse("2015-01-01")),
                 isNull(),
                 eq(engineer),
+                isNull(),
                 isNull(),
                 eq(Grade.III),
                 isNull(),
@@ -333,6 +386,8 @@ class EmployeeServiceCareerHistoryTest {
         request.setEnteredDateToNWPCouncil(LocalDate.parse("2015-01-01"));
         request.setPermanentAddress("123 Main Street");
         request.setContactNo("0712345678");
+        request.setMaritalStatus("Single");
+        request.setWidowsOrphansPensionNo("WOP-001");
         request.setServiceLevelId(10L);
         request.setEmploymentType(EmploymentType.PERMANENT);
         return request;
@@ -355,6 +410,8 @@ class EmployeeServiceCareerHistoryTest {
         request.setEnteredDateToNWPCouncil(LocalDate.parse("2015-01-01"));
         request.setPermanentAddress("123 Main Street");
         request.setContactNo("0712345678");
+        request.setMaritalStatus("Single");
+        request.setWidowsOrphansPensionNo("WOP-001");
         request.setServiceLevelId(10L);
         request.setEmploymentType(EmploymentType.PERMANENT);
         return request;

@@ -47,11 +47,12 @@ class EmployeeSummaryReportServiceTest {
                 .nic("123456789V")
                 .dateOfBirth(LocalDate.of(1970, 4, 15))
                 .dateOfFirstAppointment(LocalDate.of(1995, 1, 1))
-                .incremantDate("07-15")
                 .enteredDateToNWPCouncil(LocalDate.of(2005, 3, 1))
                 .currentWorkingPlace("NWP Engineering Dept — Head Office")
                 .designation(designation)
                 .build();
+        employee.setIncremantDate("07-15");
+        employee.setWidowsOrphansPensionNo("WOP-12345");
 
         when(employeeRepository.findById(10L)).thenReturn(Optional.of(employee));
         when(workplaceHistoryService.buildHistory(any(Employee.class)))
@@ -68,6 +69,7 @@ class EmployeeSummaryReportServiceTest {
         assertEquals("Engineer", report.getDesignation());
         assertEquals("SC-01", report.getSalaryCode());
         assertEquals("15 Jul", report.getIncremantDate());
+        assertEquals("WOP-12345", report.getWidowsOrphansPensionNo());
         assertEquals(LocalDate.of(2025, 4, 15), report.getRetirementDateAt55());
         assertEquals(LocalDate.of(2030, 4, 15), report.getRetirementDateAt60());
         assertNotNull(report.getGeneratedAt());

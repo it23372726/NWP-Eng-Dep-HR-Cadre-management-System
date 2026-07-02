@@ -50,11 +50,6 @@ public class AllEmployeeDetailsReportExportService {
             "Salary Code",
             "Grade",
             "Nature of Appointment",
-            "Employment Type",
-            "Permanent Status",
-            "Qualified For Permanent",
-            "Qualification Date",
-            "Permanent Confirmation Date",
             "Date of First Appointment",
             "Incremant Date",
             "Entered Date to All Island Service",
@@ -230,11 +225,6 @@ public class AllEmployeeDetailsReportExportService {
         createTextCell(excelRow, col++, nvl(row.getSalaryCode()), styles.dataText);
         createTextCell(excelRow, col++, nvl(row.getGrade()), styles.dataText);
         createTextCell(excelRow, col++, nvl(row.getNatureOfAppointment()), styles.dataText);
-        createTextCell(excelRow, col++, nvl(row.getEmploymentType()), styles.dataText);
-        createTextCell(excelRow, col++, nvl(row.getPermanentStatus()), styles.dataText);
-        createTextCell(excelRow, col++, nvl(row.getQualifiedForPermanent()), styles.dataText);
-        createTextCell(excelRow, col++, formatDate(row.getPermanentQualificationDate()), styles.dataText);
-        createTextCell(excelRow, col++, formatDate(row.getPermanentConfirmationDate()), styles.dataText);
         createTextCell(excelRow, col++, formatDate(row.getDateOfFirstAppointment()), styles.dataText);
         createTextCell(excelRow, col++, nvl(row.getIncremantDate()), styles.dataText);
         createTextCell(excelRow, col++, formatDate(row.getEnteredDateToAllIslandService()), styles.dataText);
@@ -267,7 +257,7 @@ public class AllEmployeeDetailsReportExportService {
     private void configureColumnWidths(Sheet sheet) {
         int[] widths = {
                 1600, 9000, 6000, 3000, 3000, 2000, 3000, 6000,
-                2500, 2500, 4000, 3500, 4500, 4500, 4000, 4500, 4000, 2500, 4000, 4000, 6000, 3500,
+                2500, 2500, 4000, 4000, 2500, 4000, 4000, 6000, 3500,
                 4000, 4000, 8000, 3000, 3000
         };
         for (int i = 0; i < widths.length; i++) {
@@ -434,11 +424,6 @@ public class AllEmployeeDetailsReportExportService {
         table.addCell(cell(nvl(row.getSalaryCode()), font));
         table.addCell(cell(nvl(row.getGrade()), font));
         table.addCell(cell(nvl(row.getNatureOfAppointment()), font));
-        table.addCell(cell(nvl(row.getEmploymentType()), font));
-        table.addCell(cell(nvl(row.getPermanentStatus()), font));
-        table.addCell(cell(nvl(row.getQualifiedForPermanent()), font));
-        table.addCell(cell(formatDate(row.getPermanentQualificationDate()), font));
-        table.addCell(cell(formatDate(row.getPermanentConfirmationDate()), font));
         table.addCell(cell(formatDate(row.getDateOfFirstAppointment()), font));
         table.addCell(cell(nvl(row.getIncremantDate()), font));
         table.addCell(cell(formatDate(row.getEnteredDateToAllIslandService()), font));

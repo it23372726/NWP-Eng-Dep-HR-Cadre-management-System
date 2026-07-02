@@ -10,6 +10,7 @@ import {
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import { createFormFieldProps, dialogActionsSx } from "../../utils/formLayout";
+import DateInput from "../DateInput";
 import { timelineMinDateHelperText } from "../../utils/timelineDates";
 
 export default function SimpleLifecycleDialog({
@@ -22,7 +23,8 @@ export default function SimpleLifecycleDialog({
     confirmLabel,
     confirmColor = "primary",
     requireReason = false,
-    previousEventDate
+    previousEventDate,
+    hideDateField = false
 }) {
     const [form, setForm] = useState({
         actionDate: "",
@@ -40,7 +42,7 @@ export default function SimpleLifecycleDialog({
         setForm({ ...form, [e.target.name]: e.target.value });
     };
 
-    const { fieldProps, dateFieldProps } = createFormFieldProps(handleChange);
+    const { fieldProps } = createFormFieldProps(handleChange);
 
     const dateBeforeMinimum = Boolean(
         previousEventDate
@@ -50,7 +52,7 @@ export default function SimpleLifecycleDialog({
 
     const submit = () => {
         const payload = {
-            actionDate: form.actionDate,
+            actionDate: hideDateField ? null : form.actionDate,
             remarks: form.remarks?.trim() || null
         };
         if (requireReason) {
@@ -59,7 +61,7 @@ export default function SimpleLifecycleDialog({
         onSubmit(payload);
     };
 
-    const valid = form.actionDate
+    const valid = (hideDateField || form.actionDate)
         && (!requireReason || form.reason.trim())
         && !dateBeforeMinimum;
 
@@ -81,15 +83,15 @@ export default function SimpleLifecycleDialog({
                     </Alert>
                 )}
                 <Grid container spacing={2}>
+                    {!hideDateField && (
                     <Grid size={{ xs: 12 }}>
-                        <TextField
-                            {...dateFieldProps}
+                        <DateInput
+                            {...fieldProps}
                             label="Action Date"
                             name="actionDate"
                             value={form.actionDate}
                             required
                             slotProps={{
-                                ...dateFieldProps.slotProps,
                                 htmlInput: previousEventDate
                                     ? { min: previousEventDate }
                                     : undefined
@@ -105,6 +107,7 @@ export default function SimpleLifecycleDialog({
                             }
                         />
                     </Grid>
+                    )}
                     {requireReason && (
                         <Grid size={{ xs: 12 }}>
                             <TextField

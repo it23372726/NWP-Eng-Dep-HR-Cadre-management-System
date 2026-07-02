@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 public class EmployeeActionSchemaMigration {
 
     private static final String OFFICE_CHANGE = "OFFICE_CHANGE";
+    private static final String VACATION_OF_POST = "VACATION_OF_POST";
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -58,7 +59,8 @@ public class EmployeeActionSchemaMigration {
             return;
         }
 
-        if (columnType.contains("'" + OFFICE_CHANGE + "'")) {
+        if (columnType.contains("'" + OFFICE_CHANGE + "'")
+                && columnType.contains("'" + VACATION_OF_POST + "'")) {
             return;
         }
 
@@ -74,10 +76,11 @@ public class EmployeeActionSchemaMigration {
                     'RETIREMENT_OR_RESIGNATION',
                     'DEATH',
                     'DISMISSAL',
+                    'VACATION_OF_POST',
                     'OFFICE_CHANGE'
                 ) NOT NULL
                 """);
-        log.info("Ensured OFFICE_CHANGE exists in employee_actions.action_type enum");
+        log.info("Ensured employee_actions.action_type enum is up to date");
     }
 
     private void ensureDepartmentOfficeColumns() {

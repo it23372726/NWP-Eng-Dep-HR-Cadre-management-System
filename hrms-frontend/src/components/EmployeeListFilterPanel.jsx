@@ -1,11 +1,12 @@
 import {
     Box,
+    Collapse,
+    IconButton,
     Paper,
     TextField,
     MenuItem,
     Stack,
     Typography,
-    IconButton,
     InputAdornment,
     Chip,
     Button
@@ -13,13 +14,17 @@ import {
 import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
 import FilterListOffIcon from "@mui/icons-material/FilterListOff";
+import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import FilterListIcon from "@mui/icons-material/FilterList";
 import {
-    PERMANENT_STATUS_OPTIONS,
+    EMPLOYEE_TYPE_FILTER_OPTIONS,
     GRADE_PROMOTION_FILTER_OPTIONS,
     RETIREMENT_FILTER_OPTIONS,
     DISTRICT_FILTER_OPTIONS,
     QUALIFICATION_FILTER_OPTIONS
 } from "../constants/hrms";
+import { PRIVATE_VEHICLE_FILTER_OPTIONS } from "../utils/privateVehicle";
 import { getActiveFilterLabels } from "../utils/employeeListFilters";
 
 const filterFieldSx = {
@@ -33,7 +38,10 @@ export default function EmployeeListFilterPanel({
     onClearFilters,
     onClearFilterKey,
     filtersActive,
-    resultSummary
+    resultSummary,
+    expanded = true,
+    onToggleExpanded,
+    showDistrictFilter = true
 }) {
     const activeFilterLabels = getActiveFilterLabels(filterState);
 
@@ -41,19 +49,72 @@ export default function EmployeeListFilterPanel({
         <Paper
             variant="outlined"
             sx={{
-                p: 2.5,
                 mb: 2,
                 borderRadius: 2,
-                bgcolor: "background.paper"
+                bgcolor: "background.paper",
+                overflow: "hidden"
             }}
         >
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
-                Search & Filters
-            </Typography>
+            <Stack
+                direction="row"
+                alignItems="center"
+                sx={{
+                    px: 2.5,
+                    py: 1.5,
+                    gap: 1.5,
+                    bgcolor: filtersActive ? "primary.50" : "grey.50",
+                    borderBottom: expanded ? "1px solid" : "none",
+                    borderColor: "divider"
+                }}
+            >
+                <FilterListIcon
+                    sx={{ color: "primary.main", fontSize: 20, flexShrink: 0 }}
+                />
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }} noWrap>
+                        Search & Filters
+                    </Typography>
+                    {!expanded && (
+                        <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{
+                                display: "block",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap"
+                            }}
+                        >
+                            {resultSummary}
+                        </Typography>
+                    )}
+                </Box>
+                {filtersActive && (
+                    <Chip
+                        label={`${activeFilterLabels.length} active`}
+                        size="small"
+                        color="primary"
+                        variant="outlined"
+                        sx={{ flexShrink: 0, display: { xs: "none", sm: "inline-flex" } }}
+                    />
+                )}
+                {onToggleExpanded && (
+                    <IconButton
+                        size="small"
+                        onClick={onToggleExpanded}
+                        aria-label={expanded ? "Collapse filters" : "Expand filters"}
+                        sx={{ flexShrink: 0, ml: "auto" }}
+                    >
+                        {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                    </IconButton>
+                )}
+            </Stack>
 
+            <Collapse in={expanded}>
+                <Box sx={{ p: 2.5 }}>
             <TextField
                 label="Search employees"
-                placeholder="Name, S/N, NIC, designation, service level, contact..."
+                placeholder="Name, S/N, NIC, designation, service code, service level, contact..."
                 value={filterState.searchTerm}
                 onChange={(e) => onFilterChange({ searchTerm: e.target.value })}
                 size="small"
@@ -90,7 +151,7 @@ export default function EmployeeListFilterPanel({
                 }}
             >
                 <TextField
-                    label="Permanent status"
+                    label="Employee type"
                     select
                     size="small"
                     value={filterState.permanentStatusFilter}
@@ -99,7 +160,7 @@ export default function EmployeeListFilterPanel({
                     })}
                     sx={filterFieldSx}
                 >
-                    {PERMANENT_STATUS_OPTIONS.map((option) => (
+                    {EMPLOYEE_TYPE_FILTER_OPTIONS.map((option) => (
                         <MenuItem key={option.value} value={option.value}>
                             {option.label}
                         </MenuItem>
@@ -140,6 +201,7 @@ export default function EmployeeListFilterPanel({
                     ))}
                 </TextField>
 
+                {showDistrictFilter && (
                 <TextField
                     label="District"
                     select
@@ -156,6 +218,7 @@ export default function EmployeeListFilterPanel({
                         </MenuItem>
                     ))}
                 </TextField>
+                )}
 
                 <TextField
                     label="Qualification"
@@ -168,6 +231,23 @@ export default function EmployeeListFilterPanel({
                     sx={filterFieldSx}
                 >
                     {QUALIFICATION_FILTER_OPTIONS.map((option) => (
+                        <MenuItem key={option.value || "ALL"} value={option.value}>
+                            {option.label}
+                        </MenuItem>
+                    ))}
+                </TextField>
+
+                <TextField
+                    label="Private vehicle"
+                    select
+                    size="small"
+                    value={filterState.privateVehicleFilter}
+                    onChange={(e) => onFilterChange({
+                        privateVehicleFilter: e.target.value
+                    })}
+                    sx={filterFieldSx}
+                >
+                    {PRIVATE_VEHICLE_FILTER_OPTIONS.map((option) => (
                         <MenuItem key={option.value || "ALL"} value={option.value}>
                             {option.label}
                         </MenuItem>
@@ -208,6 +288,8 @@ export default function EmployeeListFilterPanel({
                     </>
                 )}
             </Stack>
+                </Box>
+            </Collapse>
         </Paper>
     );
 }

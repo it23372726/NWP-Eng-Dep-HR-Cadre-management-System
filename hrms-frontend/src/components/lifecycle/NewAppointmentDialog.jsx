@@ -10,6 +10,7 @@ import {
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import { createFormFieldProps, dialogActionsSx } from "../../utils/formLayout";
+import DateInput from "../DateInput";
 import { timelineMinDateHelperText } from "../../utils/timelineDates";
 import DepartmentOfficeFields, {
     DEPARTMENT_OPTIONS,
@@ -58,7 +59,7 @@ export default function NewAppointmentDialog({
         setForm({ ...form, [e.target.name]: e.target.value });
     };
 
-    const { fieldProps, dateFieldProps } = createFormFieldProps(handleChange);
+    const { fieldProps } = createFormFieldProps(handleChange);
 
     const department = resolveDepartmentValue(
         form.departmentType,
@@ -108,14 +109,13 @@ export default function NewAppointmentDialog({
                 </Alert>
                 <Grid container spacing={2}>
                     <Grid size={{ xs: 12 }}>
-                        <TextField
-                            {...dateFieldProps}
+                        <DateInput
+                            {...fieldProps}
                             label="Appointment Date"
                             name="appointmentDate"
                             value={form.appointmentDate}
                             required
                             slotProps={{
-                                ...dateFieldProps.slotProps,
                                 htmlInput: previousEventDate
                                     ? { min: previousEventDate }
                                     : undefined

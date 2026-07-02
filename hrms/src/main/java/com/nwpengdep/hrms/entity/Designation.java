@@ -3,6 +3,7 @@ package com.nwpengdep.hrms.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -42,37 +43,6 @@ public class Designation {
 
     private String salaryCode;
 
-    private Integer grade2RequiredYears;
-
-    private Integer grade1RequiredYears;
-
-    @OneToMany(
-            mappedBy = "designation",
-            cascade = CascadeType.ALL,
-            orphanRemoval = true,
-            fetch = FetchType.EAGER
-    )
-    @Builder.Default
-    private Set<DesignationPermanentRequirement> permanentRequirements =
-            new HashSet<>();
-
-    @OneToMany(
-            mappedBy = "designation",
-            cascade = CascadeType.ALL,
-            orphanRemoval = true,
-            fetch = FetchType.EAGER
-    )
-    @Builder.Default
-    private Set<DesignationGrade2Requirement> grade2Requirements =
-            new HashSet<>();
-
-    @OneToMany(
-            mappedBy = "designation",
-            cascade = CascadeType.ALL,
-            orphanRemoval = true,
-            fetch = FetchType.EAGER
-    )
-    @Builder.Default
-    private Set<DesignationGrade1Requirement> grade1Requirements =
-            new HashSet<>();
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
 }

@@ -26,6 +26,8 @@ public class EmployeeActionResponse {
 
     private String newDesignationName;
 
+    private String recordedDesignationName;
+
     private Long newDesignationId;
 
     private String oldGrade;
@@ -61,4 +63,6 @@ public class EmployeeActionResponse {
     private Boolean canModify;
 
     private Boolean autoCreated;
+
+    private Boolean trainingGraduation;
 }

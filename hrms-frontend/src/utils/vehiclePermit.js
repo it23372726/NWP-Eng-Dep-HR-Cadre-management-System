@@ -1,4 +1,5 @@
 export const VEHICLE_PERMIT_INTERVAL_YEARS = 5;
+export const VEHICLE_PERMIT_FIRST_INTERVAL_YEARS = 6;
 
 export const isSeniorEmployee = (employee) =>
     employee?.serviceLevel?.levelName?.trim().toLowerCase() === "senior";
@@ -18,6 +19,18 @@ export const getMinVehiclePermitCollectionDate = (status) => {
     }
 
     return nextCollectableDate ?? seniorSinceDate ?? null;
+};
+
+export const getMinVehiclePermitEditDate = (status) => {
+    const { seniorSinceDate } = status ?? {};
+
+    if (!seniorSinceDate) {
+        return null;
+    }
+
+    const date = new Date(seniorSinceDate);
+    date.setFullYear(date.getFullYear() + VEHICLE_PERMIT_FIRST_INTERVAL_YEARS);
+    return date.toISOString().slice(0, 10);
 };
 
 export const validateVehiclePermitCollectionDate = (collectedDate, status) => {
@@ -42,8 +55,33 @@ export const validateVehiclePermitCollectionDate = (collectedDate, status) => {
     return null;
 };
 
-export const getVehiclePermitCollectionHelperText = (status) => {
-    const minDate = getMinVehiclePermitCollectionDate(status);
+export const validateVehiclePermitEditDate = (collectedDate, status) => {
+    if (!collectedDate) {
+        return "Collection date is required.";
+    }
+
+    const today = todayInputValue();
+
+    if (collectedDate > today) {
+        return "Collection date cannot be in the future.";
+    }
+
+    if (status?.seniorSinceDate && collectedDate < status.seniorSinceDate) {
+        return `Collection date cannot be before the employee became Senior (${formatVehiclePermitDate(status.seniorSinceDate)}).`;
+    }
+
+    const minEditDate = getMinVehiclePermitEditDate(status);
+    if (minEditDate && collectedDate < minEditDate) {
+        return `Collection date cannot be before the first collectable date (${formatVehiclePermitDate(minEditDate)}).`;
+    }
+
+    return null;
+};
+
+export const getVehiclePermitCollectionHelperText = (status, mode = "record") => {
+    const minDate = mode === "edit"
+        ? getMinVehiclePermitEditDate(status)
+        : getMinVehiclePermitCollectionDate(status);
     const today = todayInputValue();
 
     if (!minDate) {

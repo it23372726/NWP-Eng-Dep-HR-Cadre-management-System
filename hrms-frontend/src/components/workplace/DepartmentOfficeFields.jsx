@@ -43,7 +43,8 @@ export default function DepartmentOfficeFields({
     officeLabel = "Office",
     districtLabel = "Working District",
     departmentHelperText,
-    officeHelperText
+    officeHelperText,
+    excludeNwpDepartment = false
 }) {
     const isNwp = departmentType === DEPARTMENT_OPTIONS.NWP;
     const showNwpOfficeSelect = isNwp && showOffice && !officeReadOnly;
@@ -79,9 +80,11 @@ export default function DepartmentOfficeFields({
                             disabled={departmentReadOnly}
                             helperText={departmentHelperText}
                         >
-                            <MenuItem value={DEPARTMENT_OPTIONS.NWP}>
-                                {NWP_ENGINEERING_DEPARTMENT}
-                            </MenuItem>
+                            {!excludeNwpDepartment && (
+                                <MenuItem value={DEPARTMENT_OPTIONS.NWP}>
+                                    {NWP_ENGINEERING_DEPARTMENT}
+                                </MenuItem>
+                            )}
                             <MenuItem value={DEPARTMENT_OPTIONS.OTHER}>Other</MenuItem>
                         </TextField>
                     </Grid>

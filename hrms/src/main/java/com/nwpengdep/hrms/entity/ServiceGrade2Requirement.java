@@ -5,22 +5,22 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "designation_grade2_requirements")
+@Table(name = "service_grade2_requirements")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class DesignationGrade2Requirement {
+public class ServiceGrade2Requirement {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "designation_id", nullable = false)
+    @JoinColumn(name = "service_id", nullable = false)
     @JsonIgnore
-    private Designation designation;
+    private ServiceType service;
 
     @Column(nullable = false)
     private String requirementName;

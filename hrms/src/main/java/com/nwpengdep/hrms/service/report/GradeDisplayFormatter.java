@@ -2,20 +2,10 @@ package com.nwpengdep.hrms.service.report;
 
 import com.nwpengdep.hrms.entity.Grade;
 
-import java.util.Comparator;
-import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 public final class GradeDisplayFormatter {
-
-    private static final List<Grade> DISPLAY_ORDER = List.of(
-            Grade.III,
-            Grade.II,
-            Grade.I,
-            Grade.SUPRA,
-            Grade.SPECIAL
-    );
 
     private GradeDisplayFormatter() {
     }
@@ -25,7 +15,7 @@ public final class GradeDisplayFormatter {
             return "—";
         }
 
-        return DISPLAY_ORDER.stream()
+        return ReportSortOrder.GRADE_ORDER.stream()
                 .filter(grades::contains)
                 .map(grade -> {
                     if (grade == Grade.SPECIAL) {

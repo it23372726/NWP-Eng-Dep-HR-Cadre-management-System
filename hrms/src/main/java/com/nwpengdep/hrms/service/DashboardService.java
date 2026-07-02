@@ -4,6 +4,7 @@ import com.nwpengdep.hrms.constants.DepartmentConstants;
 import com.nwpengdep.hrms.dto.*;
 import com.nwpengdep.hrms.entity.*;
 import com.nwpengdep.hrms.repository.*;
+import com.nwpengdep.hrms.util.EmployeeTrainingUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -33,6 +34,8 @@ public class DashboardService {
     private final ServiceLevelRepository serviceLevelRepository;
     private final EmployeeActionRepository employeeActionRepository;
     private final CareerProgressionService careerProgressionService;
+    private final SalaryIncrementService salaryIncrementService;
+    private final EmployeeServiceResolver employeeServiceResolver;
 
     public DashboardStatsResponse getDashboardStats() {
         List<Employee> activeNwpEmployees = getActiveNwpEmployees();
@@ -72,19 +75,29 @@ public class DashboardService {
         return DashboardSummaryDto.builder()
                 .totalEmployees((int) totalEmployees)
                 .activeEmployees((int) totalEmployees)
+                .permanentEmploymentEmployees(Math.toIntExact(activeEmployees.stream()
+                        .filter(employee -> employee.getEmploymentType()
+                                == EmploymentType.PERMANENT)
+                        .count()))
                 .approvedCadre((int) approvedCadre)
                 .vacancies((int) totalVacancies)
                 .excessEmployees((int) totalExcess)
                 .retirementWatch((int) retirementWatch)
                 .probationEmployees(Math.toIntExact(activeEmployees.stream()
+                        .filter(employee -> employee.getEmploymentType()
+                                == EmploymentType.PERMANENT)
                         .filter(employee -> employee.getPermanentStatus() == null
                                 || employee.getPermanentStatus() == PermanentStatus.PROBATION)
                         .count()))
                 .qualifiedForPermanentEmployees(Math.toIntExact(activeEmployees.stream()
+                        .filter(employee -> employee.getEmploymentType()
+                                == EmploymentType.PERMANENT)
                         .filter(employee -> employee.getPermanentStatus()
                                 == PermanentStatus.QUALIFIED_FOR_PERMANENT)
                         .count()))
                 .permanentEmployees(Math.toIntExact(activeEmployees.stream()
+                        .filter(employee -> employee.getEmploymentType()
+                                == EmploymentType.PERMANENT)
                         .filter(employee -> employee.getPermanentStatus()
                                 == PermanentStatus.PERMANENT)
                         .count()))
@@ -120,6 +133,20 @@ public class DashboardService {
                                 employee.getCareerProgression()
                                         .getQualifiedForGrade1()))
                         .count()))
+                .eligibleGrade1ToSupra(Math.toIntExact(activeEmployees.stream()
+                        .filter(employee -> employee.getGrade() == Grade.I)
+                        .filter(employee -> employee.getCareerProgression() != null)
+                        .filter(employee -> Boolean.TRUE.equals(
+                                employee.getCareerProgression()
+                                        .getQualifiedForSupra()))
+                        .count()))
+                .eligibleGrade1ToSpecial(Math.toIntExact(activeEmployees.stream()
+                        .filter(employee -> employee.getGrade() == Grade.I)
+                        .filter(employee -> employee.getCareerProgression() != null)
+                        .filter(employee -> Boolean.TRUE.equals(
+                                employee.getCareerProgression()
+                                        .getQualifiedForSpecial()))
+                        .count()))
                 .recentlyQualified(Math.toIntExact(activeEmployees.stream()
                         .filter(employee -> employee.getCareerProgression() != null)
                         .filter(employee -> {
@@ -133,6 +160,12 @@ public class DashboardService {
                                     recentlyQualifiedCutoff
                             ) || recentlyQualified(
                                     progression.getGrade1EligibilityDate(),
+                                    recentlyQualifiedCutoff
+                            ) || recentlyQualified(
+                                    progression.getSupraEligibilityDate(),
+                                    recentlyQualifiedCutoff
+                            ) || recentlyQualified(
+                                    progression.getSpecialEligibilityDate(),
                                     recentlyQualifiedCutoff
                             );
                         })
@@ -170,11 +203,14 @@ public class DashboardService {
     public List<EmployeeDistributionDto> getServiceDistribution() {
         List<Employee> activeEmployees = getActiveNwpEmployees();
         return activeEmployees.stream()
-                .filter(e -> e.getDesignation() != null && e.getDesignation().getService() != null)
+                .map(employee -> employeeServiceResolver.resolve(employee))
+                .filter(Objects::nonNull)
                 .collect(Collectors.groupingBy(
-                        e -> {
-                            String code = e.getDesignation().getService().getServiceCode();
-                            return code != null && !code.isEmpty() ? code : e.getDesignation().getService().getDescription();
+                        service -> {
+                            String code = service.getServiceCode();
+                            return code != null && !code.isEmpty()
+                                    ? code
+                                    : service.getDescription();
                         },
                         Collectors.counting()
                 ))
@@ -229,28 +265,60 @@ public class DashboardService {
     }
 
     public List<EmployeeDistributionDto> getPermanentStatusDistribution() {
-        DashboardSummaryDto summary = getDashboardSummary();
-        List<EmployeeDistributionDto> distribution = new ArrayList<>();
-        if (summary.getProbationEmployees() != null && summary.getProbationEmployees() > 0) {
-            distribution.add(EmployeeDistributionDto.builder()
-                    .category("Probation")
-                    .count(summary.getProbationEmployees().longValue())
-                    .build());
+        List<Employee> activeEmployees = getActiveNwpEmployees();
+        Map<String, Long> counts = new LinkedHashMap<>();
+        counts.put("Probation", 0L);
+        counts.put("Qualified for Permanent", 0L);
+        counts.put("Confirmed Permanent", 0L);
+        counts.put("Acting", 0L);
+        counts.put("Contract", 0L);
+        counts.put("Casual", 0L);
+        counts.put("Substitute", 0L);
+
+        for (Employee employee : activeEmployees) {
+            if (EmployeeTrainingUtil.isTrainingEmployee(employee)) {
+                continue;
+            }
+
+            String category = resolveWorkforceOverviewCategory(employee);
+            if (category != null) {
+                counts.merge(category, 1L, Long::sum);
+            }
         }
-        if (summary.getQualifiedForPermanentEmployees() != null
-                && summary.getQualifiedForPermanentEmployees() > 0) {
-            distribution.add(EmployeeDistributionDto.builder()
-                    .category("Qualified for Permanent")
-                    .count(summary.getQualifiedForPermanentEmployees().longValue())
-                    .build());
+
+        return counts.entrySet()
+                .stream()
+                .filter(entry -> entry.getValue() > 0)
+                .map(entry -> EmployeeDistributionDto.builder()
+                        .category(entry.getKey())
+                        .count(entry.getValue())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    private String resolveWorkforceOverviewCategory(Employee employee) {
+        if (employee.getEmploymentType() == EmploymentType.PERMANENT) {
+            PermanentStatus status = employee.getPermanentStatus();
+            if (status == PermanentStatus.PERMANENT) {
+                return "Confirmed Permanent";
+            }
+            if (status == PermanentStatus.QUALIFIED_FOR_PERMANENT) {
+                return "Qualified for Permanent";
+            }
+            return "Probation";
         }
-        if (summary.getPermanentEmployees() != null && summary.getPermanentEmployees() > 0) {
-            distribution.add(EmployeeDistributionDto.builder()
-                    .category("Confirmed Permanent")
-                    .count(summary.getPermanentEmployees().longValue())
-                    .build());
+
+        if (employee.getEmploymentType() == null) {
+            return null;
         }
-        return distribution;
+
+        return switch (employee.getEmploymentType()) {
+            case ACTING -> "Acting";
+            case CONTRACT -> "Contract";
+            case CASUAL -> "Casual";
+            case SUBSTITUTE -> "Substitute";
+            case PERMANENT -> "Probation";
+        };
     }
 
     public List<DistrictWorkplaceDistributionDto> getWorkplaceDistributionByDistrict() {
@@ -326,11 +394,12 @@ public class DashboardService {
                             ? cadre.getApprovedCount().longValue()
                             : 0L;
                     long existing = cadre.getDesignation() != null
-                            ? employeeRepository.countByDesignationIdAndStatusAndCurrentDepartment(
-                                    cadre.getDesignation().getId(),
-                                    EmployeeStatus.ACTIVE,
-                                    DepartmentConstants.NWP_ENGINEERING
-                            )
+                            ? employeeRepository
+                                    .countCadreEligibleByDesignationIdAndStatusAndCurrentDepartment(
+                                            cadre.getDesignation().getId(),
+                                            EmployeeStatus.ACTIVE,
+                                            DepartmentConstants.NWP_ENGINEERING
+                                    )
                             : 0;
                     long vacancy = Math.max(0, approved - existing);
                     String vacancyStatus = vacancy == 0 ? "green" : vacancy <= 2 ? "orange" : "red";
@@ -554,6 +623,19 @@ public class DashboardService {
                     .build());
         }
 
+        long pendingIncrements = getPendingSalaryIncrements().size();
+        if (pendingIncrements > 0) {
+            alerts.add(DashboardAlertDto.builder()
+                    .type("PENDING_SALARY_INCREMENT")
+                    .category("INCREMENT")
+                    .message("Employees with pending salary increments")
+                    .severity("warning")
+                    .count(pendingIncrements)
+                    .actionPath("/employees")
+                    .actionQuery("incrementStatus=PENDING")
+                    .build());
+        }
+
         alerts.sort(Comparator.comparingInt(alert -> severityRank(alert.getSeverity())));
         return alerts;
     }
@@ -575,8 +657,18 @@ public class DashboardService {
                 .retirementWatchList(getRetirementWatchList())
                 .birthdaysThisMonth(getBirthdaysThisMonth())
                 .recentlyAddedEmployees(getRecentlyAddedEmployees())
+                .pendingSalaryIncrements(getPendingSalaryIncrements())
+                .upcomingSalaryIncrements(getUpcomingSalaryIncrements())
                 .alerts(getDashboardAlerts())
                 .build();
+    }
+
+    public List<SalaryIncrementWatchDto> getPendingSalaryIncrements() {
+        return salaryIncrementService.getPendingIncrements(getActiveNwpEmployees());
+    }
+
+    public List<SalaryIncrementWatchDto> getUpcomingSalaryIncrements() {
+        return salaryIncrementService.getUpcomingIncrements(getActiveNwpEmployees());
     }
 
     public int getNewAppointmentsThisYear() {

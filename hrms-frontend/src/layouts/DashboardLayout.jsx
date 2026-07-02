@@ -3,13 +3,7 @@ import {
     Toolbar,
     Typography,
     Drawer,
-    List,
-    ListItem,
-    ListItemButton,
-    ListItemIcon,
-    ListItemText,
     Box,
-    Button,
     IconButton,
     Divider,
     Tooltip,
@@ -26,50 +20,14 @@ import {
 import React from "react";
 
 import MenuIcon from "@mui/icons-material/Menu";
-import DashboardIcon from "@mui/icons-material/Dashboard";
-import PeopleAltIcon from "@mui/icons-material/PeopleAlt";
-import HistoryIcon from "@mui/icons-material/History";
-import BadgeIcon from "@mui/icons-material/Badge";
-import ApartmentIcon from "@mui/icons-material/Apartment";
-import BusinessIcon from "@mui/icons-material/Business";
-import LayersIcon from "@mui/icons-material/Layers";
-import AccountTreeIcon from "@mui/icons-material/AccountTree";
-import AssessmentIcon from "@mui/icons-material/Assessment";
 import LogoutIcon from "@mui/icons-material/Logout";
+import { logout as logoutApi } from "../services/authService";
+import { clearAuthData } from "../utils/tokenUtils";
+import { getPageTitle } from "../constants/navigation";
+import SidebarNav from "../components/layout/SidebarNav";
 
-const drawerWidth = 280;
+const drawerWidth = 300;
 const collapsedWidth = 76;
-
-const NAV_ITEMS = [
-    { label: "Dashboard", path: "/dashboard", icon: <DashboardIcon /> },
-    { label: "Active Employees", path: "/employees", icon: <PeopleAltIcon /> },
-    {
-        label: "Inactive / History",
-        path: "/employees/inactive",
-        icon: <HistoryIcon />
-    },
-    { label: "Designations", path: "/designations", icon: <BadgeIcon /> },
-    { label: "Services", path: "/services", icon: <ApartmentIcon /> },
-    { label: "Offices", path: "/offices", icon: <BusinessIcon /> },
-    { label: "Service Levels", path: "/service-levels", icon: <LayersIcon /> },
-    { label: "Cadres", path: "/cadres", icon: <AccountTreeIcon /> },
-    {
-        label: "Cadre Vacancy & Excess",
-        path: "/vacancies",
-        icon: <AssessmentIcon />
-    },
-    { label: "Cadre Report", path: "/cadre-report", icon: <AssessmentIcon /> },
-    {
-        label: "All Employee Details Report",
-        path: "/reports/all-employee-details",
-        icon: <AssessmentIcon />
-    }
-];
-
-const TITLE_BY_PATH = NAV_ITEMS.reduce((acc, item) => {
-    acc[item.path] = item.label;
-    return acc;
-}, {});
 
 export default function DashboardLayout() {
 
@@ -77,16 +35,16 @@ export default function DashboardLayout() {
     const location = useLocation();
     const [collapsed, setCollapsed] = React.useState(false);
 
-    const pageTitle =
-        TITLE_BY_PATH[location.pathname] ||
-        (location.pathname.startsWith("/employees/")
-            ? "Employee Profile"
-            : "HRMS");
+    const pageTitle = getPageTitle(location.pathname);
 
-    const logout = () => {
+    const logout = async () => {
+        try {
+            await logoutApi();
+        } catch {
+            // Continue local logout even if API call fails
+        }
 
-        localStorage.removeItem("token");
-
+        clearAuthData();
         navigate("/");
     };
 
@@ -171,71 +129,18 @@ export default function DashboardLayout() {
                         sx={{
                             color: "text.secondary",
                             px: 1,
+                            fontWeight: 700,
+                            letterSpacing: 0.5,
                             display: collapsed ? "none" : "block"
                         }}
                     >
-                        Navigation
+                        HRMS
                     </Typography>
                 </Box>
 
                 <Divider />
 
-                <List sx={{ py: 1 }}>
-
-                    {NAV_ITEMS.map((item) => {
-                        const active = location.pathname === item.path;
-                        return (
-                            <ListItem key={item.path} disablePadding sx={{ px: 1 }}>
-                                <Tooltip
-                                    title={collapsed ? item.label : ""}
-                                    placement="right"
-                                >
-                                    <ListItemButton
-                                        onClick={() => navigate(item.path)}
-                                        sx={{
-                                            borderRadius: 2,
-                                            mb: 0.5,
-                                            px: collapsed ? 1.5 : 2,
-                                            "&.Mui-selected": {
-                                                bgcolor: "action.selected",
-                                                "&:hover": { bgcolor: "action.selected" }
-                                            }
-                                        }}
-                                        selected={active}
-                                    >
-                                        <ListItemIcon
-                                            sx={{
-                                                minWidth: 0,
-                                                mr: collapsed ? 0 : 1.5,
-                                                color: active
-                                                    ? "primary.main"
-                                                    : "text.secondary",
-                                                display: "flex",
-                                                justifyContent: "center"
-                                            }}
-                                        >
-                                            {item.icon}
-                                        </ListItemIcon>
-                                        {!collapsed && (
-                                            <ListItemText
-                                                primary={item.label}
-                                                slotProps={{
-                                                    primary: {
-                                                        sx: {
-                                                            fontWeight: active ? 750 : 600,
-                                                            fontSize: "0.92rem"
-                                                        }
-                                                    }
-                                                }}
-                                            />
-                                        )}
-                                    </ListItemButton>
-                                </Tooltip>
-                            </ListItem>
-                        );
-                    })}
-
-                </List>
+                <SidebarNav collapsed={collapsed} />
 
             </Drawer>
 

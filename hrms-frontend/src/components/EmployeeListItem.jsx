@@ -11,8 +11,10 @@ import BadgeIcon from "@mui/icons-material/Badge";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 
 import EmployeeAvatar from "./EmployeeAvatar";
+import EmploymentTypeChip from "./EmploymentTypeChip";
 import EmployeeStatusChip from "./EmployeeStatusChip";
 import PermanentStatusChip from "./PermanentStatusChip";
+import { isPermanentEmployee, resolveEmployeeDesignationName, resolveEmployeeService } from "../constants/hrms";
 import { formatEmployeeWorkplace } from "../utils/employeeListFilters";
 
 const GRADE_CHIP_COLORS = {
@@ -92,9 +94,9 @@ export default function EmployeeListItem({
         return null;
     }
 
-    const designation = employee.designation?.designationName;
+    const designation = resolveEmployeeDesignationName(employee);
     const serviceLevel = employee.serviceLevel?.levelName;
-    const serviceCode = employee.designation?.service?.serviceCode;
+    const serviceCode = resolveEmployeeService(employee)?.serviceCode;
     const workplace = formatEmployeeWorkplace(employee);
     const positionLine = [designation, serviceLevel, serviceCode]
         .filter(Boolean)
@@ -161,8 +163,15 @@ export default function EmployeeListItem({
                         sx={{ flexShrink: 0 }}
                     >
                         <GradeChip grade={employee.grade} />
-                        {!isInactive && employee.permanentStatus && (
+                        {!isInactive && employee.permanentStatus
+                            && isPermanentEmployee(employee.employmentType) && (
                             <PermanentStatusChip status={employee.permanentStatus} />
+                        )}
+                        {!isInactive && !isPermanentEmployee(employee.employmentType) && (
+                            <EmploymentTypeChip
+                                employmentType={employee.employmentType}
+                                employee={employee}
+                            />
                         )}
                         {!isInactive && <PromotionChip employee={employee} />}
                         {isInactive && (

@@ -98,7 +98,7 @@ export default function InactiveEmployeesPage() {
                     description={
                         filtersActive
                             ? "Try a different search term"
-                            : "Former employees will appear here after transfer out, retirement, resignation, death, or dismissal"
+                            : "Former employees will appear here after transfer out, retirement, resignation, death, dismissal, or vacation of post"
                     }
                     action={
                         filtersActive ? (
@@ -151,7 +151,7 @@ export default function InactiveEmployeesPage() {
 
                 <TextField
                     label="Search inactive employees"
-                    placeholder="Name, S/N, NIC, designation, service level, contact..."
+                    placeholder="Name, S/N, NIC, designation, service code, service level, contact..."
                     value={searchKeyword}
                     onChange={(e) => setSearchKeyword(e.target.value)}
                     size="small"

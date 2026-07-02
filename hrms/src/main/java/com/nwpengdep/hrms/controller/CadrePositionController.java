@@ -14,6 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.validation.Valid;
 import java.util.List;
 
 @RestController
@@ -34,6 +35,13 @@ public class CadrePositionController {
 
         return cadreService
                 .createCadre(request);
+    }
+
+    @PutMapping("/order")
+    public void reorderCadres(
+            @Valid @RequestBody CadrePositionReorderRequest request
+    ) {
+        cadreService.reorderCadres(request.getOrderedCadreIds());
     }
 
     @PutMapping("/{id}")

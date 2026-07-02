@@ -33,6 +33,16 @@ public interface EmployeeRepository
 
     List<Employee> findByDesignationId(Long designationId);
 
+    List<Employee> findByDesignation_ServiceId(Long serviceId);
+
+    boolean existsByNic(String nic);
+
+    boolean existsByEmployeeNo(String employeeNo);
+
+    boolean existsByNicAndIdNot(String nic, Long id);
+
+    boolean existsByEmployeeNoAndIdNot(String employeeNo, Long id);
+
     long countByDesignationIdAndStatus(
             Long designationId,
             EmployeeStatus status
@@ -42,6 +52,25 @@ public interface EmployeeRepository
             Long designationId,
             EmployeeStatus status,
             String currentDepartment
+    );
+
+    @Query("""
+            SELECT COUNT(e)
+            FROM Employee e
+            LEFT JOIN e.serviceLevel sl
+            WHERE e.designation.id = :designationId
+              AND e.status = :status
+              AND e.currentDepartment = :currentDepartment
+              AND NOT (
+                  e.employmentType IS NULL
+                  AND sl IS NOT NULL
+                  AND LOWER(sl.levelName) = 'training'
+              )
+            """)
+    long countCadreEligibleByDesignationIdAndStatusAndCurrentDepartment(
+            @Param("designationId") Long designationId,
+            @Param("status") EmployeeStatus status,
+            @Param("currentDepartment") String currentDepartment
     );
 
     @Query("""
@@ -57,8 +86,8 @@ public interface EmployeeRepository
             FROM Employee e
             LEFT JOIN FETCH e.designation d
             LEFT JOIN FETCH d.service
+            LEFT JOIN FETCH d.serviceLevel
             LEFT JOIN FETCH e.serviceLevel
-            ORDER BY e.fullName ASC
             """)
     List<Employee> findAllForEmployeeDetailsReport();
 

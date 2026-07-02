@@ -38,7 +38,10 @@ public class EmployeeActionService {
     private final EmployeePostingRepository postingRepository;
     private final ServiceLevelService serviceLevelService;
     private final CareerProgressionService careerProgressionService;
+    private final EmployeeRequirementSyncService requirementSyncService;
     private final OfficeService officeService;
+    private final CurrentUserService currentUserService;
+    private final TrainingGraduationService trainingGraduationService;
 
     public EmployeeAction recordAction(
             Employee employee,
@@ -82,6 +85,38 @@ public class EmployeeActionService {
             String remarks,
             ActionWorkplaceFields workplace
     ) {
+        return recordActionWithGrades(
+                employee,
+                actionType,
+                actionDate,
+                oldDesignation,
+                newDesignation,
+                null,
+                oldGrade,
+                newGrade,
+                transferredFrom,
+                transferredTo,
+                reason,
+                remarks,
+                workplace
+        );
+    }
+
+    public EmployeeAction recordActionWithGrades(
+            Employee employee,
+            EmployeeActionType actionType,
+            LocalDate actionDate,
+            Designation oldDesignation,
+            Designation newDesignation,
+            String recordedNewDesignationName,
+            Grade oldGrade,
+            Grade newGrade,
+            String transferredFrom,
+            String transferredTo,
+            String reason,
+            String remarks,
+            ActionWorkplaceFields workplace
+    ) {
         validateSequentialActionDate(employee.getId(), actionDate);
 
         EmployeeAction action = EmployeeAction.builder()
@@ -90,6 +125,7 @@ public class EmployeeActionService {
                 .actionDate(actionDate)
                 .oldDesignation(oldDesignation)
                 .newDesignation(newDesignation)
+                .recordedNewDesignationName(recordedNewDesignationName)
                 .oldGrade(oldGrade)
                 .newGrade(newGrade)
                 .transferredFrom(transferredFrom)
@@ -102,11 +138,18 @@ public class EmployeeActionService {
         return employeeActionRepository.save(action);
     }
 
+    public EmployeeAction saveAction(EmployeeAction action) {
+        return employeeActionRepository.save(action);
+    }
+
     @Transactional
     public EmployeeAction[] recordPairedTransferOut(
             Employee employee,
             LocalDate transferDate,
-            Designation designation,
+            Designation oldDesignation,
+            Designation newDesignation,
+            String recordedNewDesignationName,
+            ServiceLevel newServiceLevel,
             String fromDepartment,
             String fromOffice,
             String toDepartment,
@@ -130,12 +173,15 @@ public class EmployeeActionService {
                 ? toDistrict
                 : null;
 
-        EmployeeAction transferOut = recordAction(
+        EmployeeAction transferOut = recordActionWithGrades(
                 employee,
                 EmployeeActionType.TRANSFER_OUT,
                 transferDate,
-                designation,
-                designation,
+                oldDesignation,
+                newDesignation,
+                recordedNewDesignationName,
+                null,
+                null,
                 normalizedFromDept,
                 normalizedToDept,
                 null,
@@ -151,12 +197,15 @@ public class EmployeeActionService {
                         .build()
         );
 
-        EmployeeAction transferIn = recordAction(
+        EmployeeAction transferIn = recordActionWithGrades(
                 employee,
                 EmployeeActionType.TRANSFER_IN,
                 transferDate,
                 null,
-                designation,
+                newDesignation,
+                recordedNewDesignationName,
+                null,
+                null,
                 normalizedFromDept,
                 null,
                 null,
@@ -173,6 +222,11 @@ public class EmployeeActionService {
 
         transferOut.setLinkedActionId(transferIn.getId());
         employeeActionRepository.save(transferOut);
+
+        if (newServiceLevel != null) {
+            employee.setServiceLevel(newServiceLevel);
+            employeeRepository.save(employee);
+        }
 
         recalculateEmployeeState(employee.getId());
         return new EmployeeAction[] { transferOut, transferIn };
@@ -229,6 +283,16 @@ public class EmployeeActionService {
             Designation newDesignation = designationRepository.findById(request.getNewDesignationId())
                     .orElseThrow(() -> new RuntimeException("New designation not found"));
             action.setNewDesignation(newDesignation);
+            action.setRecordedNewDesignationName(null);
+        } else if (request.getRecordedDesignationName() != null) {
+            if (request.getRecordedDesignationName().isBlank()) {
+                action.setRecordedNewDesignationName(null);
+            } else {
+                action.setNewDesignation(null);
+                action.setRecordedNewDesignationName(
+                        request.getRecordedDesignationName().trim()
+                );
+            }
         }
 
         if (request.getDepartment() != null) {
@@ -251,8 +315,14 @@ public class EmployeeActionService {
                 action.setOffice(request.getToOffice().trim());
             }
         }
+
+        if (action.getActionType() == EmployeeActionType.PROMOTION
+                && request.getTransferringOut() != null) {
+            applyPromotionWorkplaceUpdate(action, request);
+        }
+
         action.setReason(request.getReason());
-        action.setEditedBy("system");
+        action.setEditedBy(currentUserService.getCurrentUsernameOrDefault("system"));
         action.setEditedAt(java.time.LocalDateTime.now());
 
         employeeActionRepository.save(action);
@@ -295,14 +365,21 @@ public class EmployeeActionService {
             employeeActionRepository.findById(action.getLinkedActionId())
                     .ifPresent(linked -> {
                         linked.setDeleted(true);
-                        linked.setDeletedBy("system");
+                        linked.setDeletedBy(currentUserService.getCurrentUsernameOrDefault("system"));
                         linked.setDeletedAt(java.time.LocalDateTime.now());
                         employeeActionRepository.save(linked);
                     });
         }
 
+        if (Boolean.TRUE.equals(action.getTrainingGraduation())) {
+            trainingGraduationService.revertTrainingGraduation(
+                    action.getEmployee().getId()
+            );
+            return;
+        }
+
         action.setDeleted(true);
-        action.setDeletedBy("system");
+        action.setDeletedBy(currentUserService.getCurrentUsernameOrDefault("system"));
         action.setDeletedAt(java.time.LocalDateTime.now());
         employeeActionRepository.save(action);
 
@@ -325,6 +402,7 @@ public class EmployeeActionService {
         postingRepository.deleteByEmployeeId(employeeId);
 
         Designation currentDesignation = null;
+        String currentRecordedDesignationName = null;
         EmployeeStatus currentStatus = EmployeeStatus.ACTIVE;
         String currentDepartment = null;
         String currentOffice = null;
@@ -336,14 +414,25 @@ public class EmployeeActionService {
         careerProgression.setGrade3AchievedDate(null);
         careerProgression.setGrade2AchievedDate(null);
         careerProgression.setGrade1AchievedDate(null);
+        careerProgression.setSupraAchievedDate(null);
+        careerProgression.setSpecialAchievedDate(null);
         LocalDate latestAppointmentDate = null;
-        LocalDate nwpJoinDate = null;
+        LocalDate reportedDateToPresentWorkingPlace = null;
+        LocalDate enteredDateToNWPCouncil = null;
         String transferredFrom = null;
 
         for (EmployeeAction action : actions) {
             switch (action.getActionType()) {
                 case NEW_APPOINTMENT -> {
-                    currentDesignation = action.getNewDesignation();
+                    if (action.getNewDesignation() != null) {
+                        currentDesignation = action.getNewDesignation();
+                        currentRecordedDesignationName = null;
+                    } else if (action.getRecordedNewDesignationName() != null
+                            && !action.getRecordedNewDesignationName().isBlank()) {
+                        currentDesignation = null;
+                        currentRecordedDesignationName =
+                                action.getRecordedNewDesignationName().trim();
+                    }
                     currentStatus = EmployeeStatus.ACTIVE;
                     if (action.getDepartment() != null) {
                         currentDepartment = action.getDepartment();
@@ -360,7 +449,7 @@ public class EmployeeActionService {
                     } else if (currentGrade == null) {
                         currentGrade = Grade.III;
                     }
-                    nwpJoinDate = trackNwpJoinDate(action, nwpJoinDate);
+                    latestAppointmentDate = action.getActionDate();
                 }
 
                 case TRANSFER_IN -> {
@@ -389,11 +478,19 @@ public class EmployeeActionService {
                             );
                         }
                     }
-                    nwpJoinDate = trackNwpJoinDate(action, nwpJoinDate);
                 }
 
                 case TRANSFER_OUT -> {
                     currentStatus = EmployeeStatus.ACTIVE;
+                    if (action.getNewDesignation() != null) {
+                        currentDesignation = action.getNewDesignation();
+                        currentRecordedDesignationName = null;
+                    } else if (action.getRecordedNewDesignationName() != null
+                            && !action.getRecordedNewDesignationName().isBlank()) {
+                        currentDesignation = null;
+                        currentRecordedDesignationName =
+                                action.getRecordedNewDesignationName().trim();
+                    }
                     if (action.getDepartment() != null) {
                         currentDepartment = action.getDepartment();
                         currentOffice = action.getOffice();
@@ -420,10 +517,24 @@ public class EmployeeActionService {
                 }
 
                 case PROMOTION -> {
-                    currentDesignation = action.getNewDesignation();
+                    if (action.getNewDesignation() != null) {
+                        currentDesignation = action.getNewDesignation();
+                        currentRecordedDesignationName = null;
+                    } else if (action.getRecordedNewDesignationName() != null
+                            && !action.getRecordedNewDesignationName().isBlank()) {
+                        currentDesignation = null;
+                        currentRecordedDesignationName =
+                                action.getRecordedNewDesignationName().trim();
+                    }
                     if (action.getDepartment() != null) {
                         currentDepartment = action.getDepartment();
                         currentOffice = action.getOffice();
+                        currentDistrict = resolveDistrictForDepartment(
+                                currentDepartment,
+                                action.getDistrict(),
+                                currentOffice,
+                                currentDistrict
+                        );
                     }
                     if (action.getNewGrade() != null) {
                         currentGrade = action.getNewGrade();
@@ -442,10 +553,22 @@ public class EmployeeActionService {
                 case ASSIGNMENT_GRADE_UPDATE -> {
                     if (action.getNewDesignation() != null) {
                         currentDesignation = action.getNewDesignation();
+                        currentRecordedDesignationName = null;
+                    } else if (action.getRecordedNewDesignationName() != null
+                            && !action.getRecordedNewDesignationName().isBlank()) {
+                        currentDesignation = null;
+                        currentRecordedDesignationName =
+                                action.getRecordedNewDesignationName().trim();
                     }
                     if (action.getDepartment() != null) {
                         currentDepartment = action.getDepartment();
                         currentOffice = action.getOffice();
+                        currentDistrict = resolveDistrictForDepartment(
+                                currentDepartment,
+                                action.getDistrict(),
+                                currentOffice,
+                                currentDistrict
+                        );
                     }
                     if (action.getNewGrade() != null) {
                         currentGrade = action.getNewGrade();
@@ -465,19 +588,38 @@ public class EmployeeActionService {
                     if (action.getDepartment() != null) {
                         currentDepartment = action.getDepartment();
                         currentOffice = action.getOffice();
+                        currentDistrict = resolveDistrictForDepartment(
+                                currentDepartment,
+                                action.getDistrict(),
+                                currentOffice,
+                                currentDistrict
+                        );
                     }
                     careerProgression.setPermanentConfirmationDate(action.getActionDate());
                     careerProgression.setGrade3AchievedDate(action.getActionDate());
-                    latestAppointmentDate = action.getActionDate();
                 }
 
-                case RETIREMENT_OR_RESIGNATION, DEATH, DISMISSAL -> {
+                case RETIREMENT_OR_RESIGNATION, DEATH, DISMISSAL, VACATION_OF_POST -> {
                     if (action.getDepartment() != null) {
                         currentDepartment = action.getDepartment();
                         currentOffice = action.getOffice();
+                        currentDistrict = resolveDistrictForDepartment(
+                                currentDepartment,
+                                action.getDistrict(),
+                                currentOffice,
+                                currentDistrict
+                        );
                     }
                     currentStatus = EmployeeStatus.INACTIVE;
                 }
+            }
+
+            if (isWorkplaceEstablishingAction(action)) {
+                reportedDateToPresentWorkingPlace = action.getActionDate();
+            }
+
+            if (enteredDateToNWPCouncil == null && isFirstNwpJoinAction(action)) {
+                enteredDateToNWPCouncil = action.getActionDate();
             }
 
             if (currentDesignation != null && currentStatus == EmployeeStatus.ACTIVE) {
@@ -496,6 +638,16 @@ public class EmployeeActionService {
         }
 
         employee.setDesignation(currentDesignation);
+        if (currentDesignation != null) {
+            employee.setRecordedDesignationName(null);
+            if (currentDesignation.getService() != null) {
+                employee.setService(currentDesignation.getService());
+            }
+        } else if (currentRecordedDesignationName != null) {
+            employee.setRecordedDesignationName(currentRecordedDesignationName);
+        } else {
+            employee.setRecordedDesignationName(null);
+        }
         if (currentGrade != null) {
             employee.setGrade(currentGrade);
         }
@@ -505,20 +657,32 @@ public class EmployeeActionService {
         employee.setCurrentWorkingPlace(formatWorkingPlace(currentDepartment, currentOffice));
         employee.setCurrentDistrictOfWorking(currentDistrict);
         employee.setTransferredFrom(transferredFrom);
-        employee.setReportedDateToPresentWorkingPlace(nwpJoinDate);
+        employee.setReportedDateToPresentWorkingPlace(reportedDateToPresentWorkingPlace);
+        employee.setEnteredDateToNWPCouncil(enteredDateToNWPCouncil);
         employee.setAppointmentDateToPresentClassGrade(latestAppointmentDate);
+        requirementSyncService.syncEmployeeRequirements(employee);
+        requirementSyncService.completeRequirementsForAchievedGrade(employee);
         careerProgressionService.recalculateEmployeeCareer(employee);
         employeeRepository.save(employee);
     }
 
-    private LocalDate trackNwpJoinDate(EmployeeAction action, LocalDate currentJoinDate) {
-        if (currentJoinDate != null) {
-            return currentJoinDate;
+    private boolean isWorkplaceEstablishingAction(EmployeeAction action) {
+        return switch (action.getActionType()) {
+            case NEW_APPOINTMENT, OFFICE_CHANGE, TRANSFER_OUT -> true;
+            case TRANSFER_IN -> action.getLinkedActionId() == null;
+            default -> false;
+        };
+    }
+
+    private boolean isFirstNwpJoinAction(EmployeeAction action) {
+        if (!DepartmentConstants.isNwpEngineering(action.getDepartment())) {
+            return false;
         }
-        if (DepartmentConstants.isNwpEngineering(action.getDepartment())) {
-            return action.getActionDate();
-        }
-        return null;
+        return switch (action.getActionType()) {
+            case NEW_APPOINTMENT, TRANSFER_OUT -> true;
+            case TRANSFER_IN -> action.getLinkedActionId() == null;
+            default -> false;
+        };
     }
 
     private void syncLinkedTransferIn(EmployeeAction transferOut) {
@@ -532,7 +696,11 @@ public class EmployeeActionService {
                     transferIn.setOffice(transferOut.getOffice());
                     transferIn.setDistrict(transferOut.getDistrict());
                     transferIn.setTransferredFrom(transferOut.getFromDepartment());
-                    transferIn.setEditedBy("system");
+                    transferIn.setNewDesignation(transferOut.getNewDesignation());
+                    transferIn.setRecordedNewDesignationName(
+                            transferOut.getRecordedNewDesignationName()
+                    );
+                    transferIn.setEditedBy(currentUserService.getCurrentUsernameOrDefault("system"));
                     transferIn.setEditedAt(java.time.LocalDateTime.now());
                     employeeActionRepository.save(transferIn);
                 });
@@ -546,6 +714,86 @@ public class EmployeeActionService {
             }
         }
         return actions.isEmpty() ? null : actions.getFirst().getId();
+    }
+
+    private void applyPromotionWorkplaceUpdate(
+            EmployeeAction action,
+            EmployeeActionUpdateRequest request
+    ) {
+        String nwpDepartment = DepartmentConstants.NWP_ENGINEERING;
+        boolean transferringOut = Boolean.TRUE.equals(request.getTransferringOut());
+
+        if (transferringOut) {
+            if (request.getToDepartment() == null || request.getToDepartment().isBlank()) {
+                throw new RuntimeException("Destination department is required");
+            }
+            if (request.getToOffice() == null || request.getToOffice().isBlank()) {
+                throw new RuntimeException("Destination office is required");
+            }
+
+            String normalizedDestination = DepartmentConstants.normalize(
+                    request.getToDepartment().trim()
+            );
+            if (DepartmentConstants.isNwpEngineering(normalizedDestination)) {
+                throw new RuntimeException(
+                        "Use \"Stays in department\" when the employee remains in "
+                                + nwpDepartment
+                );
+            }
+
+            officeService.validateNwpWorkplaceIfNwp(
+                    normalizedDestination,
+                    request.getToOffice(),
+                    request.getToDistrict()
+            );
+
+            String fromDepartment = action.getFromDepartment() != null
+                    ? action.getFromDepartment()
+                    : (DepartmentConstants.isNwpEngineering(action.getDepartment())
+                            ? action.getDepartment()
+                            : nwpDepartment);
+            String fromOffice = action.getFromOffice() != null
+                    ? action.getFromOffice()
+                    : action.getOffice();
+
+            if (fromOffice == null || fromOffice.isBlank()) {
+                throw new RuntimeException("Source office is not set on this promotion");
+            }
+
+            action.setFromDepartment(DepartmentConstants.normalize(fromDepartment));
+            action.setFromOffice(fromOffice.trim());
+            action.setDepartment(normalizedDestination);
+            action.setOffice(request.getToOffice().trim());
+            action.setToDepartment(normalizedDestination);
+            action.setToOffice(request.getToOffice().trim());
+            action.setDistrict(
+                    DepartmentConstants.isNwpEngineering(normalizedDestination)
+                            ? request.getToDistrict()
+                            : null
+            );
+            return;
+        }
+
+        String stayingOffice = action.getFromOffice() != null
+                ? action.getFromOffice()
+                : action.getOffice();
+        if (stayingOffice == null || stayingOffice.isBlank()) {
+            Employee employee = action.getEmployee();
+            if (employee.getCurrentOffice() != null && !employee.getCurrentOffice().isBlank()) {
+                stayingOffice = employee.getCurrentOffice();
+            }
+        }
+        if (stayingOffice == null || stayingOffice.isBlank()) {
+            throw new RuntimeException("Office is required for a staying promotion");
+        }
+
+        action.setDepartment(nwpDepartment);
+        action.setOffice(stayingOffice.trim());
+        action.setFromDepartment(null);
+        action.setFromOffice(null);
+        action.setToDepartment(null);
+        action.setToOffice(null);
+        action.setDistrict(null);
     }
 
     private void applyWorkplaceFields(
@@ -631,11 +879,19 @@ public class EmployeeActionService {
         if (oldGrade == Grade.II && newGrade == Grade.I) {
             careerProgression.setGrade1AchievedDate(actionDate);
         }
+        if (oldGrade == Grade.I && newGrade == Grade.SUPRA) {
+            careerProgression.setSupraAchievedDate(actionDate);
+        }
+        if (oldGrade == Grade.I && newGrade == Grade.SPECIAL) {
+            careerProgression.setSpecialAchievedDate(actionDate);
+        }
     }
 
     private boolean isGradePromotion(Grade oldGrade, Grade newGrade) {
         return (oldGrade == Grade.III && newGrade == Grade.II)
-                || (oldGrade == Grade.II && newGrade == Grade.I);
+                || (oldGrade == Grade.II && newGrade == Grade.I)
+                || (oldGrade == Grade.I && newGrade == Grade.SUPRA)
+                || (oldGrade == Grade.I && newGrade == Grade.SPECIAL);
     }
 
     private EmployeeAction requireLatestModifiableAction(Long actionId) {
@@ -694,10 +950,14 @@ public class EmployeeActionService {
                                 : null
                 )
                 .newDesignationName(
-                        action.getNewDesignation() != null
-                                ? action.getNewDesignation().getDesignationName()
-                                : null
+                        action.getRecordedNewDesignationName() != null
+                                && !action.getRecordedNewDesignationName().isBlank()
+                                ? action.getRecordedNewDesignationName()
+                                : action.getNewDesignation() != null
+                                        ? action.getNewDesignation().getDesignationName()
+                                        : null
                 )
+                .recordedDesignationName(action.getRecordedNewDesignationName())
                 .newDesignationId(
                         action.getNewDesignation() != null
                                 ? action.getNewDesignation().getId()
@@ -724,6 +984,7 @@ public class EmployeeActionService {
                 .createdAt(action.getCreatedAt())
                 .canModify(canModify && !autoCreated)
                 .autoCreated(autoCreated)
+                .trainingGraduation(action.getTrainingGraduation())
                 .build();
     }
 

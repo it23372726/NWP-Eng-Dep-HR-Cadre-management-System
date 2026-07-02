@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,11 +29,13 @@ import com.nwpengdep.hrms.entity.Grade;
 import com.nwpengdep.hrms.entity.RequirementStatus;
 import com.nwpengdep.hrms.entity.RequirementType;
 import com.nwpengdep.hrms.entity.ServiceLevel;
+import com.nwpengdep.hrms.entity.ServicePermanentRequirement;
 import com.nwpengdep.hrms.entity.ServiceType;
 import com.nwpengdep.hrms.repository.DesignationRepository;
 import com.nwpengdep.hrms.repository.EmployeeActionRepository;
 import com.nwpengdep.hrms.repository.EmployeePostingRepository;
 import com.nwpengdep.hrms.repository.EmployeeRepository;
+import com.nwpengdep.hrms.repository.ServiceTypeRepository;
 
 class EmployeeServiceRequirementUpdateTest {
 
@@ -60,9 +63,13 @@ class EmployeeServiceRequirementUpdateTest {
         EmployeeRequirementSyncService requirementSyncService =
                 new EmployeeRequirementSyncService();
 
+        ServiceTypeRepository serviceTypeRepository =
+                mock(ServiceTypeRepository.class);
+
         employeeService = new EmployeeService(
                 employeeRepository,
                 designationRepository,
+                serviceTypeRepository,
                 employeeActionRepository,
                 postingRepository,
                 serviceLevelService,
@@ -72,15 +79,26 @@ class EmployeeServiceRequirementUpdateTest {
                 requirementSyncService,
                 new CareerHistoryValidator(
                         designationRepository,
+                        serviceTypeRepository,
                         new DesignationAssignmentValidator(),
                         careerProgressionService,
                         mock(OfficeService.class)
                 ),
-                mock(OfficeService.class)
+                mock(OfficeService.class),
+                new EmployeeServiceResolver(),
+                mock(TrainingGraduationService.class)
         );
 
         ServiceType service = new ServiceType();
         service.setId(1L);
+        service.setServiceCode("SLEgS");
+        service.setAllowedGrades(EnumSet.of(
+                Grade.III,
+                Grade.II,
+                Grade.I,
+                Grade.SUPRA,
+                Grade.SPECIAL
+        ));
 
         designation = new Designation();
         designation.setId(1L);
@@ -277,6 +295,97 @@ class EmployeeServiceRequirementUpdateTest {
         );
     }
 
+    @Test
+    void preservesGradeOneRequirementsForGradeOneEmployee() {
+        savedEmployee.setGrade(Grade.I);
+        savedEmployee.getRequirements().add(completedRequirement(
+                RequirementType.EB_GRADE_1
+        ));
+
+        EmployeeUpdateRequest request = baseUpdateRequest();
+        request.setGrade(Grade.I);
+        request.setQualificationUpdateOnly(true);
+        request.setRequirements(List.of(
+                requirementRequest(
+                        RequirementType.EB_GRADE_1,
+                        RequirementStatus.PENDING
+                )
+        ));
+
+        Employee result = employeeService.updateEmployee(1L, request);
+
+        assertEquals(
+                RequirementStatus.COMPLETED,
+                findRequirement(result, RequirementType.EB_GRADE_1).getStatus()
+        );
+    }
+
+    @Test
+    void qualificationUpdateOnlyWorksForOtherDesignationEmployeeWithoutCatalogDesignation() {
+        ServiceType service = designation.getService();
+        savedEmployee.setDesignation(null);
+        savedEmployee.setService(service);
+        savedEmployee.setRecordedDesignationName("Test Designation");
+        savedEmployee.getRequirements().add(pendingRequirement(
+                RequirementType.EB_GRADE_3
+        ));
+
+        EmployeeUpdateRequest request = baseUpdateRequest();
+        request.setDesignationId(null);
+        request.setQualificationUpdateOnly(true);
+        request.setRequirements(List.of(
+                requirementRequest(
+                        RequirementType.EB_GRADE_3,
+                        RequirementStatus.COMPLETED
+                )
+        ));
+
+        Employee result = employeeService.updateEmployee(1L, request);
+
+        assertEquals(
+                RequirementStatus.COMPLETED,
+                findRequirement(result, RequirementType.EB_GRADE_3).getStatus()
+        );
+    }
+
+    @Test
+    void qualificationUpdateOnlyUpdatesCustomPermanentRequirementForOtherEmployee() {
+        ServiceType service = designation.getService();
+        ServicePermanentRequirement customRequirement = new ServicePermanentRequirement();
+        customRequirement.setRequirementName("Professional Registration");
+        service.setPermanentRequirements(new java.util.HashSet<>(Set.of(customRequirement)));
+
+        savedEmployee.setDesignation(null);
+        savedEmployee.setService(service);
+        savedEmployee.setRecordedDesignationName("Test Designation");
+        savedEmployee.getRequirements().add(pendingNamedRequirement(
+                RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                "Professional Registration"
+        ));
+
+        EmployeeUpdateRequest request = baseUpdateRequest();
+        request.setDesignationId(null);
+        request.setQualificationUpdateOnly(true);
+        request.setRequirements(List.of(
+                namedRequirementRequest(
+                        RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                        "Professional Registration",
+                        RequirementStatus.COMPLETED
+                )
+        ));
+
+        Employee result = employeeService.updateEmployee(1L, request);
+
+        assertEquals(
+                RequirementStatus.COMPLETED,
+                findNamedRequirement(
+                        result,
+                        RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                        "Professional Registration"
+                ).getStatus()
+        );
+    }
+
     private Employee activePermanentEmployee() {
         Employee employee = new Employee();
         employee.setId(1L);
@@ -324,6 +433,45 @@ class EmployeeServiceRequirementUpdateTest {
         return request;
     }
 
+    private EmployeeRequirement pendingNamedRequirement(
+            RequirementType type,
+            String name
+    ) {
+        EmployeeRequirement requirement = new EmployeeRequirement();
+        requirement.setId(3L);
+        requirement.setEmployee(savedEmployee);
+        requirement.setRequirementType(type);
+        requirement.setRequirementName(name);
+        requirement.setStatus(RequirementStatus.PENDING);
+        return requirement;
+    }
+
+    private EmployeeRequirementRequest namedRequirementRequest(
+            RequirementType type,
+            String name,
+            RequirementStatus status
+    ) {
+        EmployeeRequirementRequest request = new EmployeeRequirementRequest();
+        request.setRequirementType(type);
+        request.setRequirementName(name);
+        request.setStatus(status);
+        return request;
+    }
+
+    private EmployeeRequirement findNamedRequirement(
+            Employee employee,
+            RequirementType type,
+            String name
+    ) {
+        return employee.getRequirements()
+                .stream()
+                .filter(requirement -> requirement.getRequirementType() == type)
+                .filter(requirement ->
+                        name.equalsIgnoreCase(requirement.getRequirementName()))
+                .findFirst()
+                .orElseThrow();
+    }
+
     private EmployeeRequirement findRequirement(
             Employee employee,
             RequirementType type
@@ -351,6 +499,8 @@ class EmployeeServiceRequirementUpdateTest {
         request.setEnteredDateToNWPCouncil(LocalDate.parse("2015-01-01"));
         request.setPermanentAddress("123 Main Street");
         request.setContactNo("0712345678");
+        request.setMaritalStatus("Single");
+        request.setWidowsOrphansPensionNo("WOP-001");
         request.setServiceLevelId(10L);
         request.setEmploymentType(EmploymentType.PERMANENT);
         return request;

@@ -18,11 +18,30 @@ import {
 import {
     FIXED_GRADE1_REQUIREMENTS,
     FIXED_GRADE2_REQUIREMENTS,
-    FIXED_PERMANENT_REQUIREMENTS
+    FIXED_PERMANENT_REQUIREMENTS,
+    FIXED_SPECIAL_REQUIREMENTS,
+    FIXED_SUPRA_REQUIREMENTS,
+    FIXED_TRAINING_GRADUATION_REQUIREMENTS,
+    getEmployeeServiceRules,
+    getTrainingGraduationBlockReason,
+    getTrainingPeriodEndDate,
+    getTrainingPeriodYears,
+    isTrainingEmployee,
+    isTrainingGraduationEligible,
+    resolveEmployeeDesignationName,
+    resolveEmployeeService,
+    serviceAllowsSpecial,
+    serviceAllowsSupra
 } from "../constants/hrms";
 import {
+    getGrade1AchievedDate,
     getGrade2AchievedDate,
-    getGrade3AchievedDate
+    getGrade1EligibilityDate,
+    getGrade2EligibilityDate,
+    getGrade3AchievedDate,
+    getSpecialEligibilityDate,
+    getSupraEligibilityDate,
+    normalizeRequiredYears
 } from "../utils/gradeAchievementDates";
 
 const formatDate = (date) =>
@@ -296,16 +315,17 @@ function RequirementSection({
 }
 
 function QualificationsSummary({
-    designation,
     employee,
     overall,
     allSectionsEligible,
-    onUpdateQualifications
+    onUpdateQualifications,
+    qualificationsActionLabel = "Update Qualifications"
 }) {
     const designationName =
-        designation?.designationName?.trim() || "Unassigned designation";
-    const serviceLabel = designation?.service
-        ? `${designation.service.serviceCode} — ${designation.service.description}`
+        resolveEmployeeDesignationName(employee)?.trim() || "Unassigned designation";
+    const service = resolveEmployeeService(employee);
+    const serviceLabel = service
+        ? `${service.serviceCode} — ${service.description}`
         : null;
 
     return (
@@ -332,7 +352,7 @@ function QualificationsSummary({
                         color="text.secondary"
                         sx={{ lineHeight: 1.2 }}
                     >
-                        Designation requirements
+                        Service requirements
                     </Typography>
                     <Typography variant="h6" fontWeight={600} sx={{ mt: 0.25 }}>
                         {designationName}
@@ -372,7 +392,7 @@ function QualificationsSummary({
                                 onClick={onUpdateQualifications}
                                 sx={{ ml: { sm: "auto" } }}
                             >
-                                Update Qualifications
+                                {qualificationsActionLabel}
                             </Button>
                         )}
                     </Stack>
@@ -421,23 +441,32 @@ function QualificationsSummary({
 export default function EmployeeQualificationsCard({
     employee,
     embedded = false,
-    onUpdateQualifications = null
+    onUpdateQualifications = null,
+    qualificationsActionLabel = "Update Qualifications"
 }) {
     if (!employee) {
         return null;
     }
 
-    const designation = employee.designation;
+    const service = getEmployeeServiceRules(employee);
     const careerProgression = employee.careerProgression || {};
     const grade = employee.grade;
     const isPermanent = employee.employmentType === "PERMANENT";
     const hasConfirmedPermanent = Boolean(
         careerProgression.permanentConfirmationDate
     );
-    const grade2RequiredYears =
-        designation?.grade2RequiredYears ?? careerProgression.grade2RequiredYears;
-    const grade1RequiredYears =
-        designation?.grade1RequiredYears ?? careerProgression.grade1RequiredYears;
+    const grade2RequiredYears = normalizeRequiredYears(
+        service?.grade2RequiredYears ?? careerProgression.grade2RequiredYears
+    );
+    const grade1RequiredYears = normalizeRequiredYears(
+        service?.grade1RequiredYears ?? careerProgression.grade1RequiredYears
+    );
+    const supraRequiredYears = normalizeRequiredYears(
+        service?.supraRequiredYears ?? careerProgression.supraRequiredYears
+    );
+    const specialRequiredYears = normalizeRequiredYears(
+        service?.specialRequiredYears ?? careerProgression.specialRequiredYears
+    );
 
     const threeYearServiceDate = getThreeYearServiceDate(
         employee.dateOfFirstAppointment
@@ -450,7 +479,7 @@ export default function EmployeeQualificationsCard({
             ...buildFixedRows(FIXED_PERMANENT_REQUIREMENTS, employee),
             ...buildCustomRows(
                 "CUSTOM_PERMANENT_REQUIREMENT",
-                designation?.permanentRequirements,
+                service?.permanentRequirements,
                 employee
             )
         ],
@@ -463,14 +492,13 @@ export default function EmployeeQualificationsCard({
             ...buildFixedRows(FIXED_GRADE2_REQUIREMENTS, employee),
             ...buildCustomRows(
                 "CUSTOM_GRADE_2_REQUIREMENT",
-                designation?.grade2Requirements,
+                service?.grade2Requirements,
                 employee
             )
         ],
-        grade2RequiredYears != null
-            ? `${grade2RequiredYears} Year(s) Service From First Appointment`
-            : "Required Service Period From First Appointment",
+        `${grade2RequiredYears} Year(s) Service From First Appointment`,
         careerProgression.grade2EligibilityDate
+            ?? getGrade2EligibilityDate(employee, { service }),
     );
 
     const grade1Rows = appendServicePeriodRow(
@@ -478,35 +506,91 @@ export default function EmployeeQualificationsCard({
             ...buildFixedRows(FIXED_GRADE1_REQUIREMENTS, employee),
             ...buildCustomRows(
                 "CUSTOM_GRADE_1_REQUIREMENT",
-                designation?.grade1Requirements,
+                service?.grade1Requirements,
                 employee
             )
         ],
-        grade1RequiredYears != null
-            ? `${grade1RequiredYears} Year(s) Grade II Service Period`
-            : "Grade II Service Period",
+        `${grade1RequiredYears} Year(s) Grade II Service Period`,
         careerProgression.grade1EligibilityDate
+            ?? getGrade1EligibilityDate(employee, { service }),
     );
 
+    const supraRows = appendServicePeriodRow(
+        [
+            ...buildFixedRows(FIXED_SUPRA_REQUIREMENTS, employee),
+            ...buildCustomRows(
+                "CUSTOM_SUPRA_REQUIREMENT",
+                service?.supraRequirements,
+                employee
+            )
+        ],
+        `${supraRequiredYears} Year(s) Grade I Service Period`,
+        careerProgression.supraEligibilityDate
+            ?? getSupraEligibilityDate(employee, { service })
+    );
+
+    const specialRows = appendServicePeriodRow(
+        [
+            ...buildFixedRows(FIXED_SPECIAL_REQUIREMENTS, employee),
+            ...buildCustomRows(
+                "CUSTOM_SPECIAL_REQUIREMENT",
+                service?.specialRequirements,
+                employee
+            )
+        ],
+        `${specialRequiredYears} Year(s) Grade I Service Period`,
+        careerProgression.specialEligibilityDate
+            ?? getSpecialEligibilityDate(employee, { service })
+    );
+
+    const trainingRows = appendServicePeriodRow(
+        buildFixedRows(FIXED_TRAINING_GRADUATION_REQUIREMENTS, employee),
+        `${getTrainingPeriodYears(employee)} Year(s) Training Period From First Appointment`,
+        getTrainingPeriodEndDate(employee)
+    );
+
+    const showTrainingGraduationSection = isTrainingEmployee(employee);
+
     const showPermanentSection =
-        isPermanent && ["III", "II", "I"].includes(grade);
+        isPermanent && ["III", "II", "I", "Supra", "Special"].includes(grade);
 
     const showGrade2Section =
         isPermanent
         && (
             (grade === "III" && hasConfirmedPermanent)
-            || ["II", "I"].includes(grade)
+            || ["II", "I", "Supra", "Special"].includes(grade)
         );
 
     const showGrade1Section =
-        isPermanent && ["II", "I"].includes(grade);
+        isPermanent && ["II", "I", "Supra", "Special"].includes(grade);
+
+    const showSupraSection =
+        isPermanent
+        && serviceAllowsSupra(service)
+        && ["I", "Supra"].includes(grade);
+
+    const showSpecialSection =
+        isPermanent
+        && serviceAllowsSpecial(service)
+        && ["I", "Special"].includes(grade);
 
     const visibleSections = [
+        showTrainingGraduationSection && trainingRows.length > 0
+            ? {
+                title: "Training → Permanent Requirements",
+                description:
+                    "Pass the training examination and complete the training period before appointing this employee as permanent.",
+                meta: `Training period is counted from first appointment date (${formatDate(employee.dateOfFirstAppointment)}).`,
+                rows: trainingRows,
+                eligibilityDate: getTrainingPeriodEndDate(employee),
+                promotionReadyLabel: "Ready for permanent appointment"
+            }
+            : null,
         showPermanentSection && permanentRows.length > 0
             ? {
                 title: "Permanent Requirements",
                 description:
-                    "Grade III permanency qualifications defined by the designation.",
+                    "Grade III permanency qualifications defined by the service.",
                 meta: grade === "III" && !hasConfirmedPermanent
                     ? "Employee is on probation — complete these to qualify for permanent status."
                     : null,
@@ -520,11 +604,11 @@ export default function EmployeeQualificationsCard({
                 title: "Grade II Promotion Requirements",
                 description:
                     "Requirements to qualify for promotion from Grade III to Grade II.",
-                meta: grade2RequiredYears != null
-                    ? `Service counted from first appointment date (${formatDate(employee.dateOfFirstAppointment || getGrade3AchievedDate(employee))}).`
-                    : null,
+                meta: `Service counted from first appointment date (${formatDate(employee.dateOfFirstAppointment || getGrade3AchievedDate(employee))}).`,
                 rows: grade2Rows,
-                eligibilityDate: careerProgression.grade2EligibilityDate,
+                eligibilityDate:
+                    careerProgression.grade2EligibilityDate
+                    ?? getGrade2EligibilityDate(employee, { service }),
                 promotionReadyLabel: "Ready for Grade II promotion"
             }
             : null,
@@ -533,12 +617,38 @@ export default function EmployeeQualificationsCard({
                 title: "Grade I Promotion Requirements",
                 description:
                     "Requirements to qualify for promotion from Grade II to Grade I.",
-                meta: grade1RequiredYears != null
-                    ? `Grade II service counted from achievement date (${formatDate(getGrade2AchievedDate(employee) || employee.appointmentDateToPresentClassGrade)}).`
-                    : null,
+                meta: `Grade II service counted from achievement date (${formatDate(getGrade2AchievedDate(employee) || employee.appointmentDateToPresentClassGrade)}).`,
                 rows: grade1Rows,
-                eligibilityDate: careerProgression.grade1EligibilityDate,
+                eligibilityDate:
+                    careerProgression.grade1EligibilityDate
+                    ?? getGrade1EligibilityDate(employee, { service }),
                 promotionReadyLabel: "Ready for Grade I promotion"
+            }
+            : null,
+        showSupraSection && supraRows.length > 0
+            ? {
+                title: "Supra Promotion Requirements",
+                description:
+                    "Requirements to qualify for promotion from Grade I to Supra.",
+                meta: `Grade I service counted from achievement date (${formatDate(getGrade1AchievedDate(employee) || employee.appointmentDateToPresentClassGrade)}).`,
+                rows: supraRows,
+                eligibilityDate:
+                    careerProgression.supraEligibilityDate
+                    ?? getSupraEligibilityDate(employee, { service }),
+                promotionReadyLabel: "Ready for Supra promotion"
+            }
+            : null,
+        showSpecialSection && specialRows.length > 0
+            ? {
+                title: "Special Promotion Requirements",
+                description:
+                    "Requirements to qualify for promotion from Grade I to Special.",
+                meta: `Grade I service counted from achievement date (${formatDate(getGrade1AchievedDate(employee) || employee.appointmentDateToPresentClassGrade)}).`,
+                rows: specialRows,
+                eligibilityDate:
+                    careerProgression.specialEligibilityDate
+                    ?? getSpecialEligibilityDate(employee, { service }),
+                promotionReadyLabel: "Ready for Special promotion"
             }
             : null
     ].filter(Boolean);
@@ -568,7 +678,7 @@ export default function EmployeeQualificationsCard({
         );
     };
 
-    if (!isPermanent) {
+    if (!isPermanent && !isTrainingEmployee(employee)) {
         return renderContent(
             <Typography color="text.secondary">
                 Qualification tracking applies to permanent government employees only.
@@ -586,12 +696,17 @@ export default function EmployeeQualificationsCard({
 
     return renderContent(
         <>
+            {isTrainingEmployee(employee) && !isTrainingGraduationEligible(employee) && (
+                <Alert severity="warning" sx={{ mb: 2.5 }}>
+                    {getTrainingGraduationBlockReason(employee)}
+                </Alert>
+            )}
             <QualificationsSummary
-                designation={designation}
                 employee={employee}
                 overall={overall}
                 allSectionsEligible={allSectionsEligible}
                 onUpdateQualifications={onUpdateQualifications}
+                qualificationsActionLabel={qualificationsActionLabel}
             />
 
             <Stack spacing={2.5}>

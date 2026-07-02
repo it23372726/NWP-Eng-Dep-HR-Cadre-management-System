@@ -27,6 +27,7 @@ import GeographicDistributionPanel from "../components/GeographicDistributionPan
 import RecentMovementsTable from "../components/RecentMovementsTable";
 import RecentEmployeesWidget from "../components/RecentEmployeesWidget";
 import BirthdaysWidget from "../components/BirthdaysWidget";
+import SalaryIncrementWatchPanel from "../components/SalaryIncrementWatchPanel";
 import DashboardSection, { dashboardGrid } from "../components/DashboardSection";
 
 const DASHBOARD_TABS = {
@@ -137,6 +138,21 @@ export default function DashboardPage() {
             {activeTab === DASHBOARD_TABS.OVERVIEW && (
                 <>
                     <AttentionRequiredPanel alerts={data?.alerts} loading={loading} />
+
+                    {(loading
+                        || (data?.pendingSalaryIncrements?.length ?? 0) > 0
+                        || (data?.upcomingSalaryIncrements?.length ?? 0) > 0) && (
+                        <DashboardSection
+                            title="Salary Increments"
+                            description="Pending and upcoming annual salary increments"
+                        >
+                            <SalaryIncrementWatchPanel
+                                pending={data?.pendingSalaryIncrements}
+                                upcoming={data?.upcomingSalaryIncrements}
+                                loading={loading}
+                            />
+                        </DashboardSection>
+                    )}
 
                     <DashboardSection
                         title="Workforce Summary"

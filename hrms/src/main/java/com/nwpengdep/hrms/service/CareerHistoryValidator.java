@@ -11,7 +11,9 @@ import com.nwpengdep.hrms.entity.Designation;
 import com.nwpengdep.hrms.entity.District;
 import com.nwpengdep.hrms.entity.EmployeeActionType;
 import com.nwpengdep.hrms.entity.Grade;
+import com.nwpengdep.hrms.entity.ServiceType;
 import com.nwpengdep.hrms.repository.DesignationRepository;
+import com.nwpengdep.hrms.repository.ServiceTypeRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -20,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 public class CareerHistoryValidator {
 
     private final DesignationRepository designationRepository;
+    private final ServiceTypeRepository serviceTypeRepository;
     private final DesignationAssignmentValidator designationAssignmentValidator;
     private final CareerProgressionService careerProgressionService;
     private final OfficeService officeService;
@@ -40,7 +43,10 @@ public class CareerHistoryValidator {
         LocalDate previousDate = null;
         LocalDate firstAppointmentDate = null;
         LocalDate grade2AchievedDate = null;
+        LocalDate grade1AchievedDate = null;
         Designation currentDesignation = null;
+        String currentRecordedDesignationName = null;
+        Long currentServiceId = null;
         Grade currentGrade = null;
         Long currentServiceLevelId = null;
         String currentDepartment = null;
@@ -94,9 +100,9 @@ public class CareerHistoryValidator {
 
             switch (event.getActionType()) {
                 case NEW_APPOINTMENT -> {
-                    if (event.getDesignationId() == null) {
+                    if (!hasCatalogDesignation(event) && !isCustomDesignationEvent(event)) {
                         throw new RuntimeException(
-                                "First appointment must include a designation"
+                                "First appointment must include a designation or a custom title"
                         );
                     }
                     if (event.getServiceLevelId() == null) {
@@ -111,7 +117,6 @@ public class CareerHistoryValidator {
                             event.getDistrict(),
                             position
                     );
-                    currentDesignation = resolveDesignation(event.getDesignationId(), position);
                     currentGrade = event.getGrade() != null ? event.getGrade() : Grade.III;
                     currentServiceLevelId = event.getServiceLevelId();
                     currentDepartment = DepartmentConstants.normalize(event.getDepartment());
@@ -119,12 +124,38 @@ public class CareerHistoryValidator {
                     currentDistrict = DepartmentConstants.isNwpEngineering(currentDepartment)
                             ? event.getDistrict()
                             : null;
-                    validateAssignmentState(
-                            currentDesignation,
-                            currentGrade,
-                            currentServiceLevelId,
-                            position
-                    );
+
+                    if (hasCatalogDesignation(event)) {
+                        currentDesignation = resolveDesignation(event.getDesignationId(), position);
+                        currentRecordedDesignationName = null;
+                        currentServiceId = currentDesignation.getService() != null
+                                ? currentDesignation.getService().getId()
+                                : null;
+                        validateAssignmentState(
+                                currentDesignation,
+                                currentGrade,
+                                currentServiceLevelId,
+                                position
+                        );
+                    } else {
+                        currentDesignation = null;
+                        currentRecordedDesignationName =
+                                event.getRecordedDesignationName().trim();
+                        if (event.getServiceId() != null) {
+                            currentServiceId = event.getServiceId();
+                        } else if (currentServiceId == null) {
+                            throw new RuntimeException(
+                                    "First appointment with a custom title must include the service"
+                            );
+                        }
+                        ServiceType service = resolveService(currentServiceId, position);
+                        validateCustomAssignmentState(
+                                currentGrade,
+                                currentServiceLevelId,
+                                service,
+                                position
+                        );
+                    }
                     firstAppointmentDate = event.getActionDate();
                     active = true;
                 }
@@ -153,42 +184,129 @@ public class CareerHistoryValidator {
                 case PROMOTION -> {
                     requireActive(active, position, "Promotion");
                     requireTimelineWorkplace(currentDepartment, currentOffice, position);
-                    if (event.getDesignationId() == null) {
+                    if (!hasCatalogDesignation(event) && !isCustomDesignationEvent(event)) {
                         throw new RuntimeException(
-                                "Promotion (event #" + position + ") must include the new designation"
+                                "Promotion (event #" + position
+                                        + ") must include the new designation or a custom title"
                         );
                     }
-                    Designation target = resolveDesignation(event.getDesignationId(), position);
-                    validateSameService(currentDesignation, target, position);
                     if (event.getGrade() == null) {
                         throw new RuntimeException(
                                 "Promotion (event #" + position + ") must include the grade"
                         );
                     }
-                    validateGradeStep(currentGrade, event.getGrade(), position);
-                    validateGradePromotionDate(
+                    validateGradeStep(
                             currentGrade,
                             event.getGrade(),
-                            event.getActionDate(),
-                            firstAppointmentDate,
-                            grade2AchievedDate,
-                            currentDesignation,
+                            resolveService(currentServiceId, position),
                             position
                     );
-                    currentDesignation = target;
+
+                    ServiceType currentService = resolveService(currentServiceId, position);
+                    if (hasCatalogDesignation(event)) {
+                        Designation target = resolveDesignation(event.getDesignationId(), position);
+                        validateSameServiceId(
+                                currentServiceId,
+                                target.getService() != null ? target.getService().getId() : null,
+                                position
+                        );
+                        validateGradePromotionDate(
+                                currentGrade,
+                                event.getGrade(),
+                                event.getActionDate(),
+                                firstAppointmentDate,
+                                grade2AchievedDate,
+                                grade1AchievedDate,
+                                target,
+                                position
+                        );
+                        currentDesignation = target;
+                        currentRecordedDesignationName = null;
+                        currentServiceId = target.getService() != null
+                                ? target.getService().getId()
+                                : currentServiceId;
+                    } else {
+                        if (event.getServiceLevelId() == null) {
+                            throw new RuntimeException(
+                                    "Promotion (event #" + position
+                                            + ") with a custom title must include a service level"
+                            );
+                        }
+                        validateGradePromotionDate(
+                                currentGrade,
+                                event.getGrade(),
+                                event.getActionDate(),
+                                firstAppointmentDate,
+                                grade2AchievedDate,
+                                grade1AchievedDate,
+                                currentService,
+                                position
+                        );
+                        currentDesignation = null;
+                        currentRecordedDesignationName =
+                                event.getRecordedDesignationName().trim();
+                    }
+
                     currentGrade = event.getGrade();
                     if (currentGrade == Grade.II && grade2AchievedDate == null) {
                         grade2AchievedDate = event.getActionDate();
                     }
+                    if (currentGrade == Grade.I && grade1AchievedDate == null) {
+                        grade1AchievedDate = event.getActionDate();
+                    }
                     if (event.getServiceLevelId() != null) {
                         currentServiceLevelId = event.getServiceLevelId();
                     }
-                    validateAssignmentState(
-                            currentDesignation,
-                            currentGrade,
-                            currentServiceLevelId,
-                            position
-                    );
+
+                    if (hasCatalogDesignation(event)) {
+                        validateAssignmentState(
+                                currentDesignation,
+                                currentGrade,
+                                currentServiceLevelId,
+                                position
+                        );
+                    } else {
+                        validateCustomAssignmentState(
+                                currentGrade,
+                                currentServiceLevelId,
+                                currentService,
+                                position
+                        );
+                    }
+
+                    if (Boolean.TRUE.equals(event.getTransferringOut())) {
+                        if (!DepartmentConstants.isNwpEngineering(currentDepartment)) {
+                            throw new RuntimeException(
+                                    "Transfer out on promotion (event #" + position
+                                            + ") is only available from "
+                                            + DepartmentConstants.NWP_ENGINEERING
+                            );
+                        }
+                        if (event.getToDepartment() == null || event.getToDepartment().isBlank()) {
+                            throw new RuntimeException(
+                                    "Transfer out on promotion (event #" + position
+                                            + ") requires a destination department"
+                            );
+                        }
+                        if (event.getToOffice() == null || event.getToOffice().isBlank()) {
+                            throw new RuntimeException(
+                                    "Transfer out on promotion (event #" + position
+                                            + ") requires a destination office"
+                            );
+                        }
+                        String destination = DepartmentConstants.normalize(
+                                event.getToDepartment().trim()
+                        );
+                        if (DepartmentConstants.isNwpEngineering(destination)) {
+                            throw new RuntimeException(
+                                    "Promotion (event #" + position
+                                            + ") cannot transfer out to "
+                                            + DepartmentConstants.NWP_ENGINEERING
+                            );
+                        }
+                        currentDepartment = destination;
+                        currentOffice = event.getToOffice().trim();
+                    }
                 }
 
                 case ASSIGNMENT_GRADE_UPDATE -> {
@@ -199,35 +317,106 @@ public class CareerHistoryValidator {
                                 "Grade update (event #" + position + ") must include the new grade"
                         );
                     }
-                    if (event.getDesignationId() != null) {
+                    ServiceType currentService = resolveService(currentServiceId, position);
+                    if (hasCatalogDesignation(event)) {
                         Designation target =
                                 resolveDesignation(event.getDesignationId(), position);
-                        validateSameService(currentDesignation, target, position);
+                        validateSameServiceId(
+                                currentServiceId,
+                                target.getService() != null ? target.getService().getId() : null,
+                                position
+                        );
                         currentDesignation = target;
+                        currentRecordedDesignationName = null;
+                        currentServiceId = target.getService() != null
+                                ? target.getService().getId()
+                                : currentServiceId;
+                        validateGradePromotionDate(
+                                currentGrade,
+                                event.getGrade(),
+                                event.getActionDate(),
+                                firstAppointmentDate,
+                                grade2AchievedDate,
+                                grade1AchievedDate,
+                                target,
+                                position
+                        );
+                    } else if (isCustomDesignationEvent(event)) {
+                        currentDesignation = null;
+                        currentRecordedDesignationName =
+                                event.getRecordedDesignationName().trim();
+                        validateGradePromotionDate(
+                                currentGrade,
+                                event.getGrade(),
+                                event.getActionDate(),
+                                firstAppointmentDate,
+                                grade2AchievedDate,
+                                grade1AchievedDate,
+                                currentService,
+                                position
+                        );
+                    } else if (currentDesignation != null) {
+                        validateGradePromotionDate(
+                                currentGrade,
+                                event.getGrade(),
+                                event.getActionDate(),
+                                firstAppointmentDate,
+                                grade2AchievedDate,
+                                grade1AchievedDate,
+                                currentDesignation,
+                                position
+                        );
+                    } else {
+                        validateGradePromotionDate(
+                                currentGrade,
+                                event.getGrade(),
+                                event.getActionDate(),
+                                firstAppointmentDate,
+                                grade2AchievedDate,
+                                grade1AchievedDate,
+                                currentService,
+                                position
+                        );
                     }
-                    validateGradeStep(currentGrade, event.getGrade(), position);
-                    validateGradePromotionDate(
+                    validateGradeStep(
                             currentGrade,
                             event.getGrade(),
-                            event.getActionDate(),
-                            firstAppointmentDate,
-                            grade2AchievedDate,
-                            currentDesignation,
+                            currentService,
                             position
                     );
                     currentGrade = event.getGrade();
                     if (currentGrade == Grade.II && grade2AchievedDate == null) {
                         grade2AchievedDate = event.getActionDate();
                     }
+                    if (currentGrade == Grade.I && grade1AchievedDate == null) {
+                        grade1AchievedDate = event.getActionDate();
+                    }
                     if (event.getServiceLevelId() != null) {
                         currentServiceLevelId = event.getServiceLevelId();
                     }
-                    validateAssignmentState(
-                            currentDesignation,
-                            currentGrade,
-                            currentServiceLevelId,
-                            position
-                    );
+                    if (hasCatalogDesignation(event)) {
+                        validateAssignmentState(
+                                currentDesignation,
+                                currentGrade,
+                                currentServiceLevelId,
+                                position
+                        );
+                    } else if (isCustomDesignationEvent(event)
+                            || currentRecordedDesignationName != null) {
+                        validateCustomAssignmentState(
+                                currentGrade,
+                                currentServiceLevelId,
+                                currentService,
+                                position
+                        );
+                    } else {
+                        validateAssignmentState(
+                                currentDesignation,
+                                currentGrade,
+                                currentServiceLevelId,
+                                position
+                        );
+                    }
                 }
 
                 case TRANSFER_OUT -> {
@@ -259,6 +448,48 @@ public class CareerHistoryValidator {
                             event.getToDistrict(),
                             position
                     );
+                    if (!hasCatalogDesignation(event) && !isCustomDesignationEvent(event)) {
+                        throw new RuntimeException(
+                                "Transfer out (event #" + position
+                                        + ") must include the destination designation"
+                        );
+                    }
+                    if (event.getServiceLevelId() == null) {
+                        throw new RuntimeException(
+                                "Transfer out (event #" + position
+                                        + ") must include the destination service level"
+                        );
+                    }
+                    ServiceType currentService = resolveService(currentServiceId, position);
+                    Long targetServiceLevelId = event.getServiceLevelId();
+                    if (hasCatalogDesignation(event)) {
+                        Designation target =
+                                resolveDesignation(event.getDesignationId(), position);
+                        validateSameServiceId(
+                                currentServiceId,
+                                target.getService() != null ? target.getService().getId() : null,
+                                position
+                        );
+                        validateAssignmentState(
+                                target,
+                                currentGrade,
+                                targetServiceLevelId,
+                                position
+                        );
+                        currentDesignation = target;
+                        currentRecordedDesignationName = null;
+                    } else {
+                        validateCustomAssignmentState(
+                                currentGrade,
+                                targetServiceLevelId,
+                                currentService,
+                                position
+                        );
+                        currentDesignation = null;
+                        currentRecordedDesignationName =
+                                event.getRecordedDesignationName().trim();
+                    }
+                    currentServiceLevelId = targetServiceLevelId;
                     currentDepartment = toDepartment;
                     currentOffice = event.getToOffice().trim();
                     if (DepartmentConstants.isNwpEngineering(toDepartment)) {
@@ -329,6 +560,17 @@ public class CareerHistoryValidator {
                     active = false;
                 }
 
+                case VACATION_OF_POST -> {
+                    requireActive(active, position, "Vacation of Post");
+                    requireTimelineWorkplace(currentDepartment, currentOffice, position);
+                    if (event.getReason() == null || event.getReason().isBlank()) {
+                        throw new RuntimeException(
+                                "Vacation of Post (event #" + position + ") must include a reason"
+                        );
+                    }
+                    active = false;
+                }
+
                 case DEATH -> {
                     requireActive(active, position, "Death");
                     requireTimelineWorkplace(currentDepartment, currentOffice, position);
@@ -369,12 +611,35 @@ public class CareerHistoryValidator {
             LocalDate actionDate,
             LocalDate firstAppointmentDate,
             LocalDate grade2AchievedDate,
+            LocalDate grade1AchievedDate,
             Designation designation,
+            int position
+    ) {
+        validateGradePromotionDate(
+                currentGrade,
+                newGrade,
+                actionDate,
+                firstAppointmentDate,
+                grade2AchievedDate,
+                grade1AchievedDate,
+                designation != null ? designation.getService() : null,
+                position
+        );
+    }
+
+    private void validateGradePromotionDate(
+            Grade currentGrade,
+            Grade newGrade,
+            LocalDate actionDate,
+            LocalDate firstAppointmentDate,
+            LocalDate grade2AchievedDate,
+            LocalDate grade1AchievedDate,
+            ServiceType service,
             int position
     ) {
         if (currentGrade == Grade.III && newGrade == Grade.II) {
             LocalDate minimumDate = careerProgressionService
-                    .getMinimumGrade2PromotionDate(firstAppointmentDate, designation);
+                    .getMinimumGrade2PromotionDate(firstAppointmentDate, service);
             if (minimumDate != null && actionDate.isBefore(minimumDate)) {
                 throw new RuntimeException(
                         "Career history event #" + position
@@ -395,7 +660,7 @@ public class CareerHistoryValidator {
                 );
             }
             LocalDate minimumDate = careerProgressionService
-                    .getMinimumGrade1PromotionDate(grade2AchievedDate, designation);
+                    .getMinimumGrade1PromotionDate(grade2AchievedDate, service);
             if (minimumDate != null && actionDate.isBefore(minimumDate)) {
                 throw new RuntimeException(
                         "Career history event #" + position
@@ -403,6 +668,48 @@ public class CareerHistoryValidator {
                                 + minimumDate
                                 + ". Grade I promotion requires the service period "
                                 + "from Grade II achievement."
+                );
+            }
+            return;
+        }
+
+        if (currentGrade == Grade.I && newGrade == Grade.SUPRA) {
+            if (grade1AchievedDate == null) {
+                throw new RuntimeException(
+                        "Career history event #" + position
+                                + " requires a prior Grade I achievement date"
+                );
+            }
+            LocalDate minimumDate = careerProgressionService
+                    .getMinimumSupraPromotionDate(grade1AchievedDate, service);
+            if (minimumDate != null && actionDate.isBefore(minimumDate)) {
+                throw new RuntimeException(
+                        "Career history event #" + position
+                                + " cannot be earlier than "
+                                + minimumDate
+                                + ". Supra promotion requires the service period "
+                                + "from Grade I achievement."
+                );
+            }
+            return;
+        }
+
+        if (currentGrade == Grade.I && newGrade == Grade.SPECIAL) {
+            if (grade1AchievedDate == null) {
+                throw new RuntimeException(
+                        "Career history event #" + position
+                                + " requires a prior Grade I achievement date"
+                );
+            }
+            LocalDate minimumDate = careerProgressionService
+                    .getMinimumSpecialPromotionDate(grade1AchievedDate, service);
+            if (minimumDate != null && actionDate.isBefore(minimumDate)) {
+                throw new RuntimeException(
+                        "Career history event #" + position
+                                + " cannot be earlier than "
+                                + minimumDate
+                                + ". Special promotion requires the service period "
+                                + "from Grade I achievement."
                 );
             }
         }
@@ -478,6 +785,67 @@ public class CareerHistoryValidator {
         validateServiceLevelForEvent(serviceLevelId, designation, position);
     }
 
+    private void validateCustomAssignmentState(
+            Grade grade,
+            Long serviceLevelId,
+            ServiceType service,
+            int position
+    ) {
+        if (grade == null || service == null) {
+            return;
+        }
+
+        try {
+            designationAssignmentValidator.validateCustomAssignment(
+                    grade,
+                    serviceLevelId,
+                    service
+            );
+        } catch (RuntimeException ex) {
+            throw new RuntimeException(
+                    "Career history event #" + position + ": " + ex.getMessage(),
+                    ex
+            );
+        }
+    }
+
+    private boolean hasCatalogDesignation(CareerHistoryEventRequest event) {
+        return event.getDesignationId() != null;
+    }
+
+    private boolean isCustomDesignationEvent(CareerHistoryEventRequest event) {
+        return event.getDesignationId() == null
+                && event.getRecordedDesignationName() != null
+                && !event.getRecordedDesignationName().isBlank();
+    }
+
+    private ServiceType resolveService(Long serviceId, int position) {
+        if (serviceId == null) {
+            throw new RuntimeException(
+                    "Career history event #" + position + " requires a service"
+            );
+        }
+        return serviceTypeRepository.findById(serviceId)
+                .orElseThrow(() -> new RuntimeException(
+                        "Service not found for career history event #" + position
+                ));
+    }
+
+    private void validateSameServiceId(
+            Long currentServiceId,
+            Long targetServiceId,
+            int position
+    ) {
+        if (currentServiceId == null
+                || targetServiceId == null
+                || !currentServiceId.equals(targetServiceId)) {
+            throw new RuntimeException(
+                    "Career history event #" + position + ": promotions can only be made "
+                            + "within the same service"
+            );
+        }
+    }
+
     private void validateServiceLevelForEvent(
             Long serviceLevelId,
             Designation designation,
@@ -519,21 +887,36 @@ public class CareerHistoryValidator {
         }
     }
 
-    private void validateGradeStep(Grade currentGrade, Grade newGrade, int position) {
-        int currentRank = rank(currentGrade);
-        int newRank = rank(newGrade);
-
-        if (newRank == 0) {
+    private void validateGradeStep(
+            Grade currentGrade,
+            Grade newGrade,
+            ServiceType service,
+            int position
+    ) {
+        if (newGrade == null || newGrade == Grade.NONE) {
             throw new RuntimeException(
                     "Career history event #" + position
                             + " has an invalid grade for a permanent employee"
             );
         }
 
-        if (newRank != currentRank && newRank != currentRank + 1) {
+        if (currentGrade == newGrade) {
+            return;
+        }
+
+        boolean allowed = switch (currentGrade) {
+            case III -> newGrade == Grade.II;
+            case II -> newGrade == Grade.I;
+            case I -> (newGrade == Grade.SUPRA
+                    && careerProgressionService.serviceAllowsSupra(service))
+                    || (newGrade == Grade.SPECIAL
+                    && careerProgressionService.serviceAllowsSpecial(service));
+            default -> false;
+        };
+
+        if (!allowed) {
             throw new RuntimeException(
-                    "Career history event #" + position + " skips grade steps: "
-                            + "grades must progress one step at a time ("
+                    "Career history event #" + position + " has an invalid grade step ("
                             + label(currentGrade) + " to " + label(newGrade) + " is not allowed)"
             );
         }
@@ -544,17 +927,15 @@ public class CareerHistoryValidator {
             Designation targetDesignation,
             int position
     ) {
-        if (currentDesignation == null
-                || currentDesignation.getService() == null
-                || targetDesignation == null
-                || targetDesignation.getService() == null
-                || !currentDesignation.getService().getId()
-                        .equals(targetDesignation.getService().getId())) {
-            throw new RuntimeException(
-                    "Career history event #" + position + ": promotions can only be made "
-                            + "to a designation within the same service"
-            );
-        }
+        validateSameServiceId(
+                currentDesignation != null && currentDesignation.getService() != null
+                        ? currentDesignation.getService().getId()
+                        : null,
+                targetDesignation != null && targetDesignation.getService() != null
+                        ? targetDesignation.getService().getId()
+                        : null,
+                position
+        );
     }
 
     private Designation resolveDesignation(Long designationId, int position) {

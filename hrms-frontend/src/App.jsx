@@ -18,6 +18,9 @@ from "./layouts/DashboardLayout";
 import ProtectedRoute
 from "./routes/ProtectedRoute";
 
+import SuperAdminRoute
+from "./routes/SuperAdminRoute";
+
 import DesignationPage
 from "./pages/DesignationPage";
 
@@ -49,6 +52,15 @@ from "./pages/CadreReportPage";
 
 import AllEmployeeDetailsReportPage
 from "./pages/AllEmployeeDetailsReportPage";
+
+import ChangesReportPage
+from "./pages/ChangesReportPage";
+
+import AuditLogPage
+from "./pages/AuditLogPage";
+
+import UsersPage
+from "./pages/UsersPage";
 
 
 export default function App() {
@@ -128,6 +140,29 @@ export default function App() {
                 <Route
                     path="/reports/all-employee-details"
                     element={<AllEmployeeDetailsReportPage />}
+                />
+
+                <Route
+                    path="/reports/changes"
+                    element={<ChangesReportPage />}
+                />
+
+                <Route
+                    path="/audit-logs"
+                    element={
+                        <SuperAdminRoute>
+                            <AuditLogPage />
+                        </SuperAdminRoute>
+                    }
+                />
+
+                <Route
+                    path="/users"
+                    element={
+                        <SuperAdminRoute>
+                            <UsersPage />
+                        </SuperAdminRoute>
+                    }
                 />
 
             </Route>

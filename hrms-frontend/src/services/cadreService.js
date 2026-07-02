@@ -47,6 +47,10 @@ export const downloadVacancyReportPdf = async () => {
     return response.data;
 };
 
+export const reorderCadres = async (orderedCadreIds) => {
+    await api.put("/cadres/order", { orderedCadreIds });
+};
+
 export const updateCadre =
 async (id, data) => {
 

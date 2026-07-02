@@ -73,7 +73,7 @@ export default function WorkforceSummaryCards({ summary, loading }) {
         {
             icon: PeopleIcon,
             title: "Active Employees",
-            value: summary?.activeEmployees ?? 0,
+            value: summary?.activeEmployees ?? summary?.totalEmployees ?? 0,
             subtitle: "NWP Engineering",
             color: KPI_COLORS.active,
             onClick: () => navigate(buildEmployeeListUrl())

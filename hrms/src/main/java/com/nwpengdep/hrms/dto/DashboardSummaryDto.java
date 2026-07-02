@@ -13,6 +13,8 @@ public class DashboardSummaryDto {
 
     private Integer activeEmployees;
 
+    private Integer permanentEmploymentEmployees;
+
     private Integer approvedCadre;
 
     private Integer vacancies;
@@ -36,6 +38,10 @@ public class DashboardSummaryDto {
     private Integer eligibleGrade3To2;
 
     private Integer eligibleGrade2To1;
+
+    private Integer eligibleGrade1ToSupra;
+
+    private Integer eligibleGrade1ToSpecial;
 
     private Integer recentlyQualified;
 

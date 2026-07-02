@@ -11,6 +11,7 @@ import {
     isNamedRequirementCompleted,
     requirementKey
 } from "../../utils/employeeFormUtils";
+import { getEmployeeServiceRules } from "../../constants/hrms";
 import FormSection from "../FormSection";
 
 const FIXED_REQUIREMENT_FIELD_NAMES = {
@@ -51,24 +52,26 @@ export default function EmployeeQualificationsSection({
         );
     }
 
-    const customRequirements = designation?.[config.customField] || [];
+    const service = getEmployeeServiceRules(employee)
+        ?? (designation ? getEmployeeServiceRules({ designation }) : null);
+    const customRequirements = service?.[config.customField] || [];
 
     return (
         <FormSection title={config.title} description={config.description}>
             {config.showGrade2Years
-                && designation?.grade2RequiredYears != null && (
+                && service?.grade2RequiredYears != null && (
                 <Chip
                     size="small"
-                    label={`Required service before Grade II: ${designation.grade2RequiredYears} year(s) from first appointment date`}
+                    label={`Required service before Grade II: ${service.grade2RequiredYears} year(s) from first appointment date`}
                     variant="outlined"
                     sx={{ mb: 2 }}
                 />
             )}
             {config.showGrade1Years
-                && designation?.grade1RequiredYears != null && (
+                && service?.grade1RequiredYears != null && (
                 <Chip
                     size="small"
-                    label={`Required service before Grade I: ${designation.grade1RequiredYears} year(s) from present class / grade date`}
+                    label={`Required service before Grade I: ${service.grade1RequiredYears} year(s) from present class / grade date`}
                     variant="outlined"
                     sx={{ mb: 2 }}
                 />
@@ -129,7 +132,7 @@ export default function EmployeeQualificationsSection({
             </Grid>
             {customRequirements.length === 0 && config.customType && (
                 <Alert severity="info" sx={{ mt: 1 }}>
-                    No custom requirements are configured for this designation.
+                    No custom requirements are configured for this service.
                 </Alert>
             )}
         </FormSection>

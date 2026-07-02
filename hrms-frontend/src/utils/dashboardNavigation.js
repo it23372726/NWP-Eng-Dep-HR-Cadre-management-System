@@ -1,21 +1,27 @@
 export const EMPLOYEE_FILTER_PARAMS = {
     permanentStatus: "permanentStatus",
+    employmentType: "employmentType",
     gradePromotion: "gradePromotion",
     retiringWithin: "retiringWithin",
     district: "district",
     office: "office",
     qualification: "qualification",
+    incrementStatus: "incrementStatus",
+    privateVehicle: "privateVehicle",
     search: "q",
     departmentScope: "departmentScope"
 };
 
 const DEFAULT_EMPLOYEE_FILTERS = {
     permanentStatus: "ALL",
+    employmentType: "",
     gradePromotion: "ALL",
     retiringWithin: "",
     district: "",
     office: "",
     qualification: "",
+    incrementStatus: "",
+    privateVehicle: "",
     search: "",
     departmentScope: "NWP"
 };
@@ -72,6 +78,10 @@ export function parseEmployeeListSearchParams(searchParams) {
             EMPLOYEE_FILTER_PARAMS.permanentStatus,
             DEFAULT_EMPLOYEE_FILTERS.permanentStatus
         ),
+        employmentTypeFilter: get(
+            EMPLOYEE_FILTER_PARAMS.employmentType,
+            DEFAULT_EMPLOYEE_FILTERS.employmentType
+        ),
         gradePromotionFilter: get(
             EMPLOYEE_FILTER_PARAMS.gradePromotion,
             DEFAULT_EMPLOYEE_FILTERS.gradePromotion
@@ -80,6 +90,8 @@ export function parseEmployeeListSearchParams(searchParams) {
         districtFilter: get(EMPLOYEE_FILTER_PARAMS.district),
         officeFilter: get(EMPLOYEE_FILTER_PARAMS.office),
         qualificationFilter: resolveQualificationFilter(searchParams),
+        incrementStatusFilter: get(EMPLOYEE_FILTER_PARAMS.incrementStatus),
+        privateVehicleFilter: get(EMPLOYEE_FILTER_PARAMS.privateVehicle),
         departmentScope: get(
             EMPLOYEE_FILTER_PARAMS.departmentScope,
             DEFAULT_EMPLOYEE_FILTERS.departmentScope
@@ -98,6 +110,12 @@ export function employeeFiltersToSearchParams(filterState) {
         params.set(
             EMPLOYEE_FILTER_PARAMS.permanentStatus,
             filterState.permanentStatusFilter
+        );
+    }
+    if (filterState.employmentTypeFilter) {
+        params.set(
+            EMPLOYEE_FILTER_PARAMS.employmentType,
+            filterState.employmentTypeFilter
         );
     }
     if (filterState.gradePromotionFilter
@@ -123,6 +141,18 @@ export function employeeFiltersToSearchParams(filterState) {
         params.set(
             EMPLOYEE_FILTER_PARAMS.qualification,
             filterState.qualificationFilter
+        );
+    }
+    if (filterState.incrementStatusFilter) {
+        params.set(
+            EMPLOYEE_FILTER_PARAMS.incrementStatus,
+            filterState.incrementStatusFilter
+        );
+    }
+    if (filterState.privateVehicleFilter) {
+        params.set(
+            EMPLOYEE_FILTER_PARAMS.privateVehicle,
+            filterState.privateVehicleFilter
         );
     }
     if (filterState.departmentScope

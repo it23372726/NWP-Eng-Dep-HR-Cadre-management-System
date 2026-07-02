@@ -35,6 +35,7 @@ class EmployeeSummaryReportExportServiceTest {
                 .dateOfFirstAppointment(LocalDate.of(2010, 2, 1))
                 .nic("987654321V")
                 .incremantDate("01 Jan")
+                .widowsOrphansPensionNo("WOP-99")
                 .salaryCode("SC-02")
                 .retirementDateAt55(LocalDate.of(2040, 8, 20))
                 .retirementDateAt60(LocalDate.of(2045, 8, 20))

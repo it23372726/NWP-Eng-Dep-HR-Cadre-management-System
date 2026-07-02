@@ -9,18 +9,24 @@ import {
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
-import { dialogActionsSx } from "../utils/formLayout";
+import { dialogActionsSx, datePickerTextFieldProps } from "../utils/formLayout";
 import {
     formatVehiclePermitDate,
     getMinVehiclePermitCollectionDate,
+    getMinVehiclePermitEditDate,
     getVehiclePermitCollectionHelperText,
     todayInputValue,
-    validateVehiclePermitCollectionDate
+    validateVehiclePermitCollectionDate,
+    validateVehiclePermitEditDate
 } from "../utils/vehiclePermit";
 
 const toDayjs = (value) => (value ? dayjs(value) : null);
 
-const defaultCollectedDate = (status) => {
+const defaultCollectedDate = (status, mode) => {
+    if (mode === "edit" && status?.lastCollectedDate) {
+        return status.lastCollectedDate;
+    }
+
     const today = todayInputValue();
     const minDate = getMinVehiclePermitCollectionDate(status);
 
@@ -36,23 +42,29 @@ export default function RecordVehiclePermitDialog({
     onClose,
     onConfirm,
     vehiclePermitStatus,
-    saving = false
+    saving = false,
+    mode = "record"
 }) {
+    const isEdit = mode === "edit";
     const [collectedDate, setCollectedDate] = useState(todayInputValue());
 
     useEffect(() => {
         if (open) {
-            setCollectedDate(defaultCollectedDate(vehiclePermitStatus));
+            setCollectedDate(defaultCollectedDate(vehiclePermitStatus, mode));
         }
-    }, [open, vehiclePermitStatus]);
+    }, [open, vehiclePermitStatus, mode]);
 
-    const minDate = getMinVehiclePermitCollectionDate(vehiclePermitStatus);
+    const minDate = isEdit
+        ? getMinVehiclePermitEditDate(vehiclePermitStatus)
+        : getMinVehiclePermitCollectionDate(vehiclePermitStatus);
     const maxDate = todayInputValue();
     const minDayjs = minDate ? dayjs(minDate) : undefined;
     const maxDayjs = dayjs(maxDate);
     const validationError = useMemo(
-        () => validateVehiclePermitCollectionDate(collectedDate, vehiclePermitStatus),
-        [collectedDate, vehiclePermitStatus]
+        () => (isEdit
+            ? validateVehiclePermitEditDate(collectedDate, vehiclePermitStatus)
+            : validateVehiclePermitCollectionDate(collectedDate, vehiclePermitStatus)),
+        [collectedDate, vehiclePermitStatus, isEdit]
     );
     const canSubmit = Boolean(collectedDate) && !validationError;
 
@@ -85,10 +97,14 @@ export default function RecordVehiclePermitDialog({
                 document.activeElement?.blur();
             }}
         >
-            <DialogTitle>Record vehicle permit collection</DialogTitle>
+            <DialogTitle>
+                {isEdit ? "Edit vehicle permit collection" : "Record vehicle permit collection"}
+            </DialogTitle>
             <DialogContent dividers>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    Record the date this Senior employee collected their vehicle permit.
+                    {isEdit
+                        ? "Update the date this Senior employee collected their vehicle permit."
+                        : "Record the date this Senior employee collected their vehicle permit."}
                     {vehiclePermitStatus?.seniorSinceDate && (
                         <>
                             {" "}
@@ -108,10 +124,12 @@ export default function RecordVehiclePermitDialog({
                     disableFuture
                     slotProps={{
                         textField: {
-                            size: "small",
-                            fullWidth: true,
+                            ...datePickerTextFieldProps,
                             error: Boolean(collectedDate && validationError),
-                            helperText: getVehiclePermitCollectionHelperText(vehiclePermitStatus)
+                            helperText: getVehiclePermitCollectionHelperText(
+                                vehiclePermitStatus,
+                                mode
+                            )
                         }
                     }}
                 />
@@ -125,7 +143,7 @@ export default function RecordVehiclePermitDialog({
                     onClick={() => onConfirm(collectedDate)}
                     disabled={saving || !canSubmit}
                 >
-                    {saving ? "Saving..." : "Confirm"}
+                    {saving ? "Saving..." : isEdit ? "Save changes" : "Confirm"}
                 </Button>
             </DialogActions>
         </Dialog>

@@ -11,6 +11,7 @@ import {
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import { createFormFieldProps, dialogActionsSx } from "../../utils/formLayout";
+import DateInput from "../DateInput";
 import { timelineMinDateHelperText } from "../../utils/timelineDates";
 import DepartmentOfficeFields, {
     DEPARTMENT_OPTIONS,
@@ -46,7 +47,7 @@ export default function OfficeChangeDialog({
         }
     }, [open]);
 
-    const { fieldProps, dateFieldProps } = createFormFieldProps(
+    const { fieldProps } = createFormFieldProps(
         (event) => {
             const { name, value } = event.target;
             if (name === "effectiveDate") {
@@ -108,14 +109,13 @@ export default function OfficeChangeDialog({
                         district={currentDistrictOfWorking}
                     />
                     <Grid size={{ xs: 12 }}>
-                        <TextField
-                            {...dateFieldProps}
+                        <DateInput
+                            {...fieldProps}
                             label="Effective Date"
                             name="effectiveDate"
                             value={effectiveDate}
                             required
                             slotProps={{
-                                ...dateFieldProps.slotProps,
                                 htmlInput: previousEventDate
                                     ? { min: previousEventDate }
                                     : undefined

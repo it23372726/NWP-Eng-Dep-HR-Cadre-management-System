@@ -2,6 +2,7 @@ package com.nwpengdep.hrms.service.report;
 
 import com.nwpengdep.hrms.dto.EmployeeSummaryReportResponse;
 import com.nwpengdep.hrms.entity.Employee;
+import com.nwpengdep.hrms.entity.EmploymentType;
 import com.nwpengdep.hrms.repository.EmployeeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -27,6 +28,18 @@ public class EmployeeSummaryReportService {
         Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
+        if (employee.getEmploymentType() == EmploymentType.CONTRACT) {
+            throw new RuntimeException(
+                    "Summary reports are not available for contract employees"
+            );
+        }
+
+        if (com.nwpengdep.hrms.util.EmployeeTrainingUtil.isTrainingEmployee(employee)) {
+            throw new RuntimeException(
+                    "Summary reports are not available for training employees"
+            );
+        }
+
         return EmployeeSummaryReportResponse.builder()
                 .employeeName(nvl(employee.getFullName()))
                 .employeeNo(nvl(employee.getEmployeeNo()))
@@ -37,6 +50,7 @@ public class EmployeeSummaryReportService {
                 .dateOfFirstAppointment(employee.getDateOfFirstAppointment())
                 .nic(nvl(employee.getNic()))
                 .incremantDate(formatIncremantDate(employee.getIncremantDate()))
+                .widowsOrphansPensionNo(nvl(employee.getWidowsOrphansPensionNo()))
                 .salaryCode(employee.getDesignation() != null
                         ? nvl(employee.getDesignation().getSalaryCode())
                         : "—")

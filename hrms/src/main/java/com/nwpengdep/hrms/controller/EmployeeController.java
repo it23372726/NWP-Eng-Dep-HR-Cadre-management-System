@@ -1,24 +1,51 @@
 package com.nwpengdep.hrms.controller;
 
-import com.nwpengdep.hrms.dto.*;
+import java.util.List;
+
+import org.springframework.data.domain.Page;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.nwpengdep.hrms.dto.DismissalRequest;
+import com.nwpengdep.hrms.dto.EmployeeActionResponse;
+import com.nwpengdep.hrms.dto.EmployeeRequest;
+import com.nwpengdep.hrms.dto.EmployeeUpdateRequest;
+import com.nwpengdep.hrms.dto.LifecycleActionRequest;
+import com.nwpengdep.hrms.dto.MakePermanentRequest;
+import com.nwpengdep.hrms.dto.NewAppointmentRequest;
+import com.nwpengdep.hrms.dto.TrainingAppointmentRequest;
+import com.nwpengdep.hrms.dto.OfficeChangeRequest;
+import com.nwpengdep.hrms.dto.PromotionRequest;
+import com.nwpengdep.hrms.dto.SalaryIncrementRecordRequest;
+import com.nwpengdep.hrms.dto.SalaryIncrementStatusDto;
+import com.nwpengdep.hrms.dto.TransferOutRequest;
+import com.nwpengdep.hrms.dto.VacationOfPostRequest;
+import com.nwpengdep.hrms.dto.VehiclePermitCollectionRequest;
+import com.nwpengdep.hrms.dto.VehiclePermitStatusDto;
 import com.nwpengdep.hrms.entity.Employee;
 import com.nwpengdep.hrms.service.EmployeeActionService;
 import com.nwpengdep.hrms.service.EmployeeDeleteService;
 import com.nwpengdep.hrms.service.EmployeeLifecycleService;
 import com.nwpengdep.hrms.service.EmployeePhotoService;
 import com.nwpengdep.hrms.service.EmployeeService;
+import com.nwpengdep.hrms.service.SalaryIncrementService;
 import com.nwpengdep.hrms.service.VehiclePermitService;
+import com.nwpengdep.hrms.service.report.EmployeeDependentDetailsReportExportService;
 import com.nwpengdep.hrms.service.report.EmployeeSummaryReportExportService;
+
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/employees")
@@ -31,7 +58,9 @@ public class EmployeeController {
     private final EmployeeDeleteService employeeDeleteService;
     private final EmployeePhotoService employeePhotoService;
     private final VehiclePermitService vehiclePermitService;
+    private final SalaryIncrementService salaryIncrementService;
     private final EmployeeSummaryReportExportService employeeSummaryReportExportService;
+    private final EmployeeDependentDetailsReportExportService employeeDependentDetailsReportExportService;
 
     @PostMapping
     public Employee createEmployee(
@@ -78,6 +107,22 @@ public class EmployeeController {
         byte[] data = employeeSummaryReportExportService.exportPdf(id);
 
         String filename = "employee-summary-" + id + ".pdf";
+
+        return ResponseEntity.ok()
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + filename + "\""
+                )
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(data);
+    }
+
+    @GetMapping("/{id}/export/dependent-details-pdf")
+    public ResponseEntity<byte[]> exportDependentDetailsPdf(@PathVariable Long id) {
+        employeeService.getEmployeeById(id);
+        byte[] data = employeeDependentDetailsReportExportService.exportPdf(id);
+
+        String filename = "employee-dependent-details-" + id + ".pdf";
 
         return ResponseEntity.ok()
                 .header(
@@ -172,6 +217,19 @@ public class EmployeeController {
         return employeeLifecycleService.appointNewEmployee(id, request);
     }
 
+    @PostMapping("/{id}/training-appointment")
+    public Employee graduateTrainingToPermanent(
+            @PathVariable Long id,
+            @Valid @RequestBody TrainingAppointmentRequest request
+    ) {
+        return employeeLifecycleService.graduateTrainingToPermanent(id, request);
+    }
+
+    @PostMapping("/{id}/revert-training-appointment")
+    public Employee revertTrainingGraduation(@PathVariable Long id) {
+        return employeeLifecycleService.revertTrainingGraduation(id);
+    }
+
     @PostMapping("/{id}/promote")
     public Employee promoteEmployee(
             @PathVariable Long id,
@@ -204,6 +262,14 @@ public class EmployeeController {
         return employeeLifecycleService.dismissEmployee(id, request);
     }
 
+    @PostMapping("/{id}/vacation-of-post")
+    public Employee vacatePostEmployee(
+            @PathVariable Long id,
+            @Valid @RequestBody VacationOfPostRequest request
+    ) {
+        return employeeLifecycleService.vacatePostEmployee(id, request);
+    }
+
     @PostMapping("/{id}/make-permanent")
     public Employee makePermanent(
             @PathVariable Long id,
@@ -223,6 +289,45 @@ public class EmployeeController {
             @Valid @RequestBody VehiclePermitCollectionRequest request
     ) {
         return vehiclePermitService.recordCollection(id, request);
+    }
+
+    @PutMapping("/{id}/vehicle-permit")
+    public VehiclePermitStatusDto updateVehiclePermitCollection(
+            @PathVariable Long id,
+            @Valid @RequestBody VehiclePermitCollectionRequest request
+    ) {
+        return vehiclePermitService.updateCollection(id, request);
+    }
+
+    @DeleteMapping("/{id}/vehicle-permit")
+    public VehiclePermitStatusDto undoVehiclePermitCollection(@PathVariable Long id) {
+        return vehiclePermitService.undoCollection(id);
+    }
+
+    @GetMapping("/{id}/salary-increment")
+    public SalaryIncrementStatusDto getSalaryIncrementStatus(@PathVariable Long id) {
+        return salaryIncrementService.getStatus(id);
+    }
+
+    @PostMapping("/{id}/salary-increment")
+    public SalaryIncrementStatusDto recordSalaryIncrement(
+            @PathVariable Long id,
+            @Valid @RequestBody SalaryIncrementRecordRequest request
+    ) {
+        return salaryIncrementService.recordIncrement(id, request);
+    }
+
+    @PutMapping("/{id}/salary-increment")
+    public SalaryIncrementStatusDto updateSalaryIncrement(
+            @PathVariable Long id,
+            @Valid @RequestBody SalaryIncrementRecordRequest request
+    ) {
+        return salaryIncrementService.updateIncrement(id, request);
+    }
+
+    @DeleteMapping("/{id}/salary-increment")
+    public SalaryIncrementStatusDto undoSalaryIncrement(@PathVariable Long id) {
+        return salaryIncrementService.undoIncrement(id);
     }
 
     @GetMapping("/paginated")

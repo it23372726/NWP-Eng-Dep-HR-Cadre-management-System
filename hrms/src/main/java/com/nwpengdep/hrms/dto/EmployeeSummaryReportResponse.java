@@ -27,6 +27,8 @@ public class EmployeeSummaryReportResponse {
 
     private String incremantDate;
 
+    private String widowsOrphansPensionNo;
+
     private String salaryCode;
 
     private LocalDate retirementDateAt55;

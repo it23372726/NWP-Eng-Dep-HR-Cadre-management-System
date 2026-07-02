@@ -10,5 +10,6 @@ public enum EmployeeActionType {
     RETIREMENT_OR_RESIGNATION,
     DEATH,
     DISMISSAL,
+    VACATION_OF_POST,
     OFFICE_CHANGE
 }

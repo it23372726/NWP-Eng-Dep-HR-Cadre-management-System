@@ -56,7 +56,8 @@ public class CadreHistoricalStateService {
                 }
                 case RETIREMENT_OR_RESIGNATION,
                         DEATH,
-                        DISMISSAL -> active = false;
+                        DISMISSAL,
+                        VACATION_OF_POST -> active = false;
                 default -> {
                 }
             }
@@ -100,6 +101,7 @@ public class CadreHistoricalStateService {
                         action.getActionType() == EmployeeActionType.RETIREMENT_OR_RESIGNATION
                                 || action.getActionType() == EmployeeActionType.DEATH
                                 || action.getActionType() == EmployeeActionType.DISMISSAL
+                                || action.getActionType() == EmployeeActionType.VACATION_OF_POST
                 );
     }
 

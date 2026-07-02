@@ -19,7 +19,8 @@ public class ServiceLevelDataInitializer {
             "Senior",
             "Tertiary",
             "Secondary",
-            "Primary"
+            "Primary",
+            "Training"
     );
 
     private final ServiceLevelRepository serviceLevelRepository;

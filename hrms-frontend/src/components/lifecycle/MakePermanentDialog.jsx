@@ -10,6 +10,7 @@ import {
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import { createFormFieldProps, dialogActionsSx } from "../../utils/formLayout";
+import DateInput from "../DateInput";
 import { combineMinDates, timelineMinDateHelperText } from "../../utils/timelineDates";
 
 export default function MakePermanentDialog({
@@ -42,7 +43,7 @@ export default function MakePermanentDialog({
         setForm({ ...form, [e.target.name]: e.target.value });
     };
 
-    const { fieldProps, dateFieldProps } = createFormFieldProps(handleChange);
+    const { fieldProps } = createFormFieldProps(handleChange);
 
     const submit = () => {
         onSubmit({
@@ -74,14 +75,13 @@ export default function MakePermanentDialog({
                 </Alert>
                 <Grid container spacing={2}>
                     <Grid size={{ xs: 12 }}>
-                        <TextField
-                            {...dateFieldProps}
+                        <DateInput
+                            {...fieldProps}
                             label="Confirmation Date"
                             name="confirmationDate"
                             value={form.confirmationDate}
                             required
                             slotProps={{
-                                ...dateFieldProps.slotProps,
                                 htmlInput: effectiveMinDate
                                     ? { min: effectiveMinDate }
                                     : undefined

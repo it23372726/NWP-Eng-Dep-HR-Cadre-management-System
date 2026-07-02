@@ -1,15 +1,17 @@
 import { Grid, MenuItem, TextField } from "@mui/material";
 
+import DateInput from "../DateInput";
 import FormSection from "../FormSection";
 
 export default function EmployeePersonalSection({
     formData,
     fieldProps,
-    dateFieldProps,
     selectFieldProps,
-    photoSlot
+    photoSlot,
+    showPrivateVehicleFields = false
 }) {
     const showPrivateVehicleDetails = formData.privateVehicleUsedForGovWork === "Yes";
+    const isRentedVehicle = formData.privateVehicleRented === "Yes";
 
     return (
         <>
@@ -38,9 +40,28 @@ export default function EmployeePersonalSection({
                     <Grid size={{ xs: 12, sm: 4 }}>
                         <TextField
                             {...fieldProps}
+                            label="TIN"
+                            name="tin"
+                            value={formData.tin}
+                            helperText="Taxpayer Identification Number (optional)"
+                        />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 4 }}>
+                        <TextField
+                            {...fieldProps}
                             label="Contact No"
                             name="contactNo"
                             value={formData.contactNo}
+                        />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 4 }}>
+                        <TextField
+                            {...fieldProps}
+                            label="Email Address"
+                            name="emailAddress"
+                            type="email"
+                            value={formData.emailAddress}
+                            helperText="Optional"
                         />
                     </Grid>
                     <Grid size={{ xs: 12 }}>
@@ -52,8 +73,8 @@ export default function EmployeePersonalSection({
                         />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 4 }}>
-                        <TextField
-                            {...dateFieldProps}
+                        <DateInput
+                            {...fieldProps}
                             label="Date of Birth"
                             name="dateOfBirth"
                             value={formData.dateOfBirth}
@@ -103,6 +124,7 @@ export default function EmployeePersonalSection({
                 </Grid>
             </FormSection>
 
+            {showPrivateVehicleFields && (
             <FormSection
                 title="Private vehicle for government work"
                 description="Record whether this employee uses their own vehicle for official duties such as field visits. Permission must be obtained before fuel reimbursement."
@@ -127,21 +149,75 @@ export default function EmployeePersonalSection({
                                     label="Vehicle"
                                     name="privateVehicleDescription"
                                     value={formData.privateVehicleDescription}
-                                    placeholder="e.g. Toyota Hilux – WP ABC-1234"
+                                    placeholder="e.g. Toyota Hilux"
                                 />
                             </Grid>
                             <Grid size={{ xs: 12, sm: 4 }}>
                                 <TextField
-                                    {...dateFieldProps}
+                                    {...fieldProps}
+                                    label="License plate number"
+                                    name="privateVehicleLicensePlateNumber"
+                                    value={formData.privateVehicleLicensePlateNumber}
+                                    placeholder="e.g. WP ABC-1234"
+                                />
+                            </Grid>
+                            <Grid size={{ xs: 12, sm: 4 }}>
+                                <TextField
+                                    {...fieldProps}
+                                    label="Insurance number"
+                                    name="privateVehicleInsuranceNumber"
+                                    value={formData.privateVehicleInsuranceNumber}
+                                />
+                            </Grid>
+                            <Grid size={{ xs: 12, sm: 4 }}>
+                                <TextField
+                                    {...selectFieldProps}
+                                    label="Rented vehicle"
+                                    name="privateVehicleRented"
+                                    value={formData.privateVehicleRented}
+                                >
+                                    <MenuItem value="Yes">Yes</MenuItem>
+                                    <MenuItem value="No">No</MenuItem>
+                                </TextField>
+                            </Grid>
+                            {isRentedVehicle && (
+                                <Grid size={{ xs: 12, sm: 8 }}>
+                                    <TextField
+                                        {...fieldProps}
+                                        label="From whom"
+                                        name="privateVehicleRentedFrom"
+                                        value={formData.privateVehicleRentedFrom}
+                                        placeholder="e.g. Vehicle owner or rental company"
+                                    />
+                                </Grid>
+                            )}
+                            <Grid size={{ xs: 12, sm: 4 }}>
+                                <DateInput
+                                    {...fieldProps}
                                     label="Permission date"
                                     name="privateVehiclePermissionDate"
                                     value={formData.privateVehiclePermissionDate}
+                                />
+                            </Grid>
+                            <Grid size={{ xs: 12, sm: 4 }}>
+                                <DateInput
+                                    {...fieldProps}
+                                    label="Expire date"
+                                    name="privateVehicleExpireDate"
+                                    value={formData.privateVehicleExpireDate}
+                                    disabled={isRentedVehicle}
+                                    helperText={
+                                        isRentedVehicle
+                                            ? "Auto-set to 2 years from permission date"
+                                            : undefined
+                                    }
                                 />
                             </Grid>
                         </>
                     )}
                 </Grid>
             </FormSection>
+            )}
         </>
     );
 }

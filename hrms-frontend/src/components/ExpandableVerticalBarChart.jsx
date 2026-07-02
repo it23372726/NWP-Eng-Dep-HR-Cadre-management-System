@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
     Box,
     Stack,
@@ -27,7 +27,7 @@ import {
     BAR_CHART_PREVIEW_ROW_HEIGHT,
     BAR_CHART_PRESETS,
     CHART_HEIGHT,
-    getChartColor
+    buildChartColorMap
 } from "../constants/dashboardTheme";
 
 function truncateLabel(label, maxLength) {
@@ -41,6 +41,7 @@ function VerticalBarChart({
     data,
     chartKey,
     variant,
+    colorMap,
     previewBarSize,
     fullBarSize,
     previewRowHeight,
@@ -103,10 +104,10 @@ function VerticalBarChart({
                     cursor={onBarClick ? "pointer" : "default"}
                     onClick={onBarClick}
                 >
-                    {data.map((entry, index) => (
+                    {data.map((entry) => (
                         <Cell
                             key={`${chartKey}-${entry.name}-${variant}`}
-                            fill={getChartColor(index)}
+                            fill={colorMap.get(entry.name)}
                         />
                     ))}
                 </Bar>
@@ -126,6 +127,10 @@ export default function ExpandableVerticalBarChart({
 }) {
     const [dialogOpen, setDialogOpen] = useState(false);
     const config = BAR_CHART_PRESETS[preset] || BAR_CHART_PRESETS.designation;
+    const colorMap = useMemo(
+        () => buildChartColorMap(data.map((entry) => entry.name)),
+        [data]
+    );
     const itemLabel = config.itemLabel;
     const previewRowHeight = config.previewRowHeight ?? BAR_CHART_PREVIEW_ROW_HEIGHT;
     const fullRowHeight = config.fullRowHeight ?? BAR_CHART_FULL_ROW_HEIGHT;
@@ -236,6 +241,7 @@ export default function ExpandableVerticalBarChart({
                                 data={data}
                                 chartKey={chartKey}
                                 variant="preview"
+                                colorMap={colorMap}
                                 onBarClick={handleExpand}
                                 {...chartProps}
                             />
@@ -289,6 +295,7 @@ export default function ExpandableVerticalBarChart({
                                 data={data}
                                 chartKey={chartKey}
                                 variant="full"
+                                colorMap={colorMap}
                                 onBarClick={handleFullBarClick}
                                 {...chartProps}
                             />

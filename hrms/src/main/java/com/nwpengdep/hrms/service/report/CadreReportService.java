@@ -6,10 +6,11 @@ import com.nwpengdep.hrms.dto.CadreReportResponse;
 import com.nwpengdep.hrms.dto.CadreReportRowResponse;
 import com.nwpengdep.hrms.entity.*;
 import com.nwpengdep.hrms.repository.CadrePositionRepository;
-import com.nwpengdep.hrms.repository.DesignationRepository;
 import com.nwpengdep.hrms.repository.EmployeeActionRepository;
 import com.nwpengdep.hrms.repository.EmployeeRepository;
+import com.nwpengdep.hrms.service.CadrePositionService;
 import com.nwpengdep.hrms.service.report.CadreHistoricalStateService.EmployeeSnapshot;
+import com.nwpengdep.hrms.util.EmployeeTrainingUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,7 +23,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class CadreReportService {
 
-    private final DesignationRepository designationRepository;
+    private final CadrePositionService cadrePositionService;
     private final CadrePositionRepository cadrePositionRepository;
     private final EmployeeRepository employeeRepository;
     private final EmployeeActionRepository employeeActionRepository;
@@ -36,8 +37,7 @@ public class CadreReportService {
             );
         }
 
-        List<Designation> designations = designationRepository.findAll();
-        designations.sort(Comparator.comparing(Designation::getDesignationName));
+        List<Designation> designations = cadrePositionService.getDesignationsInDisplayOrder();
 
         Map<Long, Integer> approvedCadreMap = cadrePositionRepository.findAll()
                 .stream()
@@ -84,7 +84,7 @@ public class CadreReportService {
         );
 
         Map<Long, Long> promotionsOutMap = toCountMap(
-                employeeActionRepository.countGroupedByOldDesignationAndDepartment(
+                employeeActionRepository.countPromotionOutByDepartment(
                         EmployeeActionType.PROMOTION,
                         nwpDepartment,
                         request.getStartDate(),
@@ -118,6 +118,14 @@ public class CadreReportService {
                 )
         );
 
+        Map<Long, Long> vacationOfPostMap = toCountMap(
+                employeeActionRepository.countGroupedByOldDesignation(
+                        EmployeeActionType.VACATION_OF_POST,
+                        request.getStartDate(),
+                        request.getEndDate()
+                )
+        );
+
         List<EmployeeAction> allActions =
                 employeeActionRepository.findAllUpToDateOrdered(
                         request.getEndDate()
@@ -137,6 +145,10 @@ public class CadreReportService {
         Map<Long, Long> endContractMap = new HashMap<>();
 
         for (Employee employee : employees) {
+            if (EmployeeTrainingUtil.isTrainingEmployee(employee)) {
+                continue;
+            }
+
             List<EmployeeAction> employeeActions =
                     actionsByEmployee.getOrDefault(
                             employee.getId(),
@@ -189,8 +201,7 @@ public class CadreReportService {
             long dismissals = dismissalsMap.getOrDefault(designationId, 0L);
             long promotionOut = promotionsOutMap.getOrDefault(designationId, 0L);
 
-            // Business logic not finalized yet: keep column but force value to 0.
-            long vacationOfPost = 0;
+            long vacationOfPost = vacationOfPostMap.getOrDefault(designationId, 0L);
 
             long permanent = endPermanentMap.getOrDefault(designationId, 0L);
             long casual = endCasualMap.getOrDefault(designationId, 0L);
@@ -285,7 +296,7 @@ public class CadreReportService {
                 .promotionsIn(sum(rows, CadreReportRowResponse::getPromotionsIn))
                 .newAppointments(sum(rows, CadreReportRowResponse::getNewAppointments))
                 .dismissals(sum(rows, CadreReportRowResponse::getDismissals))
-                .vacationOfPost(0)
+                .vacationOfPost(sum(rows, CadreReportRowResponse::getVacationOfPost))
                 .permanent(sum(rows, CadreReportRowResponse::getPermanent))
                 .vacancies(sum(rows, CadreReportRowResponse::getVacancies))
                 .excess(sum(rows, CadreReportRowResponse::getExcess))

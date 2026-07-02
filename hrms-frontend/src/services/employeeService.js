@@ -90,8 +90,27 @@ export const recordVehiclePermitCollection = async (id, collectedDate) => {
     return response.data;
 };
 
+export const updateVehiclePermitCollection = async (id, collectedDate) => {
+    const response = await api.put(`/employees/${id}/vehicle-permit`, {
+        collectedDate
+    });
+    return response.data;
+};
+
+export const undoVehiclePermitCollection = async (id) => {
+    const response = await api.delete(`/employees/${id}/vehicle-permit`);
+    return response.data;
+};
+
 export const downloadEmployeeSummaryPdf = async (id) => {
     const response = await api.get(`/employees/${id}/export/summary-pdf`, {
+        responseType: "blob"
+    });
+    return response.data;
+};
+
+export const downloadEmployeeDependentDetailsPdf = async (id) => {
+    const response = await api.get(`/employees/${id}/export/dependent-details-pdf`, {
         responseType: "blob"
     });
     return response.data;

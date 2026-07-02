@@ -38,6 +38,16 @@ export function clearAuthData() {
 }
 
 /**
+ * Generate a correlation ID for request tracing
+ */
+export function generateCorrelationId() {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
+    }
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+/**
  * Redirect to login page
  */
 export function redirectToLogin() {

@@ -77,6 +77,8 @@ public class EmployeeSummaryReportExportService {
                     formatDate(report.getDateOfFirstAppointment()), labelFont, valueFont);
             addSummaryRow(summaryTable, "NIC", report.getNic(), labelFont, valueFont);
             addSummaryRow(summaryTable, "Increment Date", report.getIncremantDate(), labelFont, valueFont);
+            addSummaryRow(summaryTable, "Widows' and Orphans' Pension No.",
+                    report.getWidowsOrphansPensionNo(), labelFont, valueFont);
             addSummaryRow(summaryTable, "Salary Code", report.getSalaryCode(), labelFont, valueFont);
             addSummaryRow(summaryTable, "Retirement Date (55 years)",
                     formatDate(report.getRetirementDateAt55()), labelFont, valueFont);

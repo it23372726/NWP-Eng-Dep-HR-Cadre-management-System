@@ -1,6 +1,6 @@
 import { Paper, Typography, Box, Skeleton, Alert } from "@mui/material";
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { CHART_HEIGHT, getServiceColor } from "../constants/dashboardTheme";
+import { CHART_HEIGHT, buildServiceChartColorMap } from "../constants/dashboardTheme";
 
 const renderLegend = (props) => {
     const { payload } = props;
@@ -110,10 +110,12 @@ export default function ServiceDistributionChart({ data, loading }) {
         );
     }
 
-    const chartData = data.map((item, index) => ({
+    const colorMap = buildServiceChartColorMap(data.map((item) => item.category));
+
+    const chartData = data.map((item) => ({
         category: item.category,
         count: item.count,
-        fill: getServiceColor(item.category, index)
+        fill: colorMap.get(item.category)
     }));
 
     return (

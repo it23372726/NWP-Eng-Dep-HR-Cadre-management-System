@@ -12,6 +12,7 @@ import com.nwpengdep.hrms.dto.VehiclePermitCollectionRequest;
 import com.nwpengdep.hrms.dto.VehiclePermitStatusDto;
 import com.nwpengdep.hrms.entity.Designation;
 import com.nwpengdep.hrms.entity.Employee;
+import com.nwpengdep.hrms.entity.EmployeePrivateVehicle;
 import com.nwpengdep.hrms.entity.EmployeeAction;
 import com.nwpengdep.hrms.entity.EmployeeActionType;
 import com.nwpengdep.hrms.entity.EmployeeStatus;
@@ -26,6 +27,7 @@ import lombok.RequiredArgsConstructor;
 public class VehiclePermitService {
 
     public static final int VEHICLE_PERMIT_INTERVAL_YEARS = 5;
+    public static final int VEHICLE_PERMIT_FIRST_INTERVAL_YEARS = 6;
 
     private static final Set<EmployeeActionType> SENIOR_CAREER_ACTION_TYPES = EnumSet.of(
             EmployeeActionType.NEW_APPOINTMENT,
@@ -52,18 +54,9 @@ public class VehiclePermitService {
         Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
-        if (employee.getStatus() != EmployeeStatus.ACTIVE) {
-            throw new IllegalArgumentException(
-                    "Only active employees can record vehicle permit collection"
-            );
-        }
+        validateActiveSeniorEmployee(employee);
 
         VehiclePermitStatusDto status = buildStatus(employee);
-        if (!status.isApplicable()) {
-            throw new IllegalArgumentException(
-                    "Vehicle permit collection applies only to Senior service level employees"
-            );
-        }
 
         if (status.getSeniorSinceDate() == null
                 && employee.getVehiclePermitCollectedDate() == null) {
@@ -78,30 +71,53 @@ public class VehiclePermitService {
             );
         }
 
-        LocalDate collectedDate = request.getCollectedDate();
-        LocalDate today = LocalDate.now();
-        LocalDate nextCollectableDate = status.getNextCollectableDate();
+        validateNewCollectionDate(request.getCollectedDate(), status);
 
-        if (collectedDate.isAfter(today)) {
+        employee.ensurePrivateVehicle().setPermitCollectedDate(request.getCollectedDate());
+        employeeRepository.save(employee);
+
+        return buildStatus(employee);
+    }
+
+    @Transactional
+    public VehiclePermitStatusDto updateCollection(
+            Long employeeId,
+            VehiclePermitCollectionRequest request
+    ) {
+        Employee employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+
+        validateActiveSeniorEmployee(employee);
+
+        if (employee.getVehiclePermitCollectedDate() == null) {
             throw new IllegalArgumentException(
-                    "Collection date cannot be in the future"
+                    "No vehicle permit collection to update"
             );
         }
 
-        if (nextCollectableDate != null && collectedDate.isBefore(nextCollectableDate)) {
+        VehiclePermitStatusDto status = buildStatus(employee);
+        validateEditCollectionDate(request.getCollectedDate(), status);
+
+        employee.ensurePrivateVehicle().setPermitCollectedDate(request.getCollectedDate());
+        employeeRepository.save(employee);
+
+        return buildStatus(employee);
+    }
+
+    @Transactional
+    public VehiclePermitStatusDto undoCollection(Long employeeId) {
+        Employee employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+
+        validateActiveSeniorEmployee(employee);
+
+        if (employee.getVehiclePermitCollectedDate() == null) {
             throw new IllegalArgumentException(
-                    "Collection date cannot be before the next collectable date"
+                    "No vehicle permit collection to undo"
             );
         }
 
-        LocalDate seniorSinceDate = status.getSeniorSinceDate();
-        if (seniorSinceDate != null && collectedDate.isBefore(seniorSinceDate)) {
-            throw new IllegalArgumentException(
-                    "Collection date cannot be before the employee became Senior"
-            );
-        }
-
-        employee.setVehiclePermitCollectedDate(collectedDate);
+        employee.ensurePrivateVehicle().setPermitCollectedDate(null);
         employeeRepository.save(employee);
 
         return buildStatus(employee);
@@ -157,6 +173,82 @@ public class VehiclePermitService {
                 .build();
     }
 
+    private void validateActiveSeniorEmployee(Employee employee) {
+        if (employee.getStatus() != EmployeeStatus.ACTIVE) {
+            throw new IllegalArgumentException(
+                    "Only active employees can record vehicle permit collection"
+            );
+        }
+
+        if (!isSeniorEmployee(employee)) {
+            throw new IllegalArgumentException(
+                    "Vehicle permit collection applies only to Senior service level employees"
+            );
+        }
+    }
+
+    private void validateNewCollectionDate(
+            LocalDate collectedDate,
+            VehiclePermitStatusDto status
+    ) {
+        LocalDate today = LocalDate.now();
+        LocalDate nextCollectableDate = status.getNextCollectableDate();
+        LocalDate seniorSinceDate = status.getSeniorSinceDate();
+
+        if (collectedDate.isAfter(today)) {
+            throw new IllegalArgumentException(
+                    "Collection date cannot be in the future"
+            );
+        }
+
+        if (nextCollectableDate != null && collectedDate.isBefore(nextCollectableDate)) {
+            throw new IllegalArgumentException(
+                    "Collection date cannot be before the next collectable date"
+            );
+        }
+
+        if (seniorSinceDate != null && collectedDate.isBefore(seniorSinceDate)) {
+            throw new IllegalArgumentException(
+                    "Collection date cannot be before the employee became Senior"
+            );
+        }
+    }
+
+    private void validateEditCollectionDate(
+            LocalDate collectedDate,
+            VehiclePermitStatusDto status
+    ) {
+        LocalDate today = LocalDate.now();
+        LocalDate seniorSinceDate = status.getSeniorSinceDate();
+        LocalDate earliestCollectableDate = resolveEarliestCollectableDate(seniorSinceDate);
+
+        if (collectedDate.isAfter(today)) {
+            throw new IllegalArgumentException(
+                    "Collection date cannot be in the future"
+            );
+        }
+
+        if (seniorSinceDate != null && collectedDate.isBefore(seniorSinceDate)) {
+            throw new IllegalArgumentException(
+                    "Collection date cannot be before the employee became Senior"
+            );
+        }
+
+        if (earliestCollectableDate != null
+                && collectedDate.isBefore(earliestCollectableDate)) {
+            throw new IllegalArgumentException(
+                    "Collection date cannot be before the first collectable date"
+            );
+        }
+    }
+
+    private LocalDate resolveEarliestCollectableDate(LocalDate seniorSinceDate) {
+        if (seniorSinceDate != null) {
+            return seniorSinceDate.plusYears(VEHICLE_PERMIT_FIRST_INTERVAL_YEARS);
+        }
+        return null;
+    }
+
     private LocalDate resolveNextCollectableDate(
             LocalDate seniorSinceDate,
             LocalDate lastCollectedDate
@@ -165,7 +257,7 @@ public class VehiclePermitService {
             return lastCollectedDate.plusYears(VEHICLE_PERMIT_INTERVAL_YEARS);
         }
         if (seniorSinceDate != null) {
-            return seniorSinceDate.plusYears(VEHICLE_PERMIT_INTERVAL_YEARS);
+            return seniorSinceDate.plusYears(VEHICLE_PERMIT_FIRST_INTERVAL_YEARS);
         }
         return null;
     }

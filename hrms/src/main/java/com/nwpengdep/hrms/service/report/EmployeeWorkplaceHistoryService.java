@@ -29,7 +29,8 @@ public class EmployeeWorkplaceHistoryService {
     private static final Set<EmployeeActionType> TERMINAL_TYPES = EnumSet.of(
             EmployeeActionType.RETIREMENT_OR_RESIGNATION,
             EmployeeActionType.DEATH,
-            EmployeeActionType.DISMISSAL
+            EmployeeActionType.DISMISSAL,
+            EmployeeActionType.VACATION_OF_POST
     );
 
     private final EmployeeActionRepository employeeActionRepository;

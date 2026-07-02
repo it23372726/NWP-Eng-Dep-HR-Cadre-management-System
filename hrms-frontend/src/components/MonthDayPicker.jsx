@@ -4,6 +4,7 @@ import {
     fromMonthDayValue,
     toMonthDayValue
 } from "../utils/monthDayDate";
+import { datePickerTextFieldProps } from "../utils/formLayout";
 
 export default function MonthDayPicker({
     label,
@@ -33,8 +34,7 @@ export default function MonthDayPicker({
             onChange={handleChange}
             slotProps={{
                 textField: {
-                    size: "small",
-                    fullWidth: true,
+                    ...datePickerTextFieldProps,
                     helperText
                 },
                 calendarHeader: {

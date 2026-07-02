@@ -44,10 +44,30 @@ export const dismissEmployee = async (employeeId, data) => {
     return response.data;
 };
 
+export const vacatePostEmployee = async (employeeId, data) => {
+    const response = await api.post(`/employees/${employeeId}/vacation-of-post`, data);
+    return response.data;
+};
+
 export const appointNewEmployee = async (employeeId, data) => {
     const response = await api.post(
         `/employees/${employeeId}/new-appointment`,
         data
+    );
+    return response.data;
+};
+
+export const graduateTrainingToPermanent = async (employeeId, data) => {
+    const response = await api.post(
+        `/employees/${employeeId}/training-appointment`,
+        data
+    );
+    return response.data;
+};
+
+export const revertTrainingGraduation = async (employeeId) => {
+    const response = await api.post(
+        `/employees/${employeeId}/revert-training-appointment`
     );
     return response.data;
 };

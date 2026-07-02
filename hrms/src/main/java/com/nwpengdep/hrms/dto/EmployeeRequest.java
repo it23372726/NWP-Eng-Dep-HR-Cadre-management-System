@@ -23,11 +23,12 @@ public class EmployeeRequest {
     @NotBlank(message = "Name is required")
     private String fullName;
 
-    @NotNull(message = "Designation is required")
     private Long designationId;
 
     @NotBlank(message = "NIC is required")
     private String nic;
+
+    private String tin;
 
     @NotNull(message = "Date of birth is required")
     private LocalDate dateOfBirth;
@@ -40,10 +41,11 @@ public class EmployeeRequest {
 
     private Grade grade;
 
-    @NotNull(message = "Date of first appointment is required")
     private LocalDate dateOfFirstAppointment;
 
     private String incremantDate;
+
+    private String widowsOrphansPensionNo;
 
     private LocalDate enteredDateToAllIslandService;
 
@@ -53,11 +55,12 @@ public class EmployeeRequest {
     @NotBlank(message = "Current working place is required")
     private String currentWorkingPlace;
 
+    private String currentDepartment;
+
     private District currentDistrictOfWorking;
 
     private LocalDate appointmentDateToPresentClassGrade;
 
-    @NotNull(message = "Entered date to N.W.P. Council is required")
     private LocalDate enteredDateToNWPCouncil;
 
     @NotBlank(message = "Permanent address is required")
@@ -71,14 +74,30 @@ public class EmployeeRequest {
 
     private LocalDate privateVehiclePermissionDate;
 
+    private LocalDate privateVehicleExpireDate;
+
+    private String privateVehicleInsuranceNumber;
+
+    private String privateVehicleLicensePlateNumber;
+
+    private Boolean privateVehicleRented;
+
+    private String privateVehicleRentedFrom;
+
     @NotBlank(message = "Contact number is required")
     private String contactNo;
 
-    @NotNull(message = "Service level is required")
+    private String emailAddress;
+
     private Long serviceLevelId;
 
-    @NotNull(message = "Employment type is required")
+    private Integer trainingPeriodYears;
+
     private EmploymentType employmentType;
+
+    private LocalDate contractStartDate;
+
+    private LocalDate contractEndDate;
 
     private String transferredFrom;
 
@@ -117,4 +136,8 @@ public class EmployeeRequest {
     private List<EmployeeRequirementRequest> requirements;
 
     private List<CareerHistoryEventRequest> careerHistory;
+
+    private EmployeeSpouseRequest spouse;
+
+    private List<EmployeeChildRequest> children;
 }

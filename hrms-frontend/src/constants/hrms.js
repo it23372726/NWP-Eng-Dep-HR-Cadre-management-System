@@ -4,6 +4,93 @@ export const DISTRICTS = ["Kurunegala", "Puttalam"];
 
 export const NWP_ENGINEERING_DEPARTMENT = "N.W.P. Engineering Department";
 
+export const OTHER_DESIGNATION_VALUE = "OTHER";
+
+export const isOtherDesignation = (id) =>
+    id === OTHER_DESIGNATION_VALUE || id === "OTHER";
+
+export const resolveDisplayDesignationName = (entity) =>
+    entity?.recordedDesignationName
+    ?? entity?.newDesignationName
+    ?? entity?.designationName
+    ?? entity?.designation?.designationName
+    ?? null;
+
+export const resolveEmployeeDesignationName = (employee) =>
+    employee?.recordedDesignationName
+    ?? employee?.designation?.designationName
+    ?? null;
+
+export const validateCustomDesignationAssignment = ({
+    grade,
+    serviceLevelId,
+    service
+}) => {
+    if (!grade || grade === "None" || grade === "NONE") {
+        return "Employee grade is required";
+    }
+
+    if (!serviceLevelId) {
+        return "Service level is required";
+    }
+
+    if (!service) {
+        return "Employee service is required";
+    }
+
+    const serviceGrades = service.allowedGrades || [];
+
+    if (!serviceGrades.length) {
+        return `Service "${service.serviceCode || "—"}" has no maximum achievable grades configured`;
+    }
+
+    if (!serviceGrades.includes(grade)) {
+        return `Grade "${grade}" exceeds the maximum achievable grade for service ${service.serviceCode}. Service maximum: ${serviceGrades.join(", ")}`;
+    }
+
+    return null;
+};
+
+export const isPermanentEmployee = (employmentType) =>
+    employmentType === "PERMANENT";
+
+export const isContractEmployee = (employmentType) =>
+    employmentType === "CONTRACT";
+
+export const TRAINING_FORM_TYPE = "TRAINING";
+
+export const isTrainingFormType = (employmentType) =>
+    employmentType === TRAINING_FORM_TYPE;
+
+export const isTrainingEmployee = (employee) =>
+    (employee?.employmentType == null || employee?.employmentType === "")
+    && employee?.serviceLevel?.levelName?.toLowerCase() === "training";
+
+export const isTrainingServiceLevel = (serviceLevel) =>
+    serviceLevel?.levelName?.toLowerCase() === "training";
+
+export const TRAINING_PERIOD_OPTIONS = [
+    { value: "1", label: "1 year training" },
+    { value: "2", label: "2 years training" }
+];
+
+export function formatTrainingPeriodYears(years) {
+    if (Number(years) === 2) {
+        return "2 years";
+    }
+    if (Number(years) === 1) {
+        return "1 year";
+    }
+
+    return "—";
+}
+
+export const canShowDependentDetails = (employeeOrForm) =>
+    isPermanentEmployee(employeeOrForm?.employmentType);
+
+export const canShowPrivateVehicleFields = (employmentType) =>
+    isPermanentEmployee(employmentType);
+
 export function normalizeDistrictLabel(value) {
     if (value === null || value === undefined) {
         return "";
@@ -35,20 +122,65 @@ export const EMPLOYMENT_TYPES = [
     { value: "ACTING", label: "Acting" },
     { value: "CONTRACT", label: "Contract" },
     { value: "CASUAL", label: "Casual" },
-    { value: "SUBSTITUTE", label: "Substitute" }
+    { value: "SUBSTITUTE", label: "Substitute" },
+    { value: TRAINING_FORM_TYPE, label: "Training" }
 ];
 
-export const PERMANENT_STATUS_OPTIONS = [
+export function getEmploymentTypeLabel(employmentType, employee = null) {
+    if (isTrainingEmployee(employee)) {
+        return "Training";
+    }
+
+    if (isTrainingFormType(employmentType)) {
+        return "Training";
+    }
+
+    const match = EMPLOYMENT_TYPES.find((type) => type.value === employmentType);
+    return match?.label ?? employmentType ?? "";
+}
+
+export const EMPLOYEE_TYPE_FILTER_OPTIONS = [
     { value: "ALL", label: "All" },
     { value: "PROBATION", label: "Probation" },
-    { value: "QUALIFIED_FOR_PERMANENT", label: "Qualified" },
-    { value: "PERMANENT", label: "Permanent" }
+    { value: "QUALIFIED_FOR_PERMANENT", label: "Qualified to permanent" },
+    { value: "PERMANENT", label: "Permanent" },
+    { value: "ACTING", label: "Acting" },
+    { value: "CONTRACT", label: "Contract" },
+    { value: "CASUAL", label: "Casual" },
+    { value: "SUBSTITUTE", label: "Substitute" },
+    { value: "TRAINING", label: "Training" }
 ];
+
+/** @deprecated Use EMPLOYEE_TYPE_FILTER_OPTIONS */
+export const PERMANENT_STATUS_OPTIONS = EMPLOYEE_TYPE_FILTER_OPTIONS;
+
+export const PERMANENT_TRACK_FILTER_VALUES = [
+    "PROBATION",
+    "QUALIFIED_FOR_PERMANENT",
+    "PERMANENT"
+];
+
+export const NON_PERMANENT_EMPLOYMENT_FILTER_VALUES = [
+    "ACTING",
+    "CONTRACT",
+    "CASUAL",
+    "SUBSTITUTE"
+];
+
+export const EMPLOYMENT_TYPE_CHIP_STYLES = {
+    ACTING: { bgcolor: "#7C3AED", color: "#FFFFFF" },
+    CONTRACT: { bgcolor: "#475569", color: "#FFFFFF" },
+    CASUAL: { bgcolor: "#94A3B8", color: "#FFFFFF" },
+    SUBSTITUTE: { bgcolor: "#0D9488", color: "#FFFFFF" },
+    TRAINING: { bgcolor: "#2563EB", color: "#FFFFFF" }
+};
 
 export const GRADE_PROMOTION_FILTER_OPTIONS = [
     { value: "ALL", label: "All grades" },
     { value: "QUALIFIED_GRADE_3_TO_2", label: "Qualified: Grade III → II" },
-    { value: "QUALIFIED_GRADE_2_TO_1", label: "Qualified: Grade II → I" }
+    { value: "QUALIFIED_GRADE_2_TO_1", label: "Qualified: Grade II → I" },
+    { value: "QUALIFIED_GRADE_1_TO_SUPRA", label: "Qualified: Grade I → Supra" },
+    { value: "QUALIFIED_GRADE_1_TO_SPECIAL", label: "Qualified: Grade I → Special" }
 ];
 
 export const RETIREMENT_FILTER_OPTIONS = [
@@ -66,7 +198,7 @@ export const DISTRICT_FILTER_OPTIONS = [
 
 export const PERMANENT_STATUS_LABELS = {
     PROBATION: "Probation",
-    QUALIFIED_FOR_PERMANENT: "Qualified",
+    QUALIFIED_FOR_PERMANENT: "Qualified to permanent",
     PERMANENT: "Permanent"
 };
 
@@ -91,8 +223,35 @@ export const ACTION_TYPE_LABELS = {
     OFFICE_CHANGE: "Office Change",
     RETIREMENT_OR_RESIGNATION: "Retirement / Resignation",
     DEATH: "Death",
-    DISMISSAL: "Dismissal"
+    DISMISSAL: "Dismissal",
+    VACATION_OF_POST: "Vacation of Post"
 };
+
+export function isPromotionTransferOut(action) {
+    if (!action || action.actionType !== "PROMOTION") {
+        return false;
+    }
+    if (action.transferringOut) {
+        return true;
+    }
+    return Boolean(
+        action.fromDepartment === NWP_ENGINEERING_DEPARTMENT
+        && action.department
+        && action.department !== NWP_ENGINEERING_DEPARTMENT
+    );
+}
+
+export function getActionTypeLabel(action) {
+    if (!action?.actionType) {
+        return "";
+    }
+    if (action.actionType === "PROMOTION") {
+        return isPromotionTransferOut(action)
+            ? "Promotion / Transfer Out"
+            : "Promotion / New Appointment";
+    }
+    return ACTION_TYPE_LABELS[action.actionType] || action.actionType;
+}
 
 export const REQUIREMENT_STATUS = {
     PENDING: "PENDING",
@@ -112,13 +271,17 @@ export const REQUIREMENT_TYPE_LABELS = {
     BIRTH_CERTIFICATE: "Birth Certificate Approved",
     OTHER_GRADE_2_REQUIREMENT: "Other Grade II Requirement Completed",
     EB_GRADE_1: "EB Grade I Passed",
-    SUPRA_REQUIREMENT: "Supra Grade Requirement",
+    SUPRA_REQUIREMENT: "Supra Grade Examination Passed",
+    MASTERS_DEGREE: "Masters Degree Completed",
     SPECIAL_GRADE_REQUIREMENT: "Special Grade Requirement",
+    TRAINING_EXAM: "Training Examination Passed",
     TRAINING_PROGRAM: "Training Program",
     PROFESSIONAL_QUALIFICATION: "Professional Qualification",
     CUSTOM_PERMANENT_REQUIREMENT: "Custom Permanent Requirement",
     CUSTOM_GRADE_2_REQUIREMENT: "Custom Grade II Requirement",
-    CUSTOM_GRADE_1_REQUIREMENT: "Custom Grade I Requirement"
+    CUSTOM_GRADE_1_REQUIREMENT: "Custom Grade I Requirement",
+    CUSTOM_SUPRA_REQUIREMENT: "Custom Supra Requirement",
+    CUSTOM_SPECIAL_REQUIREMENT: "Custom Special Requirement"
 };
 
 export const FIXED_PERMANENT_REQUIREMENTS = [
@@ -141,6 +304,119 @@ export const FIXED_GRADE2_REQUIREMENTS = [
 export const FIXED_GRADE1_REQUIREMENTS = [
     { requirementType: "EB_GRADE_1", label: "EB Grade I Passed" }
 ];
+
+export const FIXED_SUPRA_REQUIREMENTS = [
+    { requirementType: "SUPRA_REQUIREMENT", label: "Supra Grade Examination Passed" }
+];
+
+export const FIXED_SPECIAL_REQUIREMENTS = [
+    { requirementType: "MASTERS_DEGREE", label: "Masters Degree Completed" }
+];
+
+export function serviceAllowsSupra(service) {
+    return (service?.allowedGrades || []).includes("Supra");
+}
+
+export function serviceAllowsSpecial(service) {
+    return (service?.allowedGrades || []).includes("Special");
+}
+
+export function getServiceTerminalPath(service) {
+    if (serviceAllowsSupra(service)) {
+        return "supra";
+    }
+    if (serviceAllowsSpecial(service)) {
+        return "special";
+    }
+    return null;
+}
+
+export const TRAINING_EXAM_REQUIREMENT = {
+    requirementType: "TRAINING_EXAM",
+    label: "Training Examination Passed"
+};
+
+export const FIXED_TRAINING_GRADUATION_REQUIREMENTS = [
+    TRAINING_EXAM_REQUIREMENT
+];
+
+const formatTrainingDate = (date) =>
+    date ? new Date(`${date}T00:00:00`).toLocaleDateString("en-GB") : "—";
+
+export function getTrainingPeriodYears(employee) {
+    const years = Number(employee?.trainingPeriodYears);
+    return years === 2 ? 2 : 1;
+}
+
+export function getTrainingPeriodEndDate(employee) {
+    const start = employee?.dateOfFirstAppointment;
+    if (!start) {
+        return null;
+    }
+
+    const date = new Date(`${start}T00:00:00`);
+    date.setFullYear(date.getFullYear() + getTrainingPeriodYears(employee));
+    return date.toISOString().split("T")[0];
+}
+
+export function hasTrainingPeriodCompleted(employee, asOfDate = null) {
+    const endDate = getTrainingPeriodEndDate(employee);
+    if (!endDate) {
+        return false;
+    }
+
+    const compareDate = asOfDate
+        ? new Date(`${asOfDate}T00:00:00`)
+        : new Date();
+    const end = new Date(`${endDate}T00:00:00`);
+
+    return compareDate >= end;
+}
+
+export function getTrainingGraduationBlockReason(employee) {
+    if (!isTrainingEmployee(employee)) {
+        return null;
+    }
+
+    const examPassed = isRequirementCompleted(employee, "TRAINING_EXAM");
+    const periodCompleted = hasTrainingPeriodCompleted(employee);
+
+    if (examPassed && periodCompleted) {
+        return null;
+    }
+
+    const parts = [];
+
+    if (!examPassed) {
+        parts.push("pass the training examination");
+    }
+
+    if (!periodCompleted) {
+        const years = getTrainingPeriodYears(employee);
+        const endDate = getTrainingPeriodEndDate(employee);
+
+        parts.push(
+            endDate
+                ? `complete the ${years}-year training period (eligible from ${formatTrainingDate(endDate)})`
+                : `complete the ${years}-year training period from first appointment date`
+        );
+    }
+
+    return `Must ${parts.join(" and ")} before permanent appointment`;
+}
+
+export function isTrainingGraduationEligible(employee) {
+    if (!isTrainingEmployee(employee)) {
+        return false;
+    }
+
+    if (employee?.canAppointAsPermanent != null) {
+        return Boolean(employee.canAppointAsPermanent);
+    }
+
+    return isRequirementCompleted(employee, "TRAINING_EXAM")
+        && hasTrainingPeriodCompleted(employee);
+}
 
 export const QUALIFICATION_FILTER_OPTIONS = [
     { value: "", label: "All qualifications" },
@@ -205,21 +481,24 @@ export function getActionDetailLines(action) {
     const type = action.actionType;
 
     if (type === "PROMOTION" || type === "ASSIGNMENT_GRADE_UPDATE") {
-        if (action.oldDesignationName && action.newDesignationName) {
+        const newName = resolveDisplayDesignationName(action);
+        const oldName = action.oldDesignationName;
+
+        if (oldName && newName && oldName !== newName) {
             lines.push({
                 label: "Designation",
-                value: `${action.oldDesignationName} → ${action.newDesignationName}`
+                value: `${oldName} → ${newName}`
             });
-        } else if (action.newDesignationName) {
-            lines.push({ label: "Designation", value: action.newDesignationName });
+        } else if (newName && type !== "ASSIGNMENT_GRADE_UPDATE") {
+            lines.push({ label: "Designation", value: newName });
         }
 
-        if (action.oldGrade && action.newGrade) {
+        if (action.oldGrade && action.newGrade && action.oldGrade !== action.newGrade) {
             lines.push({
                 label: "Grade",
                 value: `${action.oldGrade} → ${action.newGrade}`
             });
-        } else if (action.newGrade) {
+        } else if (action.newGrade && type !== "PROMOTION") {
             lines.push({ label: "Grade", value: action.newGrade });
         }
 
@@ -229,7 +508,32 @@ export function getActionDetailLines(action) {
                 value: action.newServiceLevelName
             });
         }
+
+        if (type === "PROMOTION" && isPromotionTransferOut(action)) {
+            const from = formatWorkplace(action.fromDepartment, action.fromOffice);
+            const to = formatWorkplace(action.department, action.office)
+                || formatWorkplace(action.toDepartment, action.toOffice);
+
+            if (from) {
+                lines.push({ label: "From", value: from });
+            }
+            if (to) {
+                lines.push({ label: "To", value: to });
+            }
+        }
     } else if (type === "TRANSFER_OUT") {
+        const newName = resolveDisplayDesignationName(action);
+        const oldName = action.oldDesignationName;
+
+        if (oldName && newName && oldName !== newName) {
+            lines.push({
+                label: "Designation",
+                value: `${oldName} → ${newName}`
+            });
+        } else if (newName) {
+            lines.push({ label: "Designation", value: newName });
+        }
+
         const from = formatWorkplace(action.fromDepartment, action.fromOffice)
             || action.transferredFrom;
         const to = formatWorkplace(action.toDepartment, action.toOffice)
@@ -265,6 +569,11 @@ export function getActionDetailLines(action) {
             lines.push({ label: "District", value: district });
         }
     } else if (type === "NEW_APPOINTMENT" || type === "TRANSFER_IN") {
+        const designationName = resolveDisplayDesignationName(action);
+        if (designationName) {
+            lines.push({ label: "Designation", value: designationName });
+        }
+
         const workplace = formatWorkplace(action.department, action.office);
         const district = action.district?.label ?? action.district;
 
@@ -281,6 +590,8 @@ export function getActionDetailLines(action) {
             });
         }
     } else if (type === "DISMISSAL" && action.reason) {
+        lines.push({ label: "Reason", value: action.reason });
+    } else if (type === "VACATION_OF_POST" && action.reason) {
         lines.push({ label: "Reason", value: action.reason });
     }
 
@@ -299,12 +610,26 @@ export function formatActionDetails(action) {
         .join(" · ");
 }
 
+export function getServiceRules(designation) {
+    return designation?.service ?? null;
+}
+
+export const resolveEmployeeService = (employee) =>
+    employee?.service ?? employee?.designation?.service ?? null;
+
+export const getEmployeeServiceRules = (employee) =>
+    resolveEmployeeService(employee);
+
+export function getServiceRequirementList(designation, field) {
+    return getServiceRules(designation)?.[field] ?? [];
+}
+
 export function validateDesignationAssignment(employee, designation) {
     if (!designation) {
         return null;
     }
 
-    if (employee?.employmentType && employee.employmentType !== "PERMANENT") {
+    if (employee?.employmentType && !isPermanentEmployee(employee.employmentType)) {
         return null;
     }
 
@@ -319,7 +644,18 @@ export function validateDesignationAssignment(employee, designation) {
     const allowedGrades = designation.allowedGrades || [];
 
     if (!allowedGrades.includes(employee.grade)) {
-        return `Grade "${employee.grade}" is not allowed for ${designation.designationName}. Allowed: ${allowedGrades.join(", ")}`;
+        return `Grade "${employee.grade}" is not eligible for ${designation.designationName}. Eligible: ${allowedGrades.join(", ")}`;
+    }
+
+    const service = getServiceRules(designation);
+    const serviceGrades = service?.allowedGrades || [];
+
+    if (!serviceGrades.length) {
+        return `Service "${service?.serviceCode || "—"}" has no maximum achievable grades configured`;
+    }
+
+    if (!serviceGrades.includes(employee.grade)) {
+        return `Grade "${employee.grade}" exceeds the maximum achievable grade for service ${service.serviceCode}. Service maximum: ${serviceGrades.join(", ")}`;
     }
 
     if (

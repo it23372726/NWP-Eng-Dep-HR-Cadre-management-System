@@ -1,3 +1,19 @@
+export function mergeDateInputSlotProps(slotProps) {
+    return {
+        ...slotProps,
+        inputLabel: {
+            shrink: true,
+            ...slotProps?.inputLabel
+        }
+    };
+}
+
+export const datePickerTextFieldProps = {
+    size: "small",
+    fullWidth: true,
+    slotProps: mergeDateInputSlotProps()
+};
+
 export function createFormFieldProps(handleChange) {
     const fieldProps = {
         fullWidth: true,
@@ -8,9 +24,7 @@ export function createFormFieldProps(handleChange) {
     const dateFieldProps = {
         ...fieldProps,
         type: "date",
-        slotProps: {
-            inputLabel: { shrink: true }
-        }
+        slotProps: mergeDateInputSlotProps()
     };
 
     const selectFieldProps = {

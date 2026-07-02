@@ -39,6 +39,10 @@ public class EmployeeCareerProgression {
 
     private LocalDate grade1AchievedDate;
 
+    private LocalDate supraAchievedDate;
+
+    private LocalDate specialAchievedDate;
+
     private Integer grade2RequiredYears;
 
     private LocalDate grade2EligibilityDate;

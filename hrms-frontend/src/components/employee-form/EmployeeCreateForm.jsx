@@ -3,27 +3,42 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useSta
 import { Alert } from "@mui/material";
 
 import { getDesignations } from "../../services/designationService";
+import { getServices } from "../../services/serviceService";
 import { getServiceLevels } from "../../services/serviceLevelService";
 import { createFormFieldProps } from "../../utils/formLayout";
 import {
     applyGradeDerivedRequirements,
+    applyPrivateVehicleFormChanges,
     applyTimelineToFormData,
     appendCustomRequirementFields,
+    buildContractCreatePayload,
     buildNonPermanentCreatePayload,
     buildPermanentCreatePayload,
+    buildTrainingCreatePayload,
     emptyForm,
+    findTrainingServiceLevelId,
     validateCareerHistoryTimeline,
-    validatePrivateVehicleFields
+    validateContractFields,
+    validatePrivateVehicleFields,
+    validateTrainingFields,
+    validateWidowsOrphansPensionNo
 } from "../../utils/employeeFormUtils";
-import { validateDesignationAssignment } from "../../constants/hrms";
+import {
+    applyMaritalStatusFormChanges,
+    validateDependentFields
+} from "../../utils/employeeDependentForm";
+import { isContractEmployee, isTrainingFormType, validateCustomDesignationAssignment, validateDesignationAssignment } from "../../constants/hrms";
 import CareerHistoryBuilder, {
     deriveTimelineState
 } from "../CareerHistoryBuilder";
 import FormSection from "../FormSection";
 import EmployeeEmploymentTypeSection, {
-    EmployeeNonPermanentPositionSection
+    EmployeeContractPositionSection,
+    EmployeeNonPermanentPositionSection,
+    EmployeeTrainingPositionSection
 } from "./EmployeeEmploymentTypeSection";
 import EmployeePersonalSection from "./EmployeePersonalSection";
+import EmployeeDependentDetailsSection from "./EmployeeDependentDetailsSection";
 import EmployeePhotoUpload from "./EmployeePhotoUpload";
 import EmployeeQualificationsSection from "./EmployeeQualificationsSection";
 import EmployeeWorkplaceSection from "./EmployeeWorkplaceSection";
@@ -33,6 +48,7 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
     ref
 ) {
     const [designations, setDesignations] = useState([]);
+    const [services, setServices] = useState([]);
     const [serviceLevels, setServiceLevels] = useState([]);
     const [formData, setFormData] = useState(emptyForm);
     const [historyEvents, setHistoryEvents] = useState([]);
@@ -54,7 +70,23 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
         }
     }, [open]);
 
+    useEffect(() => {
+        if (!isTrainingFormType(formData.employmentType) || formData.serviceLevelId) {
+            return;
+        }
+
+        const trainingLevelId = findTrainingServiceLevelId(serviceLevels);
+        if (trainingLevelId) {
+            setFormData((prev) => ({
+                ...prev,
+                serviceLevelId: String(trainingLevelId)
+            }));
+        }
+    }, [formData.employmentType, formData.serviceLevelId, serviceLevels]);
+
     const isPermanent = formData.employmentType === "PERMANENT";
+    const isContract = isContractEmployee(formData.employmentType);
+    const isTraining = isTrainingFormType(formData.employmentType);
     const hasHistory = historyEvents.length > 0;
     const timelineState = hasHistory
         ? deriveTimelineState(historyEvents)
@@ -65,21 +97,42 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
             ? designation.id === Number(timelineState?.designationId)
             : designation.id === Number(formData.designationId)
     );
+    const selectedService = timelineState?.serviceId
+        ? services.find((service) => service.id === Number(timelineState.serviceId))
+        : null;
 
     useEffect(() => {
         const loadDropdowns = async () => {
-            const [designationData, levelData] = await Promise.all([
+            const [designationData, serviceData, levelData] = await Promise.all([
                 getDesignations(),
+                getServices(),
                 getServiceLevels()
             ]);
             setDesignations(designationData);
+            setServices(serviceData);
             setServiceLevels(levelData);
         };
 
         loadDropdowns();
     }, []);
 
-    const validateAssignment = (nextFormData, designationId) => {
+    const validateAssignment = (nextFormData, designationId, timelineOverride) => {
+        const state = timelineOverride ?? timelineState;
+        const isCustomAssignment = state?.recordedDesignationName
+            && !state?.designationId;
+
+        if (isCustomAssignment) {
+            const service = selectedService
+                ?? services.find((item) => item.id === Number(state?.serviceId));
+            const error = validateCustomDesignationAssignment({
+                grade: nextFormData.grade,
+                serviceLevelId: nextFormData.serviceLevelId,
+                service
+            });
+            setAssignmentError(error || "");
+            return error;
+        }
+
         const designation = designations.find(
             (item) => item.id === Number(designationId ?? nextFormData.designationId)
         );
@@ -107,18 +160,26 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
         };
 
         if (name === "employmentType") {
-            if (value !== "PERMANENT") {
+            if (value === "PERMANENT") {
+                nextFormData.grade = "III";
+            } else {
                 nextFormData.grade = "None";
                 setHistoryEvents([]);
-            } else {
-                nextFormData.grade = "III";
+            }
+            if (value === "CONTRACT") {
+                nextFormData.currentDepartment = nextFormData.currentDepartment
+                    || emptyForm.currentDepartment;
+            }
+            if (value === "TRAINING") {
+                nextFormData.serviceLevelId = findTrainingServiceLevelId(serviceLevels);
+                nextFormData.trainingPeriodYears = nextFormData.trainingPeriodYears || "1";
+                nextFormData.currentDepartment = nextFormData.currentDepartment
+                    || emptyForm.currentDepartment;
             }
         }
 
-        if (name === "privateVehicleUsedForGovWork" && value === "No") {
-            nextFormData.privateVehicleDescription = "";
-            nextFormData.privateVehiclePermissionDate = "";
-        }
+        nextFormData = applyPrivateVehicleFormChanges(nextFormData, name, value);
+        nextFormData = applyMaritalStatusFormChanges(nextFormData, name, value);
 
         nextFormData = applyGradeDerivedRequirements(nextFormData);
 
@@ -147,8 +208,9 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
             return;
         }
 
+        const state = deriveTimelineState(events);
         const designation = designations.find(
-            (item) => item.id === Number(deriveTimelineState(events).designationId)
+            (item) => item.id === Number(state.designationId)
         );
         const nextFormData = applyTimelineToFormData(
             formData,
@@ -157,22 +219,38 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
         );
 
         setFormData(nextFormData);
-        validateAssignment(nextFormData, nextFormData.designationId);
+        validateAssignment(nextFormData, nextFormData.designationId, state);
     };
 
-    const { fieldProps, dateFieldProps, selectFieldProps } =
+    const { fieldProps, selectFieldProps } =
         createFormFieldProps(handleChange);
 
     const submitForm = () => {
         setSubmitError("");
 
-        const privateVehicleError = validatePrivateVehicleFields(formData);
+        const privateVehicleError = isPermanent
+            ? validatePrivateVehicleFields(formData)
+            : null;
         if (privateVehicleError) {
             setSubmitError(privateVehicleError);
             return false;
         }
 
+        const dependentError = isPermanent
+            ? validateDependentFields(formData)
+            : null;
+        if (dependentError) {
+            setSubmitError(dependentError);
+            return false;
+        }
+
         if (isPermanent) {
+            const widowsOrphansPensionError = validateWidowsOrphansPensionNo(formData);
+            if (widowsOrphansPensionError) {
+                setSubmitError(widowsOrphansPensionError);
+                return false;
+            }
+
             if (!hasHistory) {
                 setSubmitError(
                     "Add the employee's first appointment in career history."
@@ -183,16 +261,19 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
             const timelineError = validateCareerHistoryTimeline(
                 historyEvents,
                 designations,
-                serviceLevels
+                serviceLevels,
+                services
             );
             if (timelineError) {
                 setSubmitError(timelineError);
                 return false;
             }
 
+            const timelineStateForSubmit = deriveTimelineState(historyEvents);
             const error = validateAssignment(
                 applyTimelineToFormData(formData, historyEvents, selectedDesignation),
-                timelineState?.designationId
+                timelineStateForSubmit?.designationId,
+                timelineStateForSubmit
             );
             if (error) {
                 setSubmitError(error);
@@ -203,8 +284,37 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
                 buildPermanentCreatePayload(
                     formData,
                     historyEvents,
-                    selectedDesignation
+                    selectedDesignation,
+                    services
                 ),
+                photoOptionsRef.current
+            );
+            return true;
+        }
+
+        if (isContract) {
+            const contractError = validateContractFields(formData);
+            if (contractError) {
+                setSubmitError(contractError);
+                return false;
+            }
+
+            handleSubmit(
+                buildContractCreatePayload(formData),
+                photoOptionsRef.current
+            );
+            return true;
+        }
+
+        if (isTraining) {
+            const trainingError = validateTrainingFields(formData);
+            if (trainingError) {
+                setSubmitError(trainingError);
+                return false;
+            }
+
+            handleSubmit(
+                buildTrainingCreatePayload(formData),
                 photoOptionsRef.current
             );
             return true;
@@ -224,7 +334,11 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
 
     useImperativeHandle(ref, () => ({
         submit: submitForm,
-        canSubmit: isPermanent ? hasHistory && !assignmentError : !assignmentError
+        canSubmit: isPermanent
+            ? hasHistory && !assignmentError
+            : isContract || isTraining
+                ? true
+                : !assignmentError
     }));
 
     return (
@@ -237,8 +351,8 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
             <EmployeePersonalSection
                 formData={formData}
                 fieldProps={fieldProps}
-                dateFieldProps={dateFieldProps}
                 selectFieldProps={selectFieldProps}
+                showPrivateVehicleFields={isPermanent}
                 photoSlot={(
                     <EmployeePhotoUpload
                         open={open}
@@ -246,6 +360,20 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
                     />
                 )}
             />
+
+            {isPermanent && (
+                <EmployeeDependentDetailsSection
+                    formData={formData}
+                    onSpouseChange={(spouse) => {
+                        setFormData((prev) => ({ ...prev, spouse }));
+                        setSubmitError("");
+                    }}
+                    onChildrenChange={(children) => {
+                        setFormData((prev) => ({ ...prev, children }));
+                        setSubmitError("");
+                    }}
+                />
+            )}
 
             {isPermanent ? (
                 <>
@@ -266,7 +394,6 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
                             <EmployeeWorkplaceSection
                                 formData={formData}
                                 fieldProps={fieldProps}
-                                dateFieldProps={dateFieldProps}
                                 selectFieldProps={selectFieldProps}
                                 variant="permanent"
                                 readOnlyWorkplace
@@ -286,6 +413,64 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
                         </>
                     )}
                 </>
+            ) : isContract ? (
+                <>
+                    <EmployeeContractPositionSection
+                        formData={formData}
+                        designations={designations}
+                        selectFieldProps={selectFieldProps}
+                    />
+
+                    <EmployeeWorkplaceSection
+                        formData={formData}
+                        fieldProps={fieldProps}
+                        selectFieldProps={selectFieldProps}
+                        variant="contract"
+                        onDistrictChange={(value) =>
+                            setFormData((prev) => ({
+                                ...prev,
+                                currentDistrictOfWorking: value,
+                                currentWorkingPlace: ""
+                            }))
+                        }
+                        onOfficeChange={(value) =>
+                            setFormData((prev) => ({
+                                ...prev,
+                                currentWorkingPlace: value
+                            }))
+                        }
+                    />
+                </>
+            ) : isTraining ? (
+                <>
+                    <EmployeeTrainingPositionSection
+                        formData={formData}
+                        designations={designations}
+                        selectFieldProps={selectFieldProps}
+                        onTrainingPeriodChange={handleChange}
+                    />
+
+                    <EmployeeWorkplaceSection
+                        formData={formData}
+                        fieldProps={fieldProps}
+                        selectFieldProps={selectFieldProps}
+                        variant="training"
+                        onIncrementDateChange={handleChange}
+                        onDistrictChange={(value) =>
+                            setFormData((prev) => ({
+                                ...prev,
+                                currentDistrictOfWorking: value,
+                                currentWorkingPlace: ""
+                            }))
+                        }
+                        onOfficeChange={(value) =>
+                            setFormData((prev) => ({
+                                ...prev,
+                                currentWorkingPlace: value
+                            }))
+                        }
+                    />
+                </>
             ) : (
                 <>
                     <EmployeeNonPermanentPositionSection
@@ -300,7 +485,6 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
                     <EmployeeWorkplaceSection
                         formData={formData}
                         fieldProps={fieldProps}
-                        dateFieldProps={dateFieldProps}
                         selectFieldProps={selectFieldProps}
                         variant="nonPermanent"
                         onDistrictChange={(value) =>
