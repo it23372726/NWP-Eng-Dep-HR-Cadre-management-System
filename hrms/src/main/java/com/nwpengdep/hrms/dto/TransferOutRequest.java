@@ -26,6 +26,8 @@ public class TransferOutRequest {
 
     private String recordedDesignationName;
 
+    private String specialDesignationName;
+
     @NotNull(message = "Service level is required")
     private Long serviceLevelId;
 

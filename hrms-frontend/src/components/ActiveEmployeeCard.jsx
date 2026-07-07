@@ -16,7 +16,7 @@ import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import EmployeeAvatar from "./EmployeeAvatar";
 import EmploymentTypeChip from "./EmploymentTypeChip";
 import PermanentStatusChip from "./PermanentStatusChip";
-import { isPermanentEmployee, resolveEmployeeDesignationName, resolveEmployeeService } from "../constants/hrms";
+import { isPermanentEmployee, isSystemPendingEmployee, resolveEmployeeDesignationName, resolveEmployeeService } from "../constants/hrms";
 import { getServiceColor } from "../constants/dashboardTheme";
 import { formatEmployeeWorkplace } from "../utils/employeeListFilters";
 import {
@@ -86,6 +86,7 @@ export default function ActiveEmployeeCard({ employee, onClick }) {
     }
 
     const designation = resolveEmployeeDesignationName(employee);
+    const systemPending = isSystemPendingEmployee(employee);
     const serviceLevel = employee.serviceLevel?.levelName;
     const serviceCode = resolveEmployeeService(employee)?.serviceCode;
     const serviceColor = getServiceColor(serviceCode);
@@ -199,19 +200,29 @@ export default function ActiveEmployeeCard({ employee, onClick }) {
                 </Stack>
 
                 <Stack spacing={1.25} sx={{ mb: 1.5 }}>
-                    <DetailRow
-                        icon={WorkIcon}
-                        label="Position"
-                        value={positionLine || "No designation assigned"}
-                    />
-                    <DetailRow
-                        icon={LocationOnIcon}
-                        label="Workplace"
-                        value={
-                            workplace
-                                || (district ? `${district} district` : null)
-                        }
-                    />
+                    {systemPending ? (
+                        <DetailRow
+                            icon={WorkIcon}
+                            label="Status"
+                            value="Career history not recorded"
+                        />
+                    ) : (
+                        <>
+                            <DetailRow
+                                icon={WorkIcon}
+                                label="Position"
+                                value={positionLine || "No designation assigned"}
+                            />
+                            <DetailRow
+                                icon={LocationOnIcon}
+                                label="Workplace"
+                                value={
+                                    workplace
+                                        || (district ? `${district} district` : null)
+                                }
+                            />
+                        </>
+                    )}
                     {employee.contactNo && (
                         <DetailRow
                             icon={CallIcon}
@@ -230,6 +241,15 @@ export default function ActiveEmployeeCard({ employee, onClick }) {
                 </Stack>
 
                 <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+                    {systemPending && (
+                        <Chip
+                            label="System Pending"
+                            size="small"
+                            color="warning"
+                            variant="outlined"
+                            sx={{ fontWeight: 600 }}
+                        />
+                    )}
                     {employee.grade && employee.grade !== "None" && (
                         <Chip
                             label={`Grade ${employee.grade}`}

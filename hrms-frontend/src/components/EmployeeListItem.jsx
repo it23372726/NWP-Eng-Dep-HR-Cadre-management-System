@@ -14,7 +14,7 @@ import EmployeeAvatar from "./EmployeeAvatar";
 import EmploymentTypeChip from "./EmploymentTypeChip";
 import EmployeeStatusChip from "./EmployeeStatusChip";
 import PermanentStatusChip from "./PermanentStatusChip";
-import { isPermanentEmployee, resolveEmployeeDesignationName, resolveEmployeeService } from "../constants/hrms";
+import { isPermanentEmployee, isSystemPendingEmployee, resolveEmployeeDesignationName, resolveEmployeeService } from "../constants/hrms";
 import { formatEmployeeWorkplace } from "../utils/employeeListFilters";
 
 const GRADE_CHIP_COLORS = {
@@ -95,6 +95,7 @@ export default function EmployeeListItem({
     }
 
     const designation = resolveEmployeeDesignationName(employee);
+    const systemPending = isSystemPendingEmployee(employee);
     const serviceLevel = employee.serviceLevel?.levelName;
     const serviceCode = resolveEmployeeService(employee)?.serviceCode;
     const workplace = formatEmployeeWorkplace(employee);
@@ -163,17 +164,26 @@ export default function EmployeeListItem({
                         sx={{ flexShrink: 0 }}
                     >
                         <GradeChip grade={employee.grade} />
-                        {!isInactive && employee.permanentStatus
+                        {!isInactive && systemPending && (
+                            <Chip
+                                label="System Pending"
+                                size="small"
+                                color="warning"
+                                variant="outlined"
+                                sx={{ fontWeight: 600 }}
+                            />
+                        )}
+                        {!isInactive && !systemPending && employee.permanentStatus
                             && isPermanentEmployee(employee.employmentType) && (
                             <PermanentStatusChip status={employee.permanentStatus} />
                         )}
-                        {!isInactive && !isPermanentEmployee(employee.employmentType) && (
+                        {!isInactive && !systemPending && !isPermanentEmployee(employee.employmentType) && (
                             <EmploymentTypeChip
                                 employmentType={employee.employmentType}
                                 employee={employee}
                             />
                         )}
-                        {!isInactive && <PromotionChip employee={employee} />}
+                        {!isInactive && !systemPending && <PromotionChip employee={employee} />}
                         {isInactive && (
                             <EmployeeStatusChip status={employee.status} />
                         )}
@@ -204,9 +214,11 @@ export default function EmployeeListItem({
 
                 <Stack spacing={0.35}>
                     <MetaLine icon={WorkIcon}>
-                        {positionLine || "No designation assigned"}
+                        {systemPending
+                            ? "Career history not recorded"
+                            : (positionLine || "No designation assigned")}
                     </MetaLine>
-                    {workplace && (
+                    {!systemPending && workplace && (
                         <MetaLine icon={LocationOnIcon}>
                             {workplace}
                         </MetaLine>

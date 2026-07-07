@@ -94,7 +94,9 @@ function TimelineCard({
     onEdit,
     onDelete
 }) {
-    const color = actionColor[action.actionType] || "default";
+    const color = action.trainingAppointment
+        ? "info"
+        : (actionColor[action.actionType] || "default");
     const detailLines = getActionDetailLines(action);
     const label = getActionTypeLabel(action);
 

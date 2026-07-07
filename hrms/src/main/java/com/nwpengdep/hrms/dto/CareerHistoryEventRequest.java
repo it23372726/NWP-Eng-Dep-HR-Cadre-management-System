@@ -22,6 +22,8 @@ public class CareerHistoryEventRequest {
 
     private String recordedDesignationName;
 
+    private String specialDesignationName;
+
     private Long serviceId;
 
     private Grade grade;

@@ -62,6 +62,16 @@ export function applyMaritalStatusFormChanges(formData, name, value) {
     return clearDependentFormFields(formData);
 }
 
+function isBlankSpouse(spouse) {
+    if (!spouse) {
+        return true;
+    }
+
+    return !spouse.nic?.trim()
+        && !spouse.fullName?.trim()
+        && !spouse.dateOfBirth;
+}
+
 function isBlankChildRow(child) {
     return !child.nic?.trim()
         && !child.birthCertificateNo?.trim()
@@ -94,12 +104,16 @@ export function buildDependentPayloadFields(formData) {
         };
     }
 
+    const spouse = formData.spouse ?? emptySpouseForm();
+
     return {
-        spouse: {
-            nic: formData.spouse?.nic?.trim() || null,
-            fullName: formData.spouse?.fullName?.trim() || null,
-            dateOfBirth: formData.spouse?.dateOfBirth || null
-        },
+        spouse: isBlankSpouse(spouse)
+            ? null
+            : {
+                nic: spouse.nic?.trim() || null,
+                fullName: spouse.fullName?.trim() || null,
+                dateOfBirth: spouse.dateOfBirth || null
+            },
         children: filterChildrenForPayload(formData.children)
     };
 }
@@ -107,18 +121,6 @@ export function buildDependentPayloadFields(formData) {
 export function validateDependentFields(formData) {
     if (!isMarriedStatus(formData.maritalStatus)) {
         return null;
-    }
-
-    const spouse = formData.spouse ?? emptySpouseForm();
-
-    if (!spouse.fullName?.trim()) {
-        return "Spouse name is required for married employees.";
-    }
-    if (!spouse.nic?.trim()) {
-        return "Spouse NIC is required for married employees.";
-    }
-    if (!spouse.dateOfBirth) {
-        return "Spouse date of birth is required for married employees.";
     }
 
     const children = filterChildrenForPayload(formData.children);

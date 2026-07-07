@@ -105,12 +105,15 @@ export default function DashboardLayout() {
                 variant="permanent"
                 sx={{
                     width: collapsed ? collapsedWidth : drawerWidth,
-
+                    flexShrink: 0,
                     [`& .MuiDrawer-paper`]: {
-
                         width: collapsed ? collapsedWidth : drawerWidth,
                         boxSizing: "border-box",
                         mt: 8,
+                        height: "calc(100vh - 64px)",
+                        display: "flex",
+                        flexDirection: "column",
+                        overflow: "hidden",
                         borderRight: "1px solid",
                         borderColor: "divider",
                         bgcolor: "background.paper",
@@ -122,26 +125,83 @@ export default function DashboardLayout() {
                     }
                 }}
             >
-
-                <Box sx={{ px: 1.5, py: 1 }}>
-                    <Typography
-                        variant="caption"
+                <Box
+                    sx={{
+                        px: collapsed ? 1 : 2,
+                        py: 1.5,
+                        flexShrink: 0,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1.25,
+                        minHeight: 48
+                    }}
+                >
+                    <Box
                         sx={{
-                            color: "text.secondary",
-                            px: 1,
-                            fontWeight: 700,
-                            letterSpacing: 0.5,
-                            display: collapsed ? "none" : "block"
+                            width: 32,
+                            height: 32,
+                            borderRadius: 1.5,
+                            bgcolor: "primary.main",
+                            color: "primary.contrastText",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontWeight: 800,
+                            fontSize: "0.7rem",
+                            flexShrink: 0
                         }}
                     >
-                        HRMS
-                    </Typography>
+                        HR
+                    </Box>
+                    {!collapsed && (
+                        <Box sx={{ minWidth: 0 }}>
+                            <Typography
+                                variant="subtitle2"
+                                sx={{ fontWeight: 800, lineHeight: 1.2 }}
+                                noWrap
+                            >
+                                HRMS
+                            </Typography>
+                            <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{ fontWeight: 600, letterSpacing: 0.3 }}
+                                noWrap
+                            >
+                                Navigation
+                            </Typography>
+                        </Box>
+                    )}
                 </Box>
 
                 <Divider />
 
-                <SidebarNav collapsed={collapsed} />
-
+                <Box
+                    sx={{
+                        flex: 1,
+                        minHeight: 0,
+                        overflowY: "auto",
+                        overflowX: "hidden",
+                        scrollbarWidth: "thin",
+                        scrollbarColor: (theme) =>
+                            `${theme.palette.action.disabled} transparent`,
+                        "&::-webkit-scrollbar": {
+                            width: 6
+                        },
+                        "&::-webkit-scrollbar-track": {
+                            bgcolor: "transparent"
+                        },
+                        "&::-webkit-scrollbar-thumb": {
+                            bgcolor: "action.disabled",
+                            borderRadius: 3,
+                            "&:hover": {
+                                bgcolor: "action.active"
+                            }
+                        }
+                    }}
+                >
+                    <SidebarNav collapsed={collapsed} />
+                </Box>
             </Drawer>
 
             <Box

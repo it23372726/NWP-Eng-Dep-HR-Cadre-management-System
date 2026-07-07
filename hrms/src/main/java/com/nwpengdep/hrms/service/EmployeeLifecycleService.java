@@ -33,8 +33,10 @@ import com.nwpengdep.hrms.entity.RequirementType;
 import com.nwpengdep.hrms.entity.ServiceLevel;
 import com.nwpengdep.hrms.entity.ServiceType;
 import com.nwpengdep.hrms.repository.DesignationRepository;
+import com.nwpengdep.hrms.repository.EmployeeActionRepository;
 import com.nwpengdep.hrms.repository.EmployeePostingRepository;
 import com.nwpengdep.hrms.repository.EmployeeRepository;
+import com.nwpengdep.hrms.util.EmployeePendingUtil;
 
 import lombok.RequiredArgsConstructor;
 
@@ -43,6 +45,7 @@ import lombok.RequiredArgsConstructor;
 public class EmployeeLifecycleService {
 
     private final EmployeeRepository employeeRepository;
+    private final EmployeeActionRepository employeeActionRepository;
     private final DesignationRepository designationRepository;
     private final EmployeePostingRepository postingRepository;
     private final DesignationAssignmentValidator designationAssignmentValidator;
@@ -57,6 +60,7 @@ public class EmployeeLifecycleService {
     public Employee transferOut(Long employeeId, TransferOutRequest request) {
         Employee employee = requireActiveEmployee(employeeId);
         rejectContractEmploymentActions(employee);
+        rejectSystemPendingEmployee(employee);
 
         String fromDepartment = employee.getCurrentDepartment();
         String fromOffice = employee.getCurrentOffice();
@@ -93,6 +97,7 @@ public class EmployeeLifecycleService {
 
         Designation targetDesignation = null;
         String targetRecordedName = null;
+        String targetSpecialName = null;
         if (isCatalogTransfer) {
             targetDesignation = designationRepository.findById(request.getNewDesignationId())
                     .orElseThrow(() -> new RuntimeException("Designation not found"));
@@ -101,8 +106,11 @@ public class EmployeeLifecycleService {
                     targetDesignation,
                     employeeService
             );
+            targetSpecialName = normalizeSpecialDesignationName(request.getSpecialDesignationName());
+            validateSpecialDesignationRequest(request.getSpecialDesignationName(), true);
         } else {
             targetRecordedName = request.getRecordedDesignationName().trim();
+            validateSpecialDesignationRequest(request.getSpecialDesignationName(), false);
         }
 
         ServiceLevel targetServiceLevel =
@@ -128,6 +136,7 @@ public class EmployeeLifecycleService {
                 oldDesignation,
                 targetDesignation,
                 targetRecordedName,
+                targetSpecialName,
                 targetServiceLevel,
                 fromDepartment,
                 fromOffice,
@@ -145,6 +154,7 @@ public class EmployeeLifecycleService {
     public Employee officeChange(Long employeeId, OfficeChangeRequest request) {
         Employee employee = requireActiveEmployee(employeeId);
         rejectContractEmploymentActions(employee);
+        rejectSystemPendingEmployee(employee);
 
         String currentDepartment = employee.getCurrentDepartment();
         if (currentDepartment == null || currentDepartment.isBlank()) {
@@ -216,6 +226,7 @@ public class EmployeeLifecycleService {
         Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
         rejectContractEmploymentActions(employee);
+        rejectSystemPendingEmployee(employee);
 
         employee.setStatus(EmployeeStatus.ACTIVE);
         employeeRepository.save(employee);
@@ -382,6 +393,7 @@ public class EmployeeLifecycleService {
     public Employee promoteEmployee(Long employeeId, PromotionRequest request) {
         Employee employee = requireActiveEmployee(employeeId);
         rejectContractEmploymentActions(employee);
+        rejectSystemPendingEmployee(employee);
         Designation oldDesignation = employee.getDesignation();
         Grade oldGrade = employee.getGrade();
         ServiceLevel oldServiceLevel = employee.getServiceLevel();
@@ -405,6 +417,7 @@ public class EmployeeLifecycleService {
 
         Designation targetDesignation = null;
         String targetRecordedName = null;
+        String targetSpecialName = null;
         if (isCatalogPromotion) {
             targetDesignation = designationRepository.findById(request.getNewDesignationId())
                     .orElseThrow(() -> new RuntimeException("Designation not found"));
@@ -413,8 +426,11 @@ public class EmployeeLifecycleService {
                     targetDesignation,
                     employeeService
             );
+            targetSpecialName = normalizeSpecialDesignationName(request.getSpecialDesignationName());
+            validateSpecialDesignationRequest(request.getSpecialDesignationName(), true);
         } else {
             targetRecordedName = request.getRecordedDesignationName().trim();
+            validateSpecialDesignationRequest(request.getSpecialDesignationName(), false);
         }
 
         ServiceLevel targetServiceLevel =
@@ -505,12 +521,21 @@ public class EmployeeLifecycleService {
         boolean gradeChanged = oldGrade != request.getGrade();
         boolean serviceLevelChanged = oldServiceLevel == null
                 || !oldServiceLevel.getId().equals(targetServiceLevel.getId());
+        boolean specialDesignationChanged = isCatalogPromotion
+                && !java.util.Objects.equals(
+                        normalizeComparableSpecialName(targetSpecialName),
+                        normalizeComparableSpecialName(employee.getSpecialDesignationName())
+                );
+        String oldSpecialDesignationName = employee.getSpecialDesignationName();
 
         if (gradeChanged) {
             employee.setAppointmentDateToPresentClassGrade(request.getPromotionDate());
         }
 
-        if (!designationChanged && !gradeChanged && !serviceLevelChanged) {
+        if (!designationChanged
+                && !gradeChanged
+                && !serviceLevelChanged
+                && !specialDesignationChanged) {
             careerProgressionService.recalculateEmployeeCareer(employee);
             return employeeRepository.save(employee);
         }
@@ -522,6 +547,9 @@ public class EmployeeLifecycleService {
         employee.setDesignation(targetDesignation);
         employee.setRecordedDesignationName(
                 isCustomPromotion ? targetRecordedName : null
+        );
+        employee.setSpecialDesignationName(
+                isCatalogPromotion ? targetSpecialName : null
         );
         if (targetDesignation != null && targetDesignation.getService() != null) {
             employee.setService(targetDesignation.getService());
@@ -557,9 +585,16 @@ public class EmployeeLifecycleService {
 
         if (designationChanged && gradeChanged) {
             String gradeUpdateRecordedName = null;
+            String gradeUpdateSpecialName = null;
             if (isCustomPromotion || oldDesignation == null) {
                 gradeUpdateRecordedName = employee.getRecordedDesignationName() != null
                         ? employee.getRecordedDesignationName().trim()
+                        : null;
+            } else {
+                gradeUpdateSpecialName = oldDesignation != null
+                        && targetDesignation != null
+                        && oldDesignation.getId().equals(targetDesignation.getId())
+                        ? oldSpecialDesignationName
                         : null;
             }
 
@@ -568,6 +603,7 @@ public class EmployeeLifecycleService {
                     request.getPromotionDate(),
                     oldDesignation,
                     gradeUpdateRecordedName,
+                    gradeUpdateSpecialName,
                     oldGrade,
                     request.getGrade(),
                     workplaceFromEmployee(employee)
@@ -580,6 +616,7 @@ public class EmployeeLifecycleService {
                     oldDesignation,
                     targetDesignation,
                     targetRecordedName,
+                    targetSpecialName,
                     request.getGrade(),
                     request.getGrade(),
                     null,
@@ -588,7 +625,7 @@ public class EmployeeLifecycleService {
                     request.getRemarks(),
                     promotionWorkplace
             );
-        } else if (designationChanged) {
+        } else if (designationChanged || specialDesignationChanged) {
             employeeActionService.recordActionWithGrades(
                     employee,
                     EmployeeActionType.PROMOTION,
@@ -596,6 +633,7 @@ public class EmployeeLifecycleService {
                     oldDesignation,
                     targetDesignation,
                     targetRecordedName,
+                    targetSpecialName,
                     oldGrade,
                     request.getGrade(),
                     null,
@@ -612,6 +650,7 @@ public class EmployeeLifecycleService {
                     oldDesignation,
                     targetDesignation,
                     targetRecordedName,
+                    targetSpecialName,
                     oldGrade,
                     request.getGrade(),
                     null,
@@ -630,7 +669,9 @@ public class EmployeeLifecycleService {
 
     @Transactional
     public Employee retireEmployee(Long employeeId, LifecycleActionRequest request) {
-        rejectContractEmploymentActions(requireActiveEmployee(employeeId));
+        Employee employee = requireActiveEmployee(employeeId);
+        rejectContractEmploymentActions(employee);
+        rejectSystemPendingEmployee(employee);
         return deactivateEmployee(
                 employeeId,
                 request,
@@ -641,6 +682,8 @@ public class EmployeeLifecycleService {
 
     @Transactional
     public Employee markDeath(Long employeeId, LifecycleActionRequest request) {
+        Employee employee = requireActiveEmployee(employeeId);
+        rejectSystemPendingEmployee(employee);
         return deactivateEmployee(
                 employeeId,
                 request,
@@ -652,6 +695,7 @@ public class EmployeeLifecycleService {
     @Transactional
     public Employee dismissEmployee(Long employeeId, DismissalRequest request) {
         Employee employee = requireActiveEmployee(employeeId);
+        rejectSystemPendingEmployee(employee);
 
         closeCurrentPostings(employee, request.getActionDate());
 
@@ -680,6 +724,7 @@ public class EmployeeLifecycleService {
     @Transactional
     public Employee vacatePostEmployee(Long employeeId, VacationOfPostRequest request) {
         Employee employee = requireActiveEmployee(employeeId);
+        rejectSystemPendingEmployee(employee);
 
         closeCurrentPostings(employee, request.getActionDate());
 
@@ -709,6 +754,7 @@ public class EmployeeLifecycleService {
     public Employee makePermanent(Long employeeId, MakePermanentRequest request) {
         Employee employee = requireActiveEmployee(employeeId);
         rejectContractEmploymentActions(employee);
+        rejectSystemPendingEmployee(employee);
 
         requirementSyncService.syncEmployeeRequirements(employee);
         careerProgressionService.calculatePermanentEligibility(employee);
@@ -782,6 +828,7 @@ public class EmployeeLifecycleService {
             LocalDate actionDate,
             Designation designation,
             String recordedDesignationName,
+            String specialDesignationName,
             Grade oldGrade,
             Grade newGrade,
             ActionWorkplaceFields workplace
@@ -793,6 +840,7 @@ public class EmployeeLifecycleService {
                 designation,
                 designation,
                 recordedDesignationName,
+                specialDesignationName,
                 oldGrade,
                 newGrade,
                 null,
@@ -929,6 +977,17 @@ public class EmployeeLifecycleService {
         if (com.nwpengdep.hrms.util.EmployeeTrainingUtil.isTrainingEmployee(employee)) {
             throw new RuntimeException(
                     "This action is not available for training employees"
+            );
+        }
+    }
+
+    private void rejectSystemPendingEmployee(Employee employee) {
+        if (EmployeePendingUtil.isSystemPending(
+                employee,
+                employeeActionRepository.existsActiveActionsByEmployeeId(employee.getId())
+        )) {
+            throw new RuntimeException(
+                    "Complete career history before recording lifecycle actions."
             );
         }
     }
@@ -1140,5 +1199,30 @@ public class EmployeeLifecycleService {
     private boolean isSpecialRequirementType(RequirementType type) {
         return type == RequirementType.MASTERS_DEGREE
                 || type == RequirementType.CUSTOM_SPECIAL_REQUIREMENT;
+    }
+
+    private String normalizeSpecialDesignationName(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private String normalizeComparableSpecialName(String value) {
+        String normalized = normalizeSpecialDesignationName(value);
+        return normalized == null ? null : normalized.toLowerCase();
+    }
+
+    private void validateSpecialDesignationRequest(
+            String specialDesignationName,
+            boolean catalogAssignment
+    ) {
+        if (specialDesignationName != null
+                && !specialDesignationName.isBlank()
+                && !catalogAssignment) {
+            throw new RuntimeException(
+                    "Special designation cannot be used with Other/custom title"
+            );
+        }
     }
 }

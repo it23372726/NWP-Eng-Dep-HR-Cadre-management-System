@@ -23,6 +23,7 @@ import com.nwpengdep.hrms.entity.ChildRelationship;
 import com.nwpengdep.hrms.entity.Designation;
 import com.nwpengdep.hrms.entity.District;
 import com.nwpengdep.hrms.entity.Employee;
+import com.nwpengdep.hrms.entity.EmployeeAction;
 import com.nwpengdep.hrms.entity.EmployeeActionType;
 import com.nwpengdep.hrms.entity.EmployeeCareerProgression;
 import com.nwpengdep.hrms.entity.EmployeeChild;
@@ -44,6 +45,7 @@ import com.nwpengdep.hrms.repository.EmployeeActionRepository;
 import com.nwpengdep.hrms.repository.EmployeePostingRepository;
 import com.nwpengdep.hrms.repository.EmployeeRepository;
 import com.nwpengdep.hrms.repository.ServiceTypeRepository;
+import com.nwpengdep.hrms.util.EmployeePendingUtil;
 
 import lombok.RequiredArgsConstructor;
 
@@ -76,13 +78,19 @@ public class EmployeeService {
             return createTrainingEmployee(request);
         }
 
-        validateNonContractCreateRequest(request);
         validateUniqueEmployeeIdentifiers(request.getEmployeeNo(), request.getNic(), null);
 
-        if (request.getCareerHistory() != null
-                && !request.getCareerHistory().isEmpty()) {
-            return createEmployeeWithHistory(request);
+        if (request.getEmploymentType() == EmploymentType.PERMANENT) {
+            if (request.getCareerHistory() != null
+                    && !request.getCareerHistory().isEmpty()) {
+                return createEmployeeWithHistory(request);
+            }
+            return createPendingPermanentEmployee(request);
         }
+
+        validateNonContractCreateRequest(request);
+        validateRequiredWorkplaceFields(request.getReportedDateToPresentWorkingPlace(),
+                request.getCurrentWorkingPlace());
 
         if (request.getEntryType() == EmployeeEntryType.TRANSFER_IN) {
             if (request.getTransferredFrom() == null
@@ -252,9 +260,126 @@ public class EmployeeService {
         return result;
     }
 
+    private Employee createPendingPermanentEmployee(EmployeeRequest request) {
+        if (request.getEmploymentType() != EmploymentType.PERMANENT) {
+            throw new RuntimeException(
+                    "Pending profile creation applies to permanent employees only"
+            );
+        }
+
+        Employee employee = mapPendingPermanentRequestToEmployee(
+                new Employee(),
+                request
+        );
+        employee.setStatus(EmployeeStatus.ACTIVE);
+        return employeeRepository.save(employee);
+    }
+
+    private Employee mapPendingPermanentRequestToEmployee(
+            Employee employee,
+            EmployeeRequest request
+    ) {
+        employee.setEmployeeNo(request.getEmployeeNo().trim());
+        employee.setFullName(request.getFullName().trim());
+        employee.setDesignation(null);
+        employee.setRecordedDesignationName(null);
+        employee.setService(null);
+        employee.setNic(request.getNic().trim());
+        applyTin(employee, request.getTin());
+        employee.setDateOfBirth(request.getDateOfBirth());
+        employee.setGender(request.getGender());
+        applyMaritalStatusIfProvided(employee, request.getMaritalStatus());
+        employee.setGrade(Grade.NONE);
+        employee.setDateOfFirstAppointment(null);
+        applyIncremantDate(employee, request.getIncremantDate());
+        applyWidowsOrphansPensionNo(
+                employee,
+                request.getWidowsOrphansPensionNo(),
+                false
+        );
+        employee.setEnteredDateToAllIslandService(
+                request.getEnteredDateToAllIslandService()
+        );
+        employee.setReportedDateToPresentWorkingPlace(null);
+        employee.setCurrentWorkingPlace(null);
+        employee.setCurrentDepartment(null);
+        employee.setCurrentOffice(null);
+        employee.setCurrentDistrictOfWorking(null);
+        employee.setAppointmentDateToPresentClassGrade(null);
+        employee.setEnteredDateToNWPCouncil(null);
+        employee.setPermanentAddress(request.getPermanentAddress().trim());
+        employee.setResidentDistrict(request.getResidentDistrict());
+        applyPrivateVehicleFields(
+                employee,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                null
+        );
+        employee.setContactNo(request.getContactNo().trim());
+        applyEmailAddress(employee, request.getEmailAddress());
+        employee.setServiceLevel(null);
+        employee.setEmploymentType(EmploymentType.PERMANENT);
+        applyDependentDetails(
+                employee,
+                request.getSpouse(),
+                request.getChildren(),
+                request.getMaritalStatus()
+        );
+        return employee;
+    }
+
+    private Employee updatePendingPermanentEmployee(
+            Long id,
+            EmployeeUpdateRequest request
+    ) {
+        Employee employee = employeeRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+
+        if (employee.getStatus() != EmployeeStatus.ACTIVE) {
+            throw new RuntimeException("Only active employees can be updated");
+        }
+
+        if (!isSystemPendingEmployee(employee)) {
+            throw new RuntimeException("Employee is no longer system pending");
+        }
+
+        mapPendingPermanentUpdateRequestToEmployee(employee, request);
+        return employeeRepository.save(employee);
+    }
+
+    private void mapPendingPermanentUpdateRequestToEmployee(
+            Employee employee,
+            EmployeeUpdateRequest request
+    ) {
+        employee.setEmployeeNo(request.getEmployeeNo().trim());
+        employee.setFullName(request.getFullName().trim());
+        employee.setNic(request.getNic().trim());
+        applyTin(employee, request.getTin());
+        employee.setDateOfBirth(request.getDateOfBirth());
+        employee.setGender(request.getGender());
+        applyMaritalStatusIfProvided(employee, request.getMaritalStatus());
+        applyIncremantDate(employee, request.getIncremantDate());
+        employee.setPermanentAddress(request.getPermanentAddress().trim());
+        employee.setResidentDistrict(request.getResidentDistrict());
+        employee.setContactNo(request.getContactNo().trim());
+        applyEmailAddress(employee, request.getEmailAddress());
+        applyDependentDetails(
+                employee,
+                request.getSpouse(),
+                request.getChildren(),
+                request.getMaritalStatus()
+        );
+    }
+
     private record FinalAssignmentState(
             Designation designation,
             String recordedDesignationName,
+            String specialDesignationName,
             ServiceType service
     ) {
     }
@@ -265,6 +390,7 @@ public class EmployeeService {
     ) {
         Designation currentDesignation = null;
         String currentRecordedName = null;
+        String currentSpecialName = null;
         Grade currentGrade = null;
         String currentDepartment = null;
         String currentOffice = null;
@@ -286,6 +412,7 @@ public class EmployeeService {
                     if (isCustomDesignationEvent(event)) {
                         currentDesignation = null;
                         currentRecordedName = event.getRecordedDesignationName().trim();
+                        currentSpecialName = null;
                         if (event.getServiceId() != null) {
                             ServiceType service = serviceTypeRepository.findById(event.getServiceId())
                                     .orElseThrow(() -> new RuntimeException("Service not found"));
@@ -299,6 +426,7 @@ public class EmployeeService {
                                 null,
                                 currentRecordedName,
                                 null,
+                                null,
                                 currentGrade,
                                 null,
                                 null,
@@ -309,6 +437,10 @@ public class EmployeeService {
                     } else {
                         currentDesignation = resolveDesignation(event.getDesignationId());
                         currentRecordedName = null;
+                        currentSpecialName = normalizeSpecialDesignationName(
+                                event.getSpecialDesignationName()
+                        );
+                        validateSpecialDesignationEvent(event);
                         employeeActionService.recordActionWithGrades(
                                 employee,
                                 EmployeeActionType.NEW_APPOINTMENT,
@@ -316,6 +448,7 @@ public class EmployeeService {
                                 null,
                                 currentDesignation,
                                 null,
+                                currentSpecialName,
                                 null,
                                 currentGrade,
                                 null,
@@ -348,16 +481,28 @@ public class EmployeeService {
                     Designation oldDesignation = currentDesignation;
                     Grade oldGrade = currentGrade;
                     String oldRecordedName = currentRecordedName;
+                    String oldSpecialName = currentSpecialName;
                     Designation newDesignation = null;
                     String newRecordedName = null;
+                    String newSpecialName = currentSpecialName;
 
                     if (isCustomDesignationEvent(event)) {
                         newRecordedName = event.getRecordedDesignationName().trim();
+                        newSpecialName = null;
                     } else if (event.getDesignationId() != null) {
                         newDesignation = resolveDesignation(event.getDesignationId());
+                        validateSpecialDesignationEvent(event);
+                        newSpecialName = normalizeSpecialDesignationName(
+                                event.getSpecialDesignationName()
+                        );
                     } else {
                         newDesignation = currentDesignation;
                         newRecordedName = currentRecordedName;
+                        if (event.getSpecialDesignationName() != null) {
+                            newSpecialName = normalizeSpecialDesignationName(
+                                    event.getSpecialDesignationName()
+                            );
+                        }
                     }
 
                     Grade newGrade = event.getGrade() != null
@@ -370,7 +515,11 @@ public class EmployeeService {
                                             || !oldDesignation.getId().equals(newDesignation.getId())))
                             || (newRecordedName != null
                                     && (oldRecordedName == null
-                                            || !oldRecordedName.equalsIgnoreCase(newRecordedName)));
+                                            || !oldRecordedName.equalsIgnoreCase(newRecordedName)))
+                            || !java.util.Objects.equals(
+                                    normalizeComparableSpecialName(newSpecialName),
+                                    normalizeComparableSpecialName(oldSpecialName)
+                            );
                     boolean gradeChanged = event.getGrade() != null
                             && (oldGrade == null || !oldGrade.equals(newGrade));
 
@@ -387,6 +536,7 @@ public class EmployeeService {
                                 oldDesignation,
                                 oldDesignation,
                                 oldRecordedName,
+                                oldSpecialName,
                                 oldGrade,
                                 newGrade,
                                 null,
@@ -403,6 +553,7 @@ public class EmployeeService {
                                 oldDesignation,
                                 newDesignation,
                                 newRecordedName,
+                                newSpecialName,
                                 newGrade,
                                 newGrade,
                                 null,
@@ -421,6 +572,7 @@ public class EmployeeService {
                                 oldDesignation,
                                 newDesignation,
                                 newRecordedName,
+                                newSpecialName,
                                 oldGrade,
                                 newGrade,
                                 null,
@@ -433,6 +585,7 @@ public class EmployeeService {
 
                     currentDesignation = newDesignation;
                     currentRecordedName = newRecordedName;
+                    currentSpecialName = newSpecialName;
                     currentGrade = newGrade;
                     currentDepartment = workplace.getDepartment();
                     currentOffice = workplace.getOffice();
@@ -442,11 +595,16 @@ public class EmployeeService {
                     Designation oldDesignation = currentDesignation;
                     Designation newDesignation = null;
                     String newRecordedName = null;
+                    String newSpecialName = null;
 
                     if (isCustomDesignationEvent(event)) {
                         newRecordedName = event.getRecordedDesignationName().trim();
                     } else if (event.getDesignationId() != null) {
                         newDesignation = resolveDesignation(event.getDesignationId());
+                        validateSpecialDesignationEvent(event);
+                        newSpecialName = normalizeSpecialDesignationName(
+                                event.getSpecialDesignationName()
+                        );
                     } else {
                         throw new RuntimeException(
                                 "Transfer out must include the destination designation"
@@ -467,6 +625,7 @@ public class EmployeeService {
                             oldDesignation,
                             newDesignation,
                             newRecordedName,
+                            newSpecialName,
                             newServiceLevel,
                             currentDepartment,
                             currentOffice,
@@ -477,6 +636,7 @@ public class EmployeeService {
                     );
                     currentDesignation = newDesignation;
                     currentRecordedName = newRecordedName;
+                    currentSpecialName = newSpecialName;
                     currentDepartment = DepartmentConstants.normalize(event.getToDepartment());
                     currentOffice = event.getToOffice().trim();
                 }
@@ -717,21 +877,30 @@ public class EmployeeService {
     ) {
         Designation finalDesignation = null;
         String finalRecordedName = null;
+        String finalSpecialName = null;
         Long finalServiceId = null;
 
         for (CareerHistoryEventRequest event : events) {
             if (isCustomDesignationEvent(event)) {
                 finalDesignation = null;
                 finalRecordedName = event.getRecordedDesignationName().trim();
+                finalSpecialName = null;
                 if (event.getServiceId() != null) {
                     finalServiceId = event.getServiceId();
                 }
             } else if (event.getDesignationId() != null) {
                 finalDesignation = resolveDesignation(event.getDesignationId());
                 finalRecordedName = null;
+                finalSpecialName = normalizeSpecialDesignationName(
+                        event.getSpecialDesignationName()
+                );
                 if (finalDesignation.getService() != null) {
                     finalServiceId = finalDesignation.getService().getId();
                 }
+            } else if (event.getSpecialDesignationName() != null) {
+                finalSpecialName = normalizeSpecialDesignationName(
+                        event.getSpecialDesignationName()
+                );
             }
         }
 
@@ -750,7 +919,12 @@ public class EmployeeService {
             service = finalDesignation.getService();
         }
 
-        return new FinalAssignmentState(finalDesignation, finalRecordedName, service);
+        return new FinalAssignmentState(
+                finalDesignation,
+                finalRecordedName,
+                finalSpecialName,
+                service
+        );
     }
 
     private void applyFinalAssignmentState(
@@ -759,6 +933,7 @@ public class EmployeeService {
     ) {
         employee.setDesignation(state.designation());
         employee.setRecordedDesignationName(state.recordedDesignationName());
+        employee.setSpecialDesignationName(state.specialDesignationName());
         if (state.service() != null) {
             employee.setService(state.service());
         } else if (state.designation() != null
@@ -771,6 +946,28 @@ public class EmployeeService {
         return event.getDesignationId() == null
                 && event.getRecordedDesignationName() != null
                 && !event.getRecordedDesignationName().isBlank();
+    }
+
+    private void validateSpecialDesignationEvent(CareerHistoryEventRequest event) {
+        if (event.getSpecialDesignationName() != null
+                && !event.getSpecialDesignationName().isBlank()
+                && isCustomDesignationEvent(event)) {
+            throw new RuntimeException(
+                    "Special designation cannot be used with Other/custom title"
+            );
+        }
+    }
+
+    private String normalizeSpecialDesignationName(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private String normalizeComparableSpecialName(String value) {
+        String normalized = normalizeSpecialDesignationName(value);
+        return normalized == null ? null : normalized.toLowerCase();
     }
 
     private Designation resolveFinalDesignation(
@@ -831,17 +1028,23 @@ public class EmployeeService {
             return;
         }
 
-        validateDependentDetails(spouseRequest, childrenRequest);
+        validateDependentDetails(childrenRequest);
 
-        EmployeeSpouse spouse = employee.getSpouse();
-        if (spouse == null) {
-            spouse = EmployeeSpouse.builder().employee(employee).build();
-            employee.setSpouse(spouse);
+        if (isBlankSpouseRequest(spouseRequest)) {
+            if (employee.getSpouse() != null) {
+                employee.setSpouse(null);
+            }
+        } else {
+            EmployeeSpouse spouse = employee.getSpouse();
+            if (spouse == null) {
+                spouse = EmployeeSpouse.builder().employee(employee).build();
+                employee.setSpouse(spouse);
+            }
+
+            spouse.setNic(trimToNull(spouseRequest.getNic()));
+            spouse.setFullName(trimToNull(spouseRequest.getFullName()));
+            spouse.setDateOfBirth(spouseRequest.getDateOfBirth());
         }
-
-        spouse.setNic(trimToNull(spouseRequest.getNic()));
-        spouse.setFullName(spouseRequest.getFullName().trim());
-        spouse.setDateOfBirth(spouseRequest.getDateOfBirth());
 
         List<EmployeeChildRequest> childRequests = filterChildRequests(childrenRequest);
         if (employee.getChildren() == null) {
@@ -896,27 +1099,19 @@ public class EmployeeService {
                 && childRequest.getRelationship() == null;
     }
 
-    private void validateDependentDetails(
-            EmployeeSpouseRequest spouseRequest,
-            List<EmployeeChildRequest> childrenRequest
-    ) {
-        if (spouseRequest == null
-                || trimToNull(spouseRequest.getFullName()) == null) {
-            throw new IllegalArgumentException(
-                    "Spouse name is required for married employees"
-            );
-        }
-        if (trimToNull(spouseRequest.getNic()) == null) {
-            throw new IllegalArgumentException(
-                    "Spouse NIC is required for married employees"
-            );
-        }
-        if (spouseRequest.getDateOfBirth() == null) {
-            throw new IllegalArgumentException(
-                    "Spouse date of birth is required for married employees"
-            );
+    private boolean isBlankSpouseRequest(EmployeeSpouseRequest spouseRequest) {
+        if (spouseRequest == null) {
+            return true;
         }
 
+        return trimToNull(spouseRequest.getNic()) == null
+                && trimToNull(spouseRequest.getFullName()) == null
+                && spouseRequest.getDateOfBirth() == null;
+    }
+
+    private void validateDependentDetails(
+            List<EmployeeChildRequest> childrenRequest
+    ) {
         for (EmployeeChildRequest childRequest : filterChildRequests(childrenRequest)) {
             if (trimToNull(childRequest.getBirthCertificateNo()) == null) {
                 throw new IllegalArgumentException(
@@ -1041,8 +1236,19 @@ public class EmployeeService {
     }
 
     public List<Employee> getActiveEmployeesByScope(String departmentScope) {
+        if ("SYSTEM_PENDING".equalsIgnoreCase(departmentScope)) {
+            return employeeRepository.findSystemPendingEmployees();
+        }
+
         List<Employee> active = employeeRepository.findByStatus(EmployeeStatus.ACTIVE);
         return filterByDepartmentScope(active, departmentScope);
+    }
+
+    private boolean isSystemPendingEmployee(Employee employee) {
+        return EmployeePendingUtil.isSystemPending(
+                employee,
+                employeeActionRepository.existsActiveActionsByEmployeeId(employee.getId())
+        );
     }
 
     private List<Employee> filterByDepartmentScope(
@@ -1056,6 +1262,7 @@ public class EmployeeService {
         }
         if ("NWP".equalsIgnoreCase(departmentScope)) {
             return employees.stream()
+                    .filter(employee -> !isSystemPendingEmployee(employee))
                     .filter(employee -> DepartmentConstants.isNwpEngineering(
                             employee.getCurrentDepartment()
                     ))
@@ -1063,6 +1270,7 @@ public class EmployeeService {
         }
         if ("OTHER".equalsIgnoreCase(departmentScope)) {
             return employees.stream()
+                    .filter(employee -> !isSystemPendingEmployee(employee))
                     .filter(employee -> employee.getCurrentDepartment() != null
                             && !DepartmentConstants.isNwpEngineering(
                                     employee.getCurrentDepartment()
@@ -1136,7 +1344,16 @@ public class EmployeeService {
             return updateQualificationsOnly(id, request);
         }
 
+        boolean isPending = isSystemPendingEmployee(existing);
+        if (isPending) {
+            return updatePendingPermanentEmployee(id, request);
+        }
+
         validateNonContractUpdateRequest(request);
+        validateRequiredWorkplaceFields(
+                request.getReportedDateToPresentWorkingPlace(),
+                request.getCurrentWorkingPlace()
+        );
 
         Employee employee = getEmployeeById(id);
 
@@ -1446,7 +1663,11 @@ public class EmployeeService {
         employee.setReportedDateToPresentWorkingPlace(
                 request.getReportedDateToPresentWorkingPlace()
         );
-        employee.setCurrentWorkingPlace(request.getCurrentWorkingPlace().trim());
+        if (request.getCurrentWorkingPlace() != null) {
+            employee.setCurrentWorkingPlace(request.getCurrentWorkingPlace().trim());
+        } else {
+            employee.setCurrentWorkingPlace(null);
+        }
         if (request.getCurrentDistrictOfWorking() != null) {
             employee.setCurrentDistrictOfWorking(request.getCurrentDistrictOfWorking());
         }
@@ -1572,6 +1793,25 @@ public class EmployeeService {
                 request.getCurrentWorkingPlace().trim(),
                 request.getCurrentDistrictOfWorking()
         );
+
+        EmployeeAction trainingAction = employeeActionService.recordAction(
+                employee,
+                EmployeeActionType.NEW_APPOINTMENT,
+                request.getReportedDateToPresentWorkingPlace(),
+                null,
+                designation,
+                null,
+                null,
+                null,
+                request.getRemarks(),
+                ActionWorkplaceFields.of(
+                        DepartmentConstants.NWP_ENGINEERING,
+                        request.getCurrentWorkingPlace().trim(),
+                        request.getCurrentDistrictOfWorking()
+                )
+        );
+        trainingAction.setTrainingAppointment(true);
+        employeeActionService.saveAction(trainingAction);
 
         return employee;
     }
@@ -1951,6 +2191,20 @@ public class EmployeeService {
         }
     }
 
+    private void validateRequiredWorkplaceFields(
+            LocalDate reportedDateToPresentWorkingPlace,
+            String currentWorkingPlace
+    ) {
+        if (reportedDateToPresentWorkingPlace == null) {
+            throw new RuntimeException(
+                    "Reported date to present working place is required"
+            );
+        }
+        if (currentWorkingPlace == null || currentWorkingPlace.isBlank()) {
+            throw new RuntimeException("Current working place is required");
+        }
+    }
+
     private void validateUniqueEmployeeIdentifiers(
             String employeeNo,
             String nic,
@@ -2208,7 +2462,11 @@ public class EmployeeService {
         employee.setReportedDateToPresentWorkingPlace(
                 request.getReportedDateToPresentWorkingPlace()
         );
-        employee.setCurrentWorkingPlace(request.getCurrentWorkingPlace().trim());
+        if (request.getCurrentWorkingPlace() != null) {
+            employee.setCurrentWorkingPlace(request.getCurrentWorkingPlace().trim());
+        } else {
+            employee.setCurrentWorkingPlace(null);
+        }
         if (request.getCurrentDistrictOfWorking() != null) {
             employee.setCurrentDistrictOfWorking(request.getCurrentDistrictOfWorking());
         }
@@ -2397,6 +2655,22 @@ public class EmployeeService {
         if (events == null || events.isEmpty()) {
             return;
         }
+
+        events.stream()
+                .filter(event -> event.getActionType()
+                        == EmployeeActionType.PERMANENT_CONFIRMATION)
+                .map(CareerHistoryEventRequest::getActionDate)
+                .findFirst()
+                .ifPresent(confirmationDate -> {
+                    EmployeeCareerProgression careerProgression =
+                            careerProgressionService.ensureCareerProgression(employee);
+                    careerProgression.setPermanentConfirmationDate(confirmationDate);
+                    careerProgression.setGrade3AchievedDate(confirmationDate);
+                    requirementSyncService.markPermanentRequirementsCompleted(
+                            employee,
+                            confirmationDate
+                    );
+                });
 
         requirementSyncService.syncEmployeeRequirements(employee);
         requirementSyncService.completeRequirementsForAchievedGrade(employee);
@@ -2768,10 +3042,6 @@ public class EmployeeService {
         }
 
         String trimmed = emailAddress.trim();
-        if (!trimmed.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
-            throw new IllegalArgumentException("Email address must be valid.");
-        }
-
         employee.setEmailAddress(trimmed);
     }
 

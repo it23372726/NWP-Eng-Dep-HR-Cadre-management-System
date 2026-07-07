@@ -157,7 +157,7 @@ export default function EmployeeDependentDetailsSection({
     return (
         <FormSection
             title="Dependent details"
-            description="Record spouse and children information for married employees."
+            description="Record spouse and children information for married employees. Spouse details are optional when unavailable."
         >
             <Stack spacing={3}>
                 <Box>
@@ -172,27 +172,26 @@ export default function EmployeeDependentDetailsSection({
                         <Grid size={{ xs: 12, sm: 4 }}>
                             <TextField
                                 fullWidth
-                                required
                                 label="Spouse NIC"
                                 name="nic"
                                 value={spouse.nic}
                                 onChange={handleSpouseFieldChange}
+                                helperText="Optional"
                             />
                         </Grid>
                         <Grid size={{ xs: 12, sm: 4 }}>
                             <TextField
                                 fullWidth
-                                required
                                 label="Spouse Name"
                                 name="fullName"
                                 value={spouse.fullName}
                                 onChange={handleSpouseFieldChange}
+                                helperText="Optional"
                             />
                         </Grid>
                         <Grid size={{ xs: 12, sm: 4 }}>
                             <DateInput
                                 fullWidth
-                                required
                                 label="Spouse Date of Birth"
                                 name="dateOfBirth"
                                 value={spouse.dateOfBirth}

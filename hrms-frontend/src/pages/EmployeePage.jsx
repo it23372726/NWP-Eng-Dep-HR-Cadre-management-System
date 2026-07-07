@@ -130,7 +130,9 @@ export default function EmployeePage() {
     useEffect(() => {
         const parsed = parseEmployeeListSearchParams(searchParams);
 
-        if (parsed.departmentScope === "OTHER" && (parsed.districtFilter || parsed.officeFilter)) {
+        if ((parsed.departmentScope === "OTHER"
+                || parsed.departmentScope === "SYSTEM_PENDING")
+            && (parsed.districtFilter || parsed.officeFilter)) {
             setSearchParams(
                 employeeFiltersToSearchParams({
                     ...parsed,
@@ -292,7 +294,10 @@ export default function EmployeePage() {
 
     const departmentLabel = departmentScope === "NWP"
         ? "N.W.P. Engineering Department"
-        : "Other Departments";
+        : departmentScope === "SYSTEM_PENDING"
+            ? "System Pending Employees"
+            : "Other Departments";
+    const isSystemPendingScope = departmentScope === "SYSTEM_PENDING";
 
     const renderListContent = () => {
         if (loading) {
@@ -315,14 +320,18 @@ export default function EmployeePage() {
                     title={
                         filtersActive
                             ? "No employees match your search or filters"
-                            : departmentScope === "NWP"
-                                ? "No active employees in N.W.P. Engineering Department"
-                                : "No active employees in other departments"
+                            : isSystemPendingScope
+                                ? "No system pending employees"
+                                : departmentScope === "NWP"
+                                    ? "No active employees in N.W.P. Engineering Department"
+                                    : "No active employees in other departments"
                     }
                     description={
                         filtersActive
                             ? "Try adjusting your search or filter criteria"
-                            : "Add a new employee to get started"
+                            : isSystemPendingScope
+                                ? "Employees without career history appear here after quick profile entry"
+                                : "Add a new employee to get started"
                     }
                     action={
                         !filtersActive ? (
@@ -474,7 +483,7 @@ export default function EmployeePage() {
                     onChange={(_, value) => {
                         syncFiltersToUrl({
                             departmentScope: value,
-                            ...(value === "OTHER"
+                            ...(value === "OTHER" || value === "SYSTEM_PENDING"
                                 ? { districtFilter: "", officeFilter: "" }
                                 : {})
                         });
@@ -488,6 +497,7 @@ export default function EmployeePage() {
                 >
                     <Tab label="N.W.P. Engineering Department" value="NWP" />
                     <Tab label="Other Departments" value="OTHER" />
+                    <Tab label="System Pending Employees" value="SYSTEM_PENDING" />
                 </Tabs>
             </Paper>
 
@@ -495,7 +505,8 @@ export default function EmployeePage() {
                 stats={stats}
                 loading={loading}
                 activeShortcut={activeShortcut}
-                onFilterShortcut={handleFilterShortcut}
+                onFilterShortcut={isSystemPendingScope ? undefined : handleFilterShortcut}
+                variant={isSystemPendingScope ? "pending" : "default"}
             />
 
             <EmployeeListFilterPanel
@@ -508,6 +519,7 @@ export default function EmployeePage() {
                 expanded={filtersExpanded}
                 onToggleExpanded={() => setFiltersExpanded((prev) => !prev)}
                 showDistrictFilter={departmentScope === "NWP"}
+                compact={isSystemPendingScope}
             />
 
             <Box

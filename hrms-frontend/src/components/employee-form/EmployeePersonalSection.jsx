@@ -59,7 +59,6 @@ export default function EmployeePersonalSection({
                             {...fieldProps}
                             label="Email Address"
                             name="emailAddress"
-                            type="email"
                             value={formData.emailAddress}
                             helperText="Optional"
                         />

@@ -15,6 +15,8 @@ public class PromotionRequest {
 
     private String recordedDesignationName;
 
+    private String specialDesignationName;
+
     @NotNull(message = "Grade is required")
     private Grade grade;
 

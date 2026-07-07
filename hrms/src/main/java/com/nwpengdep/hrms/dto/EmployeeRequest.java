@@ -49,10 +49,8 @@ public class EmployeeRequest {
 
     private LocalDate enteredDateToAllIslandService;
 
-    @NotNull(message = "Reported date to present working place is required")
     private LocalDate reportedDateToPresentWorkingPlace;
 
-    @NotBlank(message = "Current working place is required")
     private String currentWorkingPlace;
 
     private String currentDepartment;

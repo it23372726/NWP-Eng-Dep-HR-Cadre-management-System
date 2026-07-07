@@ -10,14 +10,16 @@ export const isOtherDesignation = (id) =>
     id === OTHER_DESIGNATION_VALUE || id === "OTHER";
 
 export const resolveDisplayDesignationName = (entity) =>
-    entity?.recordedDesignationName
+    entity?.specialDesignationName
+    ?? entity?.recordedDesignationName
     ?? entity?.newDesignationName
     ?? entity?.designationName
     ?? entity?.designation?.designationName
     ?? null;
 
 export const resolveEmployeeDesignationName = (employee) =>
-    employee?.recordedDesignationName
+    employee?.specialDesignationName
+    ?? employee?.recordedDesignationName
     ?? employee?.designation?.designationName
     ?? null;
 
@@ -53,6 +55,13 @@ export const validateCustomDesignationAssignment = ({
 
 export const isPermanentEmployee = (employmentType) =>
     employmentType === "PERMANENT";
+
+export const isSystemPendingEmployee = (employee, actionHistory = null) =>
+    employee?.employmentType === "PERMANENT"
+    && employee?.status === "ACTIVE"
+    && (actionHistory == null
+        ? !employee?.dateOfFirstAppointment && !employee?.designation
+        : actionHistory.length === 0);
 
 export const isContractEmployee = (employmentType) =>
     employmentType === "CONTRACT";
@@ -244,6 +253,9 @@ export function isPromotionTransferOut(action) {
 export function getActionTypeLabel(action) {
     if (!action?.actionType) {
         return "";
+    }
+    if (action.trainingAppointment) {
+        return "New Trainee Appointment";
     }
     if (action.actionType === "PROMOTION") {
         return isPromotionTransferOut(action)

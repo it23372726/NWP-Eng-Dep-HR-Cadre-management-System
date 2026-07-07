@@ -14,6 +14,7 @@ import {
     buildContractUpdatePayload,
     buildNonPermanentUpdatePayload,
     buildPermanentUpdatePayload,
+    buildPendingPermanentUpdatePayload,
     buildTrainingUpdatePayload,
     mapActionsToCareerHistory,
     mapEmployeeToForm,
@@ -56,6 +57,7 @@ const EmployeeEditForm = forwardRef(function EmployeeEditForm(
     const [assignmentError, setAssignmentError] = useState("");
     const [submitError, setSubmitError] = useState("");
     const [loadingHistory, setLoadingHistory] = useState(false);
+    const [systemPending, setSystemPending] = useState(false);
     const initialHistoryRef = useRef("");
     const photoOptionsRef = useRef({ photoFile: null, removePhoto: false });
 
@@ -156,10 +158,15 @@ const EmployeeEditForm = forwardRef(function EmployeeEditForm(
                     return;
                 }
 
+                const isPending = nextFormData.employmentType === "PERMANENT"
+                    && (!actions || actions.length === 0);
+                setSystemPending(isPending);
+
                 const mappedHistory = mapActionsToCareerHistory(
                     actions,
                     designations,
-                    employee
+                    employee,
+                    { isSystemPending: isPending }
                 );
 
                 setHistoryEvents(mappedHistory);
@@ -253,7 +260,7 @@ const EmployeeEditForm = forwardRef(function EmployeeEditForm(
     const submitForm = () => {
         setSubmitError("");
 
-        const privateVehicleError = isPermanent
+        const privateVehicleError = isPermanent && hasHistory
             ? validatePrivateVehicleFields(formData)
             : null;
         if (privateVehicleError) {
@@ -270,6 +277,14 @@ const EmployeeEditForm = forwardRef(function EmployeeEditForm(
         }
 
         if (isPermanent) {
+            if (systemPending && !hasHistory) {
+                handleSubmit(
+                    buildPendingPermanentUpdatePayload(formData),
+                    photoOptionsRef.current
+                );
+                return true;
+            }
+
             const widowsOrphansPensionError = validateWidowsOrphansPensionNo(formData);
             if (widowsOrphansPensionError) {
                 setSubmitError(widowsOrphansPensionError);
@@ -379,7 +394,7 @@ const EmployeeEditForm = forwardRef(function EmployeeEditForm(
     useImperativeHandle(ref, () => ({
         submit: submitForm,
         canSubmit: isPermanent
-            ? hasHistory && !assignmentError
+            ? (hasHistory ? !assignmentError : true)
             : isContract || isTraining
                 ? true
                 : !assignmentError
@@ -406,7 +421,7 @@ const EmployeeEditForm = forwardRef(function EmployeeEditForm(
                 formData={formData}
                 fieldProps={fieldProps}
                 selectFieldProps={selectFieldProps}
-                showPrivateVehicleFields={isPermanent}
+                showPrivateVehicleFields={isPermanent && hasHistory}
                 photoSlot={(
                     <EmployeePhotoUpload
                         employeeId={employee?.id}

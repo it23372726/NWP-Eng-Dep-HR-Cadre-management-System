@@ -93,7 +93,7 @@ public class CadreReportService {
         );
 
         Map<Long, Long> newAppointmentsMap = toCountMap(
-                employeeActionRepository.countGroupedByNewDesignationAndDepartment(
+                employeeActionRepository.countCadreNewAppointmentsByDesignationAndDepartment(
                         EmployeeActionType.NEW_APPOINTMENT,
                         nwpDepartment,
                         request.getStartDate(),
@@ -145,10 +145,6 @@ public class CadreReportService {
         Map<Long, Long> endContractMap = new HashMap<>();
 
         for (Employee employee : employees) {
-            if (EmployeeTrainingUtil.isTrainingEmployee(employee)) {
-                continue;
-            }
-
             List<EmployeeAction> employeeActions =
                     actionsByEmployee.getOrDefault(
                             employee.getId(),
@@ -175,9 +171,7 @@ public class CadreReportService {
                 continue;
             }
 
-            EmploymentType type = endSnapshot.employmentType() != null
-                    ? endSnapshot.employmentType()
-                    : EmploymentType.PERMANENT;
+            EmploymentType type = EmployeeTrainingUtil.resolveCadreEmploymentType(employee);
 
             Long designationId = endSnapshot.designationId();
 

@@ -60,6 +60,26 @@ function NavIcon({ icon: Icon, active, sx = {} }) {
     );
 }
 
+function navItemSx({ active, collapsed, nested = false }) {
+    return {
+        borderRadius: 2,
+        mb: 0.35,
+        pl: nested ? 3.5 : collapsed ? 1.5 : 2,
+        pr: collapsed ? 1.5 : 2,
+        py: nested ? 0.65 : 0.85,
+        borderLeft: active ? "3px solid" : "3px solid transparent",
+        borderColor: active ? "primary.main" : "transparent",
+        bgcolor: active ? "action.selected" : "transparent",
+        "&:hover": {
+            bgcolor: active ? "action.selected" : "action.hover"
+        },
+        "&.Mui-selected": {
+            bgcolor: "action.selected",
+            "&:hover": { bgcolor: "action.selected" }
+        }
+    };
+}
+
 function NavLeafButton({
     item,
     active,
@@ -75,17 +95,7 @@ function NavLeafButton({
                 <ListItemButton
                     onClick={() => onNavigate(item.path)}
                     selected={active}
-                    sx={{
-                        borderRadius: 2,
-                        mb: 0.5,
-                        pl: nested ? 4 : 2,
-                        pr: 2,
-                        py: nested ? 0.75 : 1,
-                        "&.Mui-selected": {
-                            bgcolor: "action.selected",
-                            "&:hover": { bgcolor: "action.selected" }
-                        }
-                    }}
+                    sx={navItemSx({ active, collapsed, nested })}
                 >
                     {Icon && (
                         <NavIcon
@@ -140,9 +150,16 @@ function CollapsedSectionFlyout({ section, location, onNavigate }) {
                         onClick={handleOpen}
                         sx={{
                             borderRadius: 2,
-                            mb: 0.5,
+                            mb: 0.35,
                             px: 1.5,
-                            justifyContent: "center"
+                            py: 0.85,
+                            justifyContent: "center",
+                            borderLeft: sectionActive ? "3px solid" : "3px solid transparent",
+                            borderColor: sectionActive ? "primary.main" : "transparent",
+                            bgcolor: open || sectionActive ? "action.selected" : "transparent",
+                            "&:hover": {
+                                bgcolor: "action.hover"
+                            }
                         }}
                     >
                         <ListItemIcon
@@ -239,7 +256,11 @@ function ExpandedSection({ section, expanded, onToggle, location, onNavigate }) 
                         borderRadius: 2,
                         mb: 0.25,
                         px: 2,
-                        py: 0.75
+                        py: 0.85,
+                        bgcolor: expanded ? "action.hover" : "transparent",
+                        "&:hover": {
+                            bgcolor: "action.hover"
+                        }
                     }}
                 >
                     <NavIcon icon={SectionIcon} active={sectionActive} />
@@ -272,7 +293,7 @@ function ExpandedSection({ section, expanded, onToggle, location, onNavigate }) 
             </ListItem>
 
             <Collapse in={expanded} timeout="auto" unmountOnExit>
-                <List disablePadding>
+                <List dense disablePadding sx={{ pb: 0.5 }}>
                     {section.items.map((item) => (
                         <NavLeafButton
                             key={item.path}
@@ -327,7 +348,7 @@ export default function SidebarNav({ collapsed }) {
     };
 
     return (
-        <List sx={{ py: 1 }}>
+        <List dense sx={{ py: 1, px: 0, pb: 2 }}>
             {standaloneItems.map((item) => {
                 const active = location.pathname === item.path;
                 const Icon = item.icon;
@@ -341,15 +362,7 @@ export default function SidebarNav({ collapsed }) {
                             <ListItemButton
                                 onClick={() => handleNavigate(item.path)}
                                 selected={active}
-                                sx={{
-                                    borderRadius: 2,
-                                    mb: 0.5,
-                                    px: collapsed ? 1.5 : 2,
-                                    "&.Mui-selected": {
-                                        bgcolor: "action.selected",
-                                        "&:hover": { bgcolor: "action.selected" }
-                                    }
-                                }}
+                                sx={navItemSx({ active, collapsed })}
                             >
                                 <ListItemIcon
                                     sx={{
@@ -383,9 +396,9 @@ export default function SidebarNav({ collapsed }) {
                 );
             })}
 
-            {sections.map((section, index) => (
+            {sections.map((section) => (
                 <React.Fragment key={section.id}>
-                    <Divider sx={{ my: 1, mx: 1.5 }} />
+                    <Divider sx={{ my: 0.75, mx: 1.5, opacity: 0.8 }} />
                     {collapsed ? (
                         <CollapsedSectionFlyout
                             section={section}

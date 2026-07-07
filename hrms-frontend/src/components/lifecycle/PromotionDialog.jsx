@@ -267,6 +267,7 @@ export default function PromotionDialog({
     const [form, setForm] = useState({
         newDesignationId: "",
         recordedDesignationName: "",
+        specialDesignationName: "",
         grade: "",
         serviceLevelId: "",
         ebGrade2Passed: false,
@@ -310,6 +311,9 @@ export default function PromotionDialog({
             const initialForm = {
                 newDesignationId: initialDesignationId,
                 recordedDesignationName: employee.recordedDesignationName ?? "",
+                specialDesignationName: employee.recordedDesignationName
+                    ? ""
+                    : employee.specialDesignationName ?? "",
                 grade: employee.grade ?? "",
                 serviceLevelId: String(employee.serviceLevel?.id ?? ""),
                 ebGrade2Passed: isRequirementCompleted(employee, "EB_GRADE_2"),
@@ -406,8 +410,11 @@ export default function PromotionDialog({
     const gradeChanged = employee?.grade !== form.grade;
     const serviceLevelChanged =
         employee?.serviceLevel?.id !== Number(form.serviceLevelId);
+    const specialDesignationChanged = !isOtherPromotion
+        && (form.specialDesignationName?.trim() || "").toLowerCase()
+            !== (employee?.specialDesignationName || "").trim().toLowerCase();
     const hasAssignmentChange =
-        isPromotion || gradeChanged || serviceLevelChanged;
+        isPromotion || gradeChanged || serviceLevelChanged || specialDesignationChanged;
 
     const selectableGrades = getSelectableGrades(
         employee?.grade,
@@ -888,8 +895,10 @@ export default function PromotionDialog({
         if (name === "newDesignationId") {
             if (isOtherDesignation(value)) {
                 next.recordedDesignationName = "";
+                next.specialDesignationName = "";
             } else {
                 next.recordedDesignationName = "";
+                next.specialDesignationName = "";
             }
             const designation = isOtherDesignation(value)
                 ? null
@@ -1114,7 +1123,8 @@ export default function PromotionDialog({
                     recordedDesignationName: form.recordedDesignationName.trim()
                 }
                 : {
-                    newDesignationId: Number(form.newDesignationId)
+                    newDesignationId: Number(form.newDesignationId),
+                    specialDesignationName: form.specialDesignationName?.trim() || null
                 }),
             grade: form.grade,
             serviceLevelId: Number(form.serviceLevelId),
@@ -1271,6 +1281,18 @@ export default function PromotionDialog({
                                     label="Designation title (as recorded)"
                                     name="recordedDesignationName"
                                     value={form.recordedDesignationName}
+                                />
+                            </Grid>
+                        )}
+
+                        {!isOtherPromotion && form.newDesignationId && (
+                            <Grid size={{ xs: 12 }}>
+                                <TextField
+                                    {...fieldProps}
+                                    label="Special designation (optional)"
+                                    name="specialDesignationName"
+                                    value={form.specialDesignationName}
+                                    helperText="Shown on profile and history; reports use the designation above"
                                 />
                             </Grid>
                         )}

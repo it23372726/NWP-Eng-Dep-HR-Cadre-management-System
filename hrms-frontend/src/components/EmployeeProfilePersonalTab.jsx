@@ -94,18 +94,22 @@ function InfoField({ label, value, size = { xs: 12, sm: 6, md: 4 } }) {
 
 function MilestoneDetail({ label, value }) {
     return (
-        <Stack
-            direction="row"
-            spacing={1}
-            sx={{ justifyContent: "space-between", alignItems: "baseline" }}
-        >
-            <Typography variant="body2" color="text.secondary">
+        <Box sx={{ minWidth: 0 }}>
+            <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: "block", mb: 0.25, lineHeight: 1.4 }}
+            >
                 {label}
             </Typography>
-            <Typography variant="body2" fontWeight={500} textAlign="right">
+            <Typography
+                variant="body2"
+                fontWeight={500}
+                sx={{ lineHeight: 1.5, wordBreak: "break-word" }}
+            >
                 {value}
             </Typography>
-        </Stack>
+        </Box>
     );
 }
 
@@ -125,15 +129,12 @@ function CareerMilestoneCard({
                 height: "100%",
                 borderRadius: 2,
                 display: "flex",
-                flexDirection: "column"
+                flexDirection: "column",
+                minWidth: 0
             }}
         >
-            <Stack
-                direction="row"
-                spacing={1.5}
-                sx={{ alignItems: "flex-start", justifyContent: "space-between" }}
-            >
-                <Stack direction="row" spacing={1.5} sx={{ alignItems: "flex-start" }}>
+            <Stack spacing={1.5} sx={{ minWidth: 0 }}>
+                <Stack direction="row" spacing={1.5} sx={{ alignItems: "flex-start", minWidth: 0 }}>
                     <Box
                         sx={{
                             width: 28,
@@ -151,21 +152,28 @@ function CareerMilestoneCard({
                     >
                         {step}
                     </Box>
-                    <Box>
-                        <Typography variant="subtitle1" fontWeight={600}>
+                    <Box sx={{ minWidth: 0, flex: 1 }}>
+                        <Typography variant="subtitle1" fontWeight={600} sx={{ lineHeight: 1.3 }}>
                             {title}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                        <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mt: 0.25, lineHeight: 1.45, wordBreak: "break-word" }}
+                        >
                             {description}
                         </Typography>
                     </Box>
                 </Stack>
-                {statusChip}
+
+                {statusChip && (
+                    <Box sx={{ alignSelf: "flex-start", maxWidth: "100%" }}>{statusChip}</Box>
+                )}
             </Stack>
 
             <Divider sx={{ my: 2 }} />
 
-            <Stack spacing={1.25} sx={{ flexGrow: 1 }}>
+            <Stack spacing={1.25} sx={{ flexGrow: 1, minWidth: 0 }}>
                 {details.map(({ label, value }) => (
                     <MilestoneDetail key={label} label={label} value={value} />
                 ))}
@@ -416,7 +424,8 @@ export default function EmployeeProfilePersonalTab({
     grade1RequiredYears,
     threeYearDate,
     canMakePermanent,
-    onMakePermanent
+    onMakePermanent,
+    isSystemPending = false
 }) {
     const career = employee.careerProgression;
     const service = resolveEmployeeService(employee);
@@ -581,6 +590,7 @@ export default function EmployeeProfilePersonalTab({
                 </ProfileSection>
             )}
 
+            {!isSystemPending && (
             <ProfileSection title="Employment & Assignment">
                 <Stack spacing={3}>
                     <ProfileSubsection title="Employee's Details">
@@ -711,19 +721,25 @@ export default function EmployeeProfilePersonalTab({
                     </ProfileSubsection>
                 </Stack>
             </ProfileSection>
+            )}
 
-            {!isSimplifiedAssignment && (
+            {!isSystemPending && !isSimplifiedAssignment && (
             <ProfileSection title="Career Progression">
                 {!isPermanentEmployee ? (
                     <Typography color="text.secondary">
                         Career progression milestones apply to permanent government employees.
                     </Typography>
+                ) : careerMilestones.length === 0 ? (
+                    <Typography color="text.secondary">
+                        No career progression milestones are available yet.
+                    </Typography>
                 ) : (
-                    <Grid container spacing={2.5}>
+                    <Grid container spacing={2.5} sx={{ alignItems: "stretch" }}>
                         {careerMilestones.map((milestone) => (
                             <Grid
                                 key={milestone.id}
                                 size={{ xs: 12, sm: 6, lg: 3 }}
+                                sx={{ display: "flex", minWidth: 0 }}
                             >
                                 <CareerMilestoneCard
                                     step={milestone.step}

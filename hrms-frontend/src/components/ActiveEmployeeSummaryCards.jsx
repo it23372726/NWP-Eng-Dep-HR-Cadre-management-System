@@ -81,9 +81,21 @@ export default function ActiveEmployeeSummaryCards({
     stats,
     loading,
     onFilterShortcut,
-    activeShortcut
+    activeShortcut,
+    variant = "default"
 }) {
-    const cards = [
+    const cards = variant === "pending"
+        ? [
+            {
+                key: "total",
+                icon: PeopleAltIcon,
+                title: "System Pending",
+                value: stats?.total ?? 0,
+                subtitle: "Profiles awaiting career history",
+                color: KPI_COLORS.active
+            }
+        ]
+        : [
         {
             key: "total",
             icon: PeopleAltIcon,

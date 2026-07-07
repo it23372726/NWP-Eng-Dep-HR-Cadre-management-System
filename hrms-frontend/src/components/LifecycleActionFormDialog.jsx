@@ -76,6 +76,7 @@ export default function LifecycleActionFormDialog({
     const [form, setForm] = useState({
         newDesignationId: "",
         recordedDesignationName: "",
+        specialDesignationName: "",
         grade: "",
         serviceLevelId: "",
         actionDate: "",
@@ -119,6 +120,9 @@ export default function LifecycleActionFormDialog({
                     ? OTHER_DESIGNATION_VALUE
                     : String(action.newDesignationId || ""),
                 recordedDesignationName: action.recordedDesignationName || "",
+                specialDesignationName: action.recordedDesignationName
+                    ? ""
+                    : action.specialDesignationName || "",
                 grade: action.newGrade || "",
                 serviceLevelId: serviceLevelId ? String(serviceLevelId) : "",
                 actionDate: action.actionDate || "",
@@ -238,6 +242,17 @@ export default function LifecycleActionFormDialog({
             ...form,
             [name]: type === "checkbox" ? checked : value
         };
+
+        if (name === "newDesignationId") {
+            if (isOtherDesignation(value)) {
+                next.recordedDesignationName = "";
+                next.specialDesignationName = "";
+            } else {
+                next.recordedDesignationName = "";
+                next.specialDesignationName = "";
+            }
+        }
+
         setForm(next);
 
         if (
@@ -333,6 +348,8 @@ export default function LifecycleActionFormDialog({
                     updateData.newDesignationId =
                         Number(form.newDesignationId) || null;
                     updateData.recordedDesignationName = null;
+                    updateData.specialDesignationName =
+                        form.specialDesignationName?.trim() || null;
                 }
                 updateData.grade = form.grade;
                 updateData.serviceLevelId = Number(form.serviceLevelId) || null;
@@ -425,6 +442,18 @@ export default function LifecycleActionFormDialog({
                                 label="Designation title (as recorded)"
                                 name="recordedDesignationName"
                                 value={form.recordedDesignationName}
+                            />
+                        </Grid>
+                    )}
+
+                    {isPromotionLike && !isOtherPromotion && form.newDesignationId && (
+                        <Grid size={{ xs: 12 }}>
+                            <TextField
+                                {...fieldProps}
+                                label="Special designation (optional)"
+                                name="specialDesignationName"
+                                value={form.specialDesignationName}
+                                helperText="Shown on profile and history; reports use the designation above"
                             />
                         </Grid>
                     )}

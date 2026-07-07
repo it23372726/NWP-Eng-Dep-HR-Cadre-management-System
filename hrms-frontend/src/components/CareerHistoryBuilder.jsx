@@ -65,6 +65,7 @@ const emptyFirstAppointment = {
     actionDate: "",
     designationId: "",
     recordedDesignationName: "",
+    specialDesignationName: "",
     serviceId: "",
     serviceLevelId: "",
     departmentType: DEPARTMENT_OPTIONS.NWP,
@@ -79,6 +80,7 @@ const emptyEventDraft = {
     actionDate: "",
     designationId: "",
     recordedDesignationName: "",
+    specialDesignationName: "",
     serviceId: "",
     grade: "",
     serviceLevelId: "",
@@ -149,6 +151,7 @@ const isFirstNwpJoinEvent = (event) => {
 export const deriveTimelineState = (events) => {
     let designationId = null;
     let recordedDesignationName = null;
+    let specialDesignationName = null;
     let serviceId = null;
     let grade = null;
     let serviceLevelId = null;
@@ -174,12 +177,14 @@ export const deriveTimelineState = (events) => {
                 if (event.recordedDesignationName) {
                     recordedDesignationName = event.recordedDesignationName;
                     designationId = null;
+                    specialDesignationName = null;
                     if (event.serviceId) {
                         serviceId = event.serviceId;
                     }
                 } else {
                     designationId = event.designationId;
                     recordedDesignationName = null;
+                    specialDesignationName = event.specialDesignationName?.trim() || null;
                 }
                 grade = event.grade || "III";
                 firstAppointmentDate = event.actionDate;
@@ -203,9 +208,13 @@ export const deriveTimelineState = (events) => {
                 if (event.recordedDesignationName) {
                     recordedDesignationName = event.recordedDesignationName;
                     designationId = null;
+                    specialDesignationName = null;
                 } else if (event.designationId) {
                     designationId = event.designationId;
                     recordedDesignationName = null;
+                    specialDesignationName = event.specialDesignationName?.trim() || null;
+                } else if (event.specialDesignationName != null) {
+                    specialDesignationName = event.specialDesignationName?.trim() || null;
                 }
                 if (event.grade) {
                     if (grade === "III" && event.grade === "II") {
@@ -247,9 +256,11 @@ export const deriveTimelineState = (events) => {
                 if (event.recordedDesignationName) {
                     recordedDesignationName = event.recordedDesignationName;
                     designationId = null;
+                    specialDesignationName = null;
                 } else if (event.designationId) {
                     designationId = event.designationId;
                     recordedDesignationName = null;
+                    specialDesignationName = event.specialDesignationName?.trim() || null;
                 }
                 if (event.serviceLevelId) {
                     serviceLevelId = event.serviceLevelId;
@@ -319,6 +330,7 @@ export const deriveTimelineState = (events) => {
     return {
         designationId,
         recordedDesignationName,
+        specialDesignationName,
         serviceId,
         grade,
         serviceLevelId,
@@ -366,7 +378,9 @@ const nextGradeOptions = (currentGrade, allowedGrades = []) => {
 
 const eventSummary = (event, designations, serviceLevels) => {
     const parts = [];
-    if (event.recordedDesignationName) {
+    if (event.specialDesignationName?.trim()) {
+        parts.push(event.specialDesignationName.trim());
+    } else if (event.recordedDesignationName) {
         parts.push(event.recordedDesignationName);
     } else {
         const designation = designations.find(
@@ -600,12 +614,14 @@ export default function CareerHistoryBuilder({
                     next = {
                         ...next,
                         recordedDesignationName: "",
+                        specialDesignationName: "",
                         serviceId: "",
                         serviceLevelId: ""
                     };
                 } else {
                     next = applyRequiredServiceLevel(next, value, designations);
                     next.recordedDesignationName = "";
+                    next.specialDesignationName = "";
                     next.serviceId = "";
                 }
             }
@@ -631,8 +647,10 @@ export default function CareerHistoryBuilder({
                     if (timeline.recordedDesignationName) {
                         next.designationId = OTHER_DESIGNATION_VALUE;
                         next.recordedDesignationName = timeline.recordedDesignationName;
+                        next.specialDesignationName = "";
                     } else if (timeline.designationId) {
                         next.designationId = String(timeline.designationId);
+                        next.specialDesignationName = timeline.specialDesignationName ?? "";
                     }
                     next.serviceLevelId = timeline.serviceLevelId
                         ? String(timeline.serviceLevelId)
@@ -646,12 +664,14 @@ export default function CareerHistoryBuilder({
                     next = {
                         ...next,
                         recordedDesignationName: "",
+                        specialDesignationName: "",
                         serviceId: "",
                         serviceLevelId: ""
                     };
                 } else {
                     next = applyRequiredServiceLevel(next, value, designations);
                     next.recordedDesignationName = "";
+                    next.specialDesignationName = "";
                     next.serviceId = "";
                 }
             }
@@ -737,6 +757,9 @@ export default function CareerHistoryBuilder({
                 recordedDesignationName: isOtherFirstDesignation
                     ? firstDraft.recordedDesignationName.trim()
                     : null,
+                specialDesignationName: isOtherFirstDesignation
+                    ? null
+                    : firstDraft.specialDesignationName?.trim() || null,
                 serviceId: isOtherFirstDesignation
                     ? Number(firstDraft.serviceId)
                     : null,
@@ -919,6 +942,9 @@ export default function CareerHistoryBuilder({
             recordedDesignationName: isOtherEventDesignation
                 ? eventDraft.recordedDesignationName.trim()
                 : null,
+            specialDesignationName: isOtherEventDesignation
+                ? null
+                : eventDraft.specialDesignationName?.trim() || null,
             grade: eventDraft.grade || null,
             serviceLevelId: eventDraft.serviceLevelId
                 ? Number(eventDraft.serviceLevelId)
@@ -970,6 +996,9 @@ export default function CareerHistoryBuilder({
                 recordedDesignationName: isOtherEventDesignation
                     ? eventDraft.recordedDesignationName?.trim() || null
                     : null,
+                specialDesignationName: isOtherEventDesignation
+                    ? null
+                    : eventDraft.specialDesignationName?.trim() || null,
                 grade: state.grade,
                 serviceLevelId: eventDraft.serviceLevelId
                     ? Number(eventDraft.serviceLevelId)
@@ -1023,6 +1052,10 @@ export default function CareerHistoryBuilder({
         field === "first"
             ? isOtherFirstDesignation
             : isOtherEventDesignation;
+    const showSpecialDesignationField = (field) =>
+        field === "first"
+            ? Boolean(firstDraft.designationId) && !isOtherFirstDesignation
+            : Boolean(eventDraft.designationId) && !isOtherEventDesignation;
     const showTransferDestination = draftType === "TRANSFER_OUT";
     const showPromotionOutcome =
         draftType === "PROMOTION"
@@ -1139,6 +1172,18 @@ export default function CareerHistoryBuilder({
                                 </MenuItem>
                             </TextField>
                         </Grid>
+                        {showSpecialDesignationField("first") && (
+                            <Grid size={{ xs: 12, sm: 4 }}>
+                                <TextField
+                                    {...fieldProps}
+                                    onChange={handleFirstDraftChange}
+                                    label="Special designation (optional)"
+                                    name="specialDesignationName"
+                                    value={firstDraft.specialDesignationName}
+                                    helperText="Shown on profile and history; reports use the designation above"
+                                />
+                            </Grid>
+                        )}
                         {showOtherDesignationFields("first") && (
                             <>
                                 <Grid size={{ xs: 12, sm: 4 }}>
@@ -1313,6 +1358,18 @@ export default function CareerHistoryBuilder({
                                         Other (type historical title)
                                     </MenuItem>
                                 </TextField>
+                            </Grid>
+                        )}
+                        {showDesignationField && showSpecialDesignationField("event") && (
+                            <Grid size={{ xs: 12, sm: 4 }}>
+                                <TextField
+                                    {...fieldProps}
+                                    onChange={handleEventDraftChange}
+                                    label="Special designation (optional)"
+                                    name="specialDesignationName"
+                                    value={eventDraft.specialDesignationName}
+                                    helperText="Shown on profile and history; reports use the designation above"
+                                />
                             </Grid>
                         )}
                         {showDesignationField && showOtherDesignationFields("event") && (

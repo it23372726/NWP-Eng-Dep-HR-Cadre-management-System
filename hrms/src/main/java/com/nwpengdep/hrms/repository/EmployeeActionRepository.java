@@ -122,6 +122,34 @@ public interface EmployeeActionRepository
     );
 
     @Query("""
+            SELECT a.newDesignation.id, COUNT(a)
+            FROM EmployeeAction a
+            WHERE a.actionType = :actionType
+              AND a.newDesignation IS NOT NULL
+              AND a.department = :department
+              AND a.actionDate BETWEEN :from AND :to
+              AND (a.deleted IS NULL OR a.deleted = false)
+              AND (
+                  a.trainingAppointment IS NULL
+                  OR a.trainingAppointment = false
+                  OR NOT EXISTS (
+                      SELECT 1
+                      FROM EmployeeAction g
+                      WHERE g.employee.id = a.employee.id
+                        AND g.trainingGraduation = true
+                        AND (g.deleted IS NULL OR g.deleted = false)
+                  )
+              )
+            GROUP BY a.newDesignation.id
+            """)
+    List<Object[]> countCadreNewAppointmentsByDesignationAndDepartment(
+            @Param("actionType") EmployeeActionType actionType,
+            @Param("department") String department,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to
+    );
+
+    @Query("""
             SELECT a.oldDesignation.id, COUNT(a)
             FROM EmployeeAction a
             WHERE a.actionType = :actionType
@@ -238,4 +266,12 @@ public interface EmployeeActionRepository
     @Transactional
     @Modifying
     void deleteByEmployeeId(Long employeeId);
+
+    @Query("""
+            SELECT CASE WHEN COUNT(a) > 0 THEN true ELSE false END
+            FROM EmployeeAction a
+            WHERE a.employee.id = :employeeId
+              AND (a.deleted IS NULL OR a.deleted = false)
+            """)
+    boolean existsActiveActionsByEmployeeId(@Param("employeeId") Long employeeId);
 }

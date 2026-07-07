@@ -103,6 +103,7 @@ export default function TransferOutDialog({
         transferDate: "",
         newDesignationId: "",
         recordedDesignationName: "",
+        specialDesignationName: "",
         serviceLevelId: "",
         toDepartmentType: DEPARTMENT_OPTIONS.NWP,
         toOtherDepartmentName: "",
@@ -176,6 +177,9 @@ export default function TransferOutDialog({
                 transferDate: "",
                 newDesignationId: initialDesignationId,
                 recordedDesignationName: employee.recordedDesignationName ?? "",
+                specialDesignationName: employee.recordedDesignationName
+                    ? ""
+                    : employee.specialDesignationName ?? "",
                 serviceLevelId: String(employee.serviceLevel?.id ?? ""),
                 toDepartmentType: DEPARTMENT_OPTIONS.NWP,
                 toOtherDepartmentName: "",
@@ -208,10 +212,12 @@ export default function TransferOutDialog({
                 if (isOtherDesignation(value)) {
                     next = {
                         ...next,
-                        recordedDesignationName: ""
+                        recordedDesignationName: "",
+                        specialDesignationName: ""
                     };
                 } else {
                     next.recordedDesignationName = "";
+                    next.specialDesignationName = "";
                     next = applyRequiredServiceLevel(next, value, designations);
                 }
             }
@@ -232,7 +238,9 @@ export default function TransferOutDialog({
     const currentDesignationName = resolveEmployeeDesignationName(employee);
     const destinationDesignationName = isOtherTransfer
         ? form.recordedDesignationName?.trim() || null
-        : selectedDesignation?.designationName ?? null;
+        : form.specialDesignationName?.trim()
+            || selectedDesignation?.designationName
+            || null;
     const currentServiceLevelName = employee?.serviceLevel?.levelName ?? null;
     const destinationServiceLevelName = serviceLevels.find(
         (level) => level.id === Number(form.serviceLevelId)
@@ -271,6 +279,7 @@ export default function TransferOutDialog({
             payload.recordedDesignationName = form.recordedDesignationName.trim();
         } else {
             payload.newDesignationId = Number(form.newDesignationId);
+            payload.specialDesignationName = form.specialDesignationName?.trim() || null;
         }
 
         onSubmit(payload);
@@ -362,6 +371,17 @@ export default function TransferOutDialog({
                                 value={form.recordedDesignationName}
                                 required
                                 error={Boolean(assignmentError)}
+                            />
+                        </Grid>
+                    )}
+                    {!isOtherTransfer && form.newDesignationId && (
+                        <Grid size={{ xs: 12 }}>
+                            <TextField
+                                {...fieldProps}
+                                label="Special designation (optional)"
+                                name="specialDesignationName"
+                                value={form.specialDesignationName}
+                                helperText="Shown on profile and history; reports use the designation above"
                             />
                         </Grid>
                     )}

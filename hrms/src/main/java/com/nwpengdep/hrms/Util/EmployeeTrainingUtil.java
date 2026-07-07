@@ -1,6 +1,7 @@
 package com.nwpengdep.hrms.util;
 
 import com.nwpengdep.hrms.entity.Employee;
+import com.nwpengdep.hrms.entity.EmploymentType;
 import com.nwpengdep.hrms.entity.ServiceLevel;
 
 public final class EmployeeTrainingUtil {
@@ -23,5 +24,14 @@ public final class EmployeeTrainingUtil {
     public static boolean isTrainingServiceLevel(ServiceLevel serviceLevel) {
         return serviceLevel != null
                 && TRAINING_LEVEL_NAME.equalsIgnoreCase(serviceLevel.getLevelName());
+    }
+
+    public static EmploymentType resolveCadreEmploymentType(Employee employee) {
+        if (isTrainingEmployee(employee)) {
+            return EmploymentType.PERMANENT;
+        }
+        return employee.getEmploymentType() != null
+                ? employee.getEmploymentType()
+                : EmploymentType.PERMANENT;
     }
 }

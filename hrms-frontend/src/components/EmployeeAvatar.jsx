@@ -87,7 +87,7 @@ export default function EmployeeAvatar({ employee, size = EMPLOYEE_PHOTO_SIZE })
                     ...avatarSx(size),
                     bgcolor: "grey.100"
                 }}
-                imgProps={{ style: { objectFit: "cover" } }}
+                slotProps={{ img: { style: { objectFit: "cover" } } }}
             />
         );
     }

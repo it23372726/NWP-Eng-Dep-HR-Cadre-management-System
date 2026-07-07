@@ -268,7 +268,7 @@ export default function EmployeePhotoUpload({
                                 ...avatarSx,
                                 bgcolor: "grey.100"
                             }}
-                            imgProps={{ style: { objectFit: "cover" } }}
+                            slotProps={{ img: { style: { objectFit: "cover" } } }}
                         />
                     ) : (
                         <Avatar sx={avatarSx}>

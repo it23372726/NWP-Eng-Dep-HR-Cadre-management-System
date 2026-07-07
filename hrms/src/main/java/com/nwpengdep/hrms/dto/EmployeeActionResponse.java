@@ -28,6 +28,8 @@ public class EmployeeActionResponse {
 
     private String recordedDesignationName;
 
+    private String specialDesignationName;
+
     private Long newDesignationId;
 
     private String oldGrade;
@@ -65,4 +67,6 @@ public class EmployeeActionResponse {
     private Boolean autoCreated;
 
     private Boolean trainingGraduation;
+
+    private Boolean trainingAppointment;
 }

@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.annotation.Order;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -14,6 +15,7 @@ public class EmployeeDependentSchemaMigration {
 
     private final JdbcTemplate jdbcTemplate;
 
+    @Order(3)
     @EventListener(ApplicationReadyEvent.class)
     public void migrateEmployeeDependentSchema() {
         try {
@@ -23,6 +25,7 @@ public class EmployeeDependentSchemaMigration {
 
             createSpouseTableIfMissing();
             createChildrenTableIfMissing();
+            relaxSpouseDateOfBirthNullability();
         } catch (Exception e) {
             log.warn(
                     "Employee dependent schema migration skipped: {}",
@@ -69,6 +72,34 @@ public class EmployeeDependentSchemaMigration {
                         ON DELETE CASCADE
                 )
                 """);
+    }
+
+    private void relaxSpouseDateOfBirthNullability() {
+        if (!tableExists("employee_spouses") || !columnExists("employee_spouses", "date_of_birth")) {
+            return;
+        }
+
+        jdbcTemplate.execute("""
+                ALTER TABLE employee_spouses
+                MODIFY COLUMN date_of_birth DATE NULL
+                """);
+        log.info("Relaxed employee_spouses.date_of_birth to allow NULL");
+    }
+
+    private boolean columnExists(String tableName, String columnName) {
+        Integer count = jdbcTemplate.queryForObject(
+                """
+                        SELECT COUNT(*)
+                        FROM information_schema.COLUMNS
+                        WHERE TABLE_SCHEMA = DATABASE()
+                          AND TABLE_NAME = ?
+                          AND COLUMN_NAME = ?
+                        """,
+                Integer.class,
+                tableName,
+                columnName
+        );
+        return count != null && count > 0;
     }
 
     private boolean tableExists(String tableName) {

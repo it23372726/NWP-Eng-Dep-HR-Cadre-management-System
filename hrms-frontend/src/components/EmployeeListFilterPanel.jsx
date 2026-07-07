@@ -41,7 +41,8 @@ export default function EmployeeListFilterPanel({
     resultSummary,
     expanded = true,
     onToggleExpanded,
-    showDistrictFilter = true
+    showDistrictFilter = true,
+    compact = false
 }) {
     const activeFilterLabels = getActiveFilterLabels(filterState);
 
@@ -143,6 +144,7 @@ export default function EmployeeListFilterPanel({
                 }}
             />
 
+            {!compact && (
             <Box
                 sx={{
                     display: "flex",
@@ -254,6 +256,7 @@ export default function EmployeeListFilterPanel({
                     ))}
                 </TextField>
             </Box>
+            )}
 
             <Stack
                 direction="row"

@@ -4,9 +4,11 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.nwpengdep.hrms.constants.DepartmentConstants;
 import com.nwpengdep.hrms.dto.TrainingRevertSnapshot;
 import com.nwpengdep.hrms.entity.Employee;
 import com.nwpengdep.hrms.entity.EmployeeAction;
+import com.nwpengdep.hrms.entity.EmployeeActionType;
 import com.nwpengdep.hrms.entity.EmployeeCareerProgression;
 import com.nwpengdep.hrms.entity.EmployeePosting;
 import com.nwpengdep.hrms.entity.Grade;
@@ -37,6 +39,7 @@ public class TrainingGraduationService {
     private final EmployeePostingRepository postingRepository;
     private final ServiceLevelRepository serviceLevelRepository;
     private final CurrentUserService currentUserService;
+    private final EmployeeRequirementSyncService requirementSyncService;
 
     private static ObjectMapper createObjectMapper() {
         ObjectMapper mapper = new ObjectMapper();
@@ -116,8 +119,17 @@ public class TrainingGraduationService {
 
     @Transactional
     public Employee revertTrainingGraduation(Long employeeId) {
+        return revertTrainingGraduation(employeeId, null);
+    }
+
+    @Transactional
+    public Employee revertTrainingGraduation(Long employeeId, Long graduationActionId) {
         Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
+
+        if (graduationActionId != null) {
+            return revertTrainingGraduationByAction(employee, graduationActionId);
+        }
 
         if (!canRevertTrainingGraduation(employee)) {
             throw new RuntimeException(
@@ -132,6 +144,60 @@ public class TrainingGraduationService {
                         new RuntimeException("Training graduation action not found")
                 );
 
+        return performRevert(employee, graduationAction, snapshot);
+    }
+
+    private Employee revertTrainingGraduationByAction(
+            Employee employee,
+            Long graduationActionId
+    ) {
+        EmployeeAction graduationAction = employeeActionRepository
+                .findById(graduationActionId)
+                .orElseThrow(() -> new RuntimeException("Employee action not found"));
+
+        if (!employee.getId().equals(graduationAction.getEmployee().getId())) {
+            throw new RuntimeException("Action does not belong to this employee");
+        }
+        if (!Boolean.TRUE.equals(graduationAction.getTrainingGraduation())) {
+            throw new RuntimeException(
+                    "This action is not a training graduation appointment"
+            );
+        }
+        if (Boolean.TRUE.equals(graduationAction.getDeleted())) {
+            throw new RuntimeException("This lifecycle action has already been deleted");
+        }
+        if (!Boolean.TRUE.equals(employee.getTrainingOrigin())) {
+            throw new RuntimeException(
+                    "This employee cannot be reverted to training status"
+            );
+        }
+        if (EmployeeTrainingUtil.isTrainingEmployee(employee)) {
+            throw new RuntimeException("Employee is already in training status");
+        }
+
+        TrainingRevertSnapshot snapshot = readSnapshot(employee);
+        if (snapshot == null
+                || snapshot.graduationActionId() == null
+                || !snapshot.graduationActionId().equals(graduationActionId)) {
+            throw new RuntimeException(
+                    "This action is not the recorded training graduation appointment"
+            );
+        }
+        if (hasActionsAfterGraduation(employee.getId(), graduationAction)) {
+            throw new RuntimeException(
+                    "Cannot revert because later lifecycle actions exist after "
+                            + "the permanent appointment"
+            );
+        }
+
+        return performRevert(employee, graduationAction, snapshot);
+    }
+
+    private Employee performRevert(
+            Employee employee,
+            EmployeeAction graduationAction,
+            TrainingRevertSnapshot snapshot
+    ) {
         graduationAction.setDeleted(true);
         graduationAction.setDeletedBy(
                 currentUserService.getCurrentUsernameOrDefault("system")
@@ -140,8 +206,11 @@ public class TrainingGraduationService {
         employeeActionRepository.save(graduationAction);
 
         applyTrainingState(employee, snapshot);
+        restoreWorkplaceFromTraineeAppointment(employee);
         employee.ensureTrainingProfile().setTrainingRevertSnapshot(null);
         employee.setCanRevertTrainingGraduation(false);
+        requirementSyncService.syncTrainingEmployeeRequirements(employee);
+        populateLifecycleFlags(employee);
 
         return employeeRepository.save(employee);
     }
@@ -198,6 +267,37 @@ public class TrainingGraduationService {
                     .build();
             postingRepository.save(posting);
         }
+    }
+
+    private void restoreWorkplaceFromTraineeAppointment(Employee employee) {
+        activeActions(employee.getId()).stream()
+                .filter(action -> action.getActionType() == EmployeeActionType.NEW_APPOINTMENT
+                        && Boolean.TRUE.equals(action.getTrainingAppointment()))
+                .findFirst()
+                .ifPresent(action -> {
+                    if (action.getNewDesignation() != null) {
+                        employee.setDesignation(action.getNewDesignation());
+                    }
+                    if (action.getDepartment() != null) {
+                        employee.setCurrentDepartment(action.getDepartment());
+                        employee.setCurrentOffice(action.getOffice());
+                        employee.setCurrentDistrictOfWorking(action.getDistrict());
+                        employee.setCurrentWorkingPlace(
+                                formatWorkingPlace(action.getDepartment(), action.getOffice())
+                        );
+                    }
+                    employee.setReportedDateToPresentWorkingPlace(action.getActionDate());
+                });
+    }
+
+    private String formatWorkingPlace(String department, String office) {
+        if (department == null || department.isBlank()) {
+            return office;
+        }
+        if (office == null || office.isBlank()) {
+            return DepartmentConstants.normalize(department);
+        }
+        return DepartmentConstants.normalize(department) + " - " + office.trim();
     }
 
     private boolean hasActionsAfterGraduation(

@@ -36,6 +36,8 @@ public class EmployeeActionUpdateRequest {
 
     private String recordedDesignationName;
 
+    private String specialDesignationName;
+
     private Long serviceLevelId;
 
     /** Promotion outcome: when true, employee leaves N.W.P. Engineering on promotion. */

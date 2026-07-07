@@ -63,6 +63,7 @@ public class EmployeeActionService {
                 newDesignation,
                 null,
                 null,
+                null,
                 transferredFrom,
                 transferredTo,
                 reason,
@@ -92,6 +93,7 @@ public class EmployeeActionService {
                 oldDesignation,
                 newDesignation,
                 null,
+                null,
                 oldGrade,
                 newGrade,
                 transferredFrom,
@@ -117,6 +119,40 @@ public class EmployeeActionService {
             String remarks,
             ActionWorkplaceFields workplace
     ) {
+        return recordActionWithGrades(
+                employee,
+                actionType,
+                actionDate,
+                oldDesignation,
+                newDesignation,
+                recordedNewDesignationName,
+                null,
+                oldGrade,
+                newGrade,
+                transferredFrom,
+                transferredTo,
+                reason,
+                remarks,
+                workplace
+        );
+    }
+
+    public EmployeeAction recordActionWithGrades(
+            Employee employee,
+            EmployeeActionType actionType,
+            LocalDate actionDate,
+            Designation oldDesignation,
+            Designation newDesignation,
+            String recordedNewDesignationName,
+            String recordedSpecialDesignationName,
+            Grade oldGrade,
+            Grade newGrade,
+            String transferredFrom,
+            String transferredTo,
+            String reason,
+            String remarks,
+            ActionWorkplaceFields workplace
+    ) {
         validateSequentialActionDate(employee.getId(), actionDate);
 
         EmployeeAction action = EmployeeAction.builder()
@@ -126,6 +162,9 @@ public class EmployeeActionService {
                 .oldDesignation(oldDesignation)
                 .newDesignation(newDesignation)
                 .recordedNewDesignationName(recordedNewDesignationName)
+                .recordedSpecialDesignationName(
+                        normalizeSpecialDesignationName(recordedSpecialDesignationName)
+                )
                 .oldGrade(oldGrade)
                 .newGrade(newGrade)
                 .transferredFrom(transferredFrom)
@@ -149,6 +188,7 @@ public class EmployeeActionService {
             Designation oldDesignation,
             Designation newDesignation,
             String recordedNewDesignationName,
+            String recordedSpecialDesignationName,
             ServiceLevel newServiceLevel,
             String fromDepartment,
             String fromOffice,
@@ -180,6 +220,7 @@ public class EmployeeActionService {
                 oldDesignation,
                 newDesignation,
                 recordedNewDesignationName,
+                recordedSpecialDesignationName,
                 null,
                 null,
                 normalizedFromDept,
@@ -204,6 +245,7 @@ public class EmployeeActionService {
                 null,
                 newDesignation,
                 recordedNewDesignationName,
+                recordedSpecialDesignationName,
                 null,
                 null,
                 normalizedFromDept,
@@ -284,6 +326,11 @@ public class EmployeeActionService {
                     .orElseThrow(() -> new RuntimeException("New designation not found"));
             action.setNewDesignation(newDesignation);
             action.setRecordedNewDesignationName(null);
+            if (request.getSpecialDesignationName() != null) {
+                action.setRecordedSpecialDesignationName(
+                        normalizeSpecialDesignationName(request.getSpecialDesignationName())
+                );
+            }
         } else if (request.getRecordedDesignationName() != null) {
             if (request.getRecordedDesignationName().isBlank()) {
                 action.setRecordedNewDesignationName(null);
@@ -292,7 +339,12 @@ public class EmployeeActionService {
                 action.setRecordedNewDesignationName(
                         request.getRecordedDesignationName().trim()
                 );
+                action.setRecordedSpecialDesignationName(null);
             }
+        } else if (request.getSpecialDesignationName() != null) {
+            action.setRecordedSpecialDesignationName(
+                    normalizeSpecialDesignationName(request.getSpecialDesignationName())
+            );
         }
 
         if (request.getDepartment() != null) {
@@ -353,7 +405,28 @@ public class EmployeeActionService {
 
     @Transactional
     public void deleteEmployeeAction(Long actionId) {
-        EmployeeAction action = requireLatestModifiableAction(actionId);
+        EmployeeAction action = employeeActionRepository.findById(actionId)
+                .orElseThrow(() -> new RuntimeException("Employee action not found"));
+
+        if (Boolean.TRUE.equals(action.getDeleted())) {
+            throw new RuntimeException("This lifecycle action has already been deleted");
+        }
+
+        if (Boolean.TRUE.equals(action.getTrainingAppointment())) {
+            throw new RuntimeException(
+                    "Trainee appointment actions cannot be deleted independently"
+            );
+        }
+
+        if (Boolean.TRUE.equals(action.getTrainingGraduation())) {
+            trainingGraduationService.revertTrainingGraduation(
+                    action.getEmployee().getId(),
+                    action.getId()
+            );
+            return;
+        }
+
+        action = requireLatestModifiableAction(actionId);
 
         if (action.getActionType() == EmployeeActionType.TRANSFER_IN) {
             throw new RuntimeException(
@@ -369,13 +442,6 @@ public class EmployeeActionService {
                         linked.setDeletedAt(java.time.LocalDateTime.now());
                         employeeActionRepository.save(linked);
                     });
-        }
-
-        if (Boolean.TRUE.equals(action.getTrainingGraduation())) {
-            trainingGraduationService.revertTrainingGraduation(
-                    action.getEmployee().getId()
-            );
-            return;
         }
 
         action.setDeleted(true);
@@ -403,6 +469,7 @@ public class EmployeeActionService {
 
         Designation currentDesignation = null;
         String currentRecordedDesignationName = null;
+        String currentSpecialDesignationName = null;
         EmployeeStatus currentStatus = EmployeeStatus.ACTIVE;
         String currentDepartment = null;
         String currentOffice = null;
@@ -427,11 +494,16 @@ public class EmployeeActionService {
                     if (action.getNewDesignation() != null) {
                         currentDesignation = action.getNewDesignation();
                         currentRecordedDesignationName = null;
+                        currentSpecialDesignationName =
+                                normalizeSpecialDesignationName(
+                                        action.getRecordedSpecialDesignationName()
+                                );
                     } else if (action.getRecordedNewDesignationName() != null
                             && !action.getRecordedNewDesignationName().isBlank()) {
                         currentDesignation = null;
                         currentRecordedDesignationName =
                                 action.getRecordedNewDesignationName().trim();
+                        currentSpecialDesignationName = null;
                     }
                     currentStatus = EmployeeStatus.ACTIVE;
                     if (action.getDepartment() != null) {
@@ -455,6 +527,13 @@ public class EmployeeActionService {
                 case TRANSFER_IN -> {
                     if (action.getNewDesignation() != null) {
                         currentDesignation = action.getNewDesignation();
+                        currentRecordedDesignationName = null;
+                        if (action.getRecordedSpecialDesignationName() != null) {
+                            currentSpecialDesignationName =
+                                    normalizeSpecialDesignationName(
+                                            action.getRecordedSpecialDesignationName()
+                                    );
+                        }
                     }
                     currentStatus = EmployeeStatus.ACTIVE;
                     if (action.getDepartment() != null) {
@@ -485,11 +564,16 @@ public class EmployeeActionService {
                     if (action.getNewDesignation() != null) {
                         currentDesignation = action.getNewDesignation();
                         currentRecordedDesignationName = null;
+                        currentSpecialDesignationName =
+                                normalizeSpecialDesignationName(
+                                        action.getRecordedSpecialDesignationName()
+                                );
                     } else if (action.getRecordedNewDesignationName() != null
                             && !action.getRecordedNewDesignationName().isBlank()) {
                         currentDesignation = null;
                         currentRecordedDesignationName =
                                 action.getRecordedNewDesignationName().trim();
+                        currentSpecialDesignationName = null;
                     }
                     if (action.getDepartment() != null) {
                         currentDepartment = action.getDepartment();
@@ -520,11 +604,16 @@ public class EmployeeActionService {
                     if (action.getNewDesignation() != null) {
                         currentDesignation = action.getNewDesignation();
                         currentRecordedDesignationName = null;
+                        currentSpecialDesignationName =
+                                normalizeSpecialDesignationName(
+                                        action.getRecordedSpecialDesignationName()
+                                );
                     } else if (action.getRecordedNewDesignationName() != null
                             && !action.getRecordedNewDesignationName().isBlank()) {
                         currentDesignation = null;
                         currentRecordedDesignationName =
                                 action.getRecordedNewDesignationName().trim();
+                        currentSpecialDesignationName = null;
                     }
                     if (action.getDepartment() != null) {
                         currentDepartment = action.getDepartment();
@@ -554,11 +643,18 @@ public class EmployeeActionService {
                     if (action.getNewDesignation() != null) {
                         currentDesignation = action.getNewDesignation();
                         currentRecordedDesignationName = null;
+                        if (action.getRecordedSpecialDesignationName() != null) {
+                            currentSpecialDesignationName =
+                                    normalizeSpecialDesignationName(
+                                            action.getRecordedSpecialDesignationName()
+                                    );
+                        }
                     } else if (action.getRecordedNewDesignationName() != null
                             && !action.getRecordedNewDesignationName().isBlank()) {
                         currentDesignation = null;
                         currentRecordedDesignationName =
                                 action.getRecordedNewDesignationName().trim();
+                        currentSpecialDesignationName = null;
                     }
                     if (action.getDepartment() != null) {
                         currentDepartment = action.getDepartment();
@@ -640,13 +736,16 @@ public class EmployeeActionService {
         employee.setDesignation(currentDesignation);
         if (currentDesignation != null) {
             employee.setRecordedDesignationName(null);
+            employee.setSpecialDesignationName(currentSpecialDesignationName);
             if (currentDesignation.getService() != null) {
                 employee.setService(currentDesignation.getService());
             }
         } else if (currentRecordedDesignationName != null) {
             employee.setRecordedDesignationName(currentRecordedDesignationName);
+            employee.setSpecialDesignationName(null);
         } else {
             employee.setRecordedDesignationName(null);
+            employee.setSpecialDesignationName(null);
         }
         if (currentGrade != null) {
             employee.setGrade(currentGrade);
@@ -699,6 +798,9 @@ public class EmployeeActionService {
                     transferIn.setNewDesignation(transferOut.getNewDesignation());
                     transferIn.setRecordedNewDesignationName(
                             transferOut.getRecordedNewDesignationName()
+                    );
+                    transferIn.setRecordedSpecialDesignationName(
+                            transferOut.getRecordedSpecialDesignationName()
                     );
                     transferIn.setEditedBy(currentUserService.getCurrentUsernameOrDefault("system"));
                     transferIn.setEditedAt(java.time.LocalDateTime.now());
@@ -949,15 +1051,9 @@ public class EmployeeActionService {
                                 ? action.getOldDesignation().getId()
                                 : null
                 )
-                .newDesignationName(
-                        action.getRecordedNewDesignationName() != null
-                                && !action.getRecordedNewDesignationName().isBlank()
-                                ? action.getRecordedNewDesignationName()
-                                : action.getNewDesignation() != null
-                                        ? action.getNewDesignation().getDesignationName()
-                                        : null
-                )
+                .newDesignationName(resolveActionDisplayDesignationName(action))
                 .recordedDesignationName(action.getRecordedNewDesignationName())
+                .specialDesignationName(action.getRecordedSpecialDesignationName())
                 .newDesignationId(
                         action.getNewDesignation() != null
                                 ? action.getNewDesignation().getId()
@@ -985,6 +1081,7 @@ public class EmployeeActionService {
                 .canModify(canModify && !autoCreated)
                 .autoCreated(autoCreated)
                 .trainingGraduation(action.getTrainingGraduation())
+                .trainingAppointment(action.getTrainingAppointment())
                 .build();
     }
 
@@ -1050,6 +1147,30 @@ public class EmployeeActionService {
             }
         }
 
+        return null;
+    }
+
+    private String normalizeSpecialDesignationName(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private String resolveActionDisplayDesignationName(EmployeeAction action) {
+        String specialName = normalizeSpecialDesignationName(
+                action.getRecordedSpecialDesignationName()
+        );
+        if (specialName != null) {
+            return specialName;
+        }
+        if (action.getRecordedNewDesignationName() != null
+                && !action.getRecordedNewDesignationName().isBlank()) {
+            return action.getRecordedNewDesignationName();
+        }
+        if (action.getNewDesignation() != null) {
+            return action.getNewDesignation().getDesignationName();
+        }
         return null;
     }
 }

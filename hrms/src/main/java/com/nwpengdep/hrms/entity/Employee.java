@@ -58,6 +58,9 @@ public class Employee {
     @Column(name = "recorded_designation_name")
     private String recordedDesignationName;
 
+    @Column(name = "special_designation_name")
+    private String specialDesignationName;
+
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "service_id")
     private ServiceType service;

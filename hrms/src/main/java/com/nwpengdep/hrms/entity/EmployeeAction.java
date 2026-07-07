@@ -41,6 +41,9 @@ public class EmployeeAction {
     @Column(name = "recorded_new_designation_name")
     private String recordedNewDesignationName;
 
+    @Column(name = "recorded_special_designation_name")
+    private String recordedSpecialDesignationName;
+
     @Enumerated(EnumType.STRING)
     private Grade oldGrade;
 
@@ -85,6 +88,10 @@ public class EmployeeAction {
     @Column(name = "training_graduation", nullable = false)
     @Builder.Default
     private Boolean trainingGraduation = false;
+
+    @Column(name = "training_appointment", nullable = false)
+    @Builder.Default
+    private Boolean trainingAppointment = false;
 
     private String deletedBy;
 

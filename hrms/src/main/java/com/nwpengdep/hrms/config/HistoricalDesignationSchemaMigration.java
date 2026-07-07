@@ -27,6 +27,16 @@ public class HistoricalDesignationSchemaMigration {
                     "recorded_designation_name",
                     "VARCHAR(255)"
             );
+            addColumnIfMissing(
+                    "employees",
+                    "special_designation_name",
+                    "VARCHAR(255)"
+            );
+            addColumnIfMissing(
+                    "employee_actions",
+                    "recorded_special_designation_name",
+                    "VARCHAR(255)"
+            );
             addColumnIfMissing("employees", "service_id", "BIGINT");
             addForeignKeyIfMissing(
                     "employees",

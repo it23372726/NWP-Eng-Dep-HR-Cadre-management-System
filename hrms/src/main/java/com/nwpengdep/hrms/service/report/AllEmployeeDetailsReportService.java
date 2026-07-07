@@ -109,6 +109,10 @@ public class AllEmployeeDetailsReportService {
     }
 
     private String resolveEmployeeDesignationName(Employee employee) {
+        if (employee.getSpecialDesignationName() != null
+                && !employee.getSpecialDesignationName().isBlank()) {
+            return employee.getSpecialDesignationName();
+        }
         if (employee.getRecordedDesignationName() != null
                 && !employee.getRecordedDesignationName().isBlank()) {
             return employee.getRecordedDesignationName();

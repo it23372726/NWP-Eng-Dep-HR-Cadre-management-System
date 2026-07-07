@@ -14,6 +14,7 @@ import {
     buildContractCreatePayload,
     buildNonPermanentCreatePayload,
     buildPermanentCreatePayload,
+    buildPendingPermanentCreatePayload,
     buildTrainingCreatePayload,
     emptyForm,
     findTrainingServiceLevelId,
@@ -228,7 +229,7 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
     const submitForm = () => {
         setSubmitError("");
 
-        const privateVehicleError = isPermanent
+        const privateVehicleError = isPermanent && hasHistory
             ? validatePrivateVehicleFields(formData)
             : null;
         if (privateVehicleError) {
@@ -245,16 +246,23 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
         }
 
         if (isPermanent) {
+            if (!hasHistory) {
+                const dependentOnlyError = validateDependentFields(formData);
+                if (dependentOnlyError) {
+                    setSubmitError(dependentOnlyError);
+                    return false;
+                }
+
+                handleSubmit(
+                    buildPendingPermanentCreatePayload(formData),
+                    photoOptionsRef.current
+                );
+                return true;
+            }
+
             const widowsOrphansPensionError = validateWidowsOrphansPensionNo(formData);
             if (widowsOrphansPensionError) {
                 setSubmitError(widowsOrphansPensionError);
-                return false;
-            }
-
-            if (!hasHistory) {
-                setSubmitError(
-                    "Add the employee's first appointment in career history."
-                );
                 return false;
             }
 
@@ -335,7 +343,7 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
     useImperativeHandle(ref, () => ({
         submit: submitForm,
         canSubmit: isPermanent
-            ? hasHistory && !assignmentError
+            ? !assignmentError
             : isContract || isTraining
                 ? true
                 : !assignmentError
@@ -352,7 +360,7 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
                 formData={formData}
                 fieldProps={fieldProps}
                 selectFieldProps={selectFieldProps}
-                showPrivateVehicleFields={isPermanent}
+                showPrivateVehicleFields={isPermanent && hasHistory}
                 photoSlot={(
                     <EmployeePhotoUpload
                         open={open}
@@ -379,7 +387,7 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
                 <>
                     <FormSection
                         title="Career history"
-                        description="Start with the first appointment, then add every lifecycle event up to the employee's current position."
+                        description="Optional — add the first appointment now, or complete career history later from the employee profile."
                     >
                         <CareerHistoryBuilder
                             events={historyEvents}

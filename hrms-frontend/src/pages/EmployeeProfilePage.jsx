@@ -10,7 +10,9 @@ import {
     ListItemText,
     Tabs,
     Tab,
-    CircularProgress
+    CircularProgress,
+    Alert,
+    Chip
 } from "@mui/material";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 
@@ -68,7 +70,8 @@ import {
     isTrainingGraduationEligible,
     getTrainingGraduationBlockReason,
     resolveEmployeeDesignationName,
-    resolveEmployeeService
+    resolveEmployeeService,
+    isSystemPendingEmployee
 } from "../constants/hrms";
 import { normalizeRequiredYears } from "../utils/gradeAchievementDates";
 import { getLatestEventDate } from "../utils/timelineDates";
@@ -162,6 +165,9 @@ export default function EmployeeProfilePage() {
     const isContract = isContractEmployee(employee?.employmentType);
     const isTraining = isTrainingEmployee(employee);
     const isSimplifiedLifecycle = isContract || isTraining;
+    const isSystemPending = isSystemPendingEmployee(employee, actionHistory);
+    const showLifecycleHistoryTab =
+        !isSystemPending && (isTraining || !isSimplifiedLifecycle);
     const canAppointTrainingAsPermanent = isTrainingGraduationEligible(employee);
 
     useEffect(() => {
@@ -471,15 +477,25 @@ export default function EmployeeProfilePage() {
                                 {employee.fullName}
                             </Typography>
                             <EmployeeStatusChip status={employee.status} />
+                            {isSystemPending && (
+                                <Chip
+                                    label="System Pending"
+                                    size="small"
+                                    color="warning"
+                                    variant="outlined"
+                                />
+                            )}
                         </Stack>
                         <Typography color="text.secondary">
-                            {employee.employeeNo} · {resolveEmployeeDesignationName(employee)}
+                            {isSystemPending
+                                ? `${employee.employeeNo} · Career history not recorded`
+                                : `${employee.employeeNo} · ${resolveEmployeeDesignationName(employee)}`}
                         </Typography>
                     </Box>
                 </Stack>
 
-                <Stack direction="row" spacing={1} flexWrap="wrap">
-                    {!isSimplifiedLifecycle && (
+                <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
+                    {!isSimplifiedLifecycle && !isSystemPending && (
                     <Button
                         variant="outlined"
                         size="small"
@@ -519,7 +535,7 @@ export default function EmployeeProfilePage() {
                         >
                             Edit Details
                         </Button>
-                        {canUpdateQualifications && (
+                        {canUpdateQualifications && !isSystemPending && (
                             <Button
                                 variant="outlined"
                                 size="small"
@@ -531,6 +547,7 @@ export default function EmployeeProfilePage() {
                                 {qualificationsActionLabel}
                             </Button>
                         )}
+                        {!isSystemPending && (
                         <Button
                             variant="contained"
                             size="small"
@@ -538,6 +555,18 @@ export default function EmployeeProfilePage() {
                         >
                             Employee Actions ▼
                         </Button>
+                        )}
+                        {isSystemPending && (
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                color="error"
+                                onClick={() => setOpenDelete(true)}
+                            >
+                                Delete Permanently
+                            </Button>
+                        )}
+                        {!isSystemPending && (
                         <Menu
                             anchorEl={anchorEl}
                             open={Boolean(anchorEl)}
@@ -706,10 +735,18 @@ export default function EmployeeProfilePage() {
                                 <ListItemText sx={{ color: "error.main" }}>Delete Permanently</ListItemText>
                             </MenuItem>
                         </Menu>
+                        )}
                         </>
                     )}
                 </Stack>
             </Stack>
+
+            {isSystemPending && (
+                <Alert severity="info" sx={{ mb: 3 }}>
+                    Career history has not been recorded yet. Use Edit Details to add the
+                    employee&apos;s first appointment and complete their profile.
+                </Alert>
+            )}
 
             <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 3 }}>
                 <Tabs
@@ -719,11 +756,11 @@ export default function EmployeeProfilePage() {
                     scrollButtons="auto"
                 >
                     <Tab label="Employee's Information" />
-                    <Tab label="Benefits & Allowances" />
-                    {!isContract && (
+                    {!isSystemPending && <Tab label="Benefits & Allowances" />}
+                    {!isSystemPending && !isContract && (
                         <Tab label="Qualifications & Requirements" />
                     )}
-                    {!isSimplifiedLifecycle && (
+                    {showLifecycleHistoryTab && (
                         <Tab label="Lifecycle Action History" />
                     )}
                 </Tabs>
@@ -737,10 +774,11 @@ export default function EmployeeProfilePage() {
                     threeYearDate={threeYearDate}
                     canMakePermanent={canMakePermanent}
                     onMakePermanent={() => setOpenMakePermanent(true)}
+                    isSystemPending={isSystemPending}
                 />
             )}
 
-            {activeTab === 1 && (
+            {!isSystemPending && activeTab === 1 && (
                 <EmployeeProfileBenefitsTab
                     employee={employee}
                     onRevokePrivateVehicle={
@@ -787,7 +825,7 @@ export default function EmployeeProfilePage() {
                 />
             )}
 
-            {activeTab === 2 && !isContract && (
+            {activeTab === 2 && !isContract && !isSystemPending && (
                 <EmployeeQualificationsCard
                     employee={employee}
                     embedded
@@ -800,7 +838,7 @@ export default function EmployeeProfilePage() {
                 />
             )}
 
-            {activeTab === 3 && !isSimplifiedLifecycle && (
+            {activeTab === 3 && showLifecycleHistoryTab && (
                 <EmployeeActionHistoryTable
                     actions={actionHistory}
                     designations={designations}

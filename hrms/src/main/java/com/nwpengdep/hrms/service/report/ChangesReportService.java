@@ -127,6 +127,10 @@ public class ChangesReportService {
         }
 
         if (employee != null) {
+            if (employee.getSpecialDesignationName() != null
+                    && !employee.getSpecialDesignationName().isBlank()) {
+                return employee.getSpecialDesignationName();
+            }
             if (employee.getRecordedDesignationName() != null
                     && !employee.getRecordedDesignationName().isBlank()) {
                 return employee.getRecordedDesignationName();
@@ -164,6 +168,10 @@ public class ChangesReportService {
     }
 
     private String resolveNewDesignationName(EmployeeAction action) {
+        if (action.getRecordedSpecialDesignationName() != null
+                && !action.getRecordedSpecialDesignationName().isBlank()) {
+            return action.getRecordedSpecialDesignationName();
+        }
         if (action.getRecordedNewDesignationName() != null
                 && !action.getRecordedNewDesignationName().isBlank()) {
             return action.getRecordedNewDesignationName();

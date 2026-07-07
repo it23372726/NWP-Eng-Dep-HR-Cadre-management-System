@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 public interface EmployeeRepository
         extends JpaRepository<Employee, Long> {
@@ -35,7 +36,12 @@ public interface EmployeeRepository
 
     List<Employee> findByDesignation_ServiceId(Long serviceId);
 
+    Optional<Employee> findByEmployeeNo(String employeeNo);
+
     boolean existsByNic(String nic);
+
+    @Query("SELECT COUNT(e) > 0 FROM Employee e WHERE UPPER(e.nic) = UPPER(:nic)")
+    boolean existsByNicIgnoreCase(@Param("nic") String nic);
 
     boolean existsByEmployeeNo(String employeeNo);
 
@@ -57,15 +63,9 @@ public interface EmployeeRepository
     @Query("""
             SELECT COUNT(e)
             FROM Employee e
-            LEFT JOIN e.serviceLevel sl
             WHERE e.designation.id = :designationId
               AND e.status = :status
               AND e.currentDepartment = :currentDepartment
-              AND NOT (
-                  e.employmentType IS NULL
-                  AND sl IS NOT NULL
-                  AND LOWER(sl.levelName) = 'training'
-              )
             """)
     long countCadreEligibleByDesignationIdAndStatusAndCurrentDepartment(
             @Param("designationId") Long designationId,
@@ -134,5 +134,41 @@ public interface EmployeeRepository
     long countByCurrentOfficeIgnoreCaseAndStatus(
             String currentOffice,
             EmployeeStatus status
+    );
+
+    @Query("""
+            SELECT e
+            FROM Employee e
+            WHERE e.status = com.nwpengdep.hrms.entity.EmployeeStatus.ACTIVE
+              AND e.employmentType = com.nwpengdep.hrms.entity.EmploymentType.PERMANENT
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM EmployeeAction a
+                  WHERE a.employee.id = e.id
+                    AND (a.deleted IS NULL OR a.deleted = false)
+              )
+            ORDER BY e.employeeNo ASC
+            """)
+    List<Employee> findSystemPendingEmployees();
+
+    @Query("""
+            SELECT e
+            FROM Employee e
+            JOIN FETCH e.designation
+            JOIN e.serviceLevel sl
+            WHERE e.status = :status
+              AND e.employmentType IS NULL
+              AND LOWER(sl.levelName) = 'training'
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM EmployeeAction a
+                  WHERE a.employee.id = e.id
+                    AND a.actionType = com.nwpengdep.hrms.entity.EmployeeActionType.NEW_APPOINTMENT
+                    AND a.trainingAppointment = true
+                    AND (a.deleted IS NULL OR a.deleted = false)
+              )
+            """)
+    List<Employee> findActiveTrainingEmployeesWithoutNewAppointment(
+            @Param("status") EmployeeStatus status
     );
 }

@@ -603,6 +603,7 @@ export const applyTimelineToFormData = (formData, events, designation) => {
         ...formData,
         designationId: state.designationId ?? "",
         recordedDesignationName: state.recordedDesignationName ?? "",
+        specialDesignationName: state.specialDesignationName ?? "",
         serviceId: state.serviceId ?? "",
         grade: state.grade ?? "None",
         serviceLevelId: state.serviceLevelId ?? "",
@@ -872,6 +873,47 @@ export const buildPermanentCreatePayload = (
     };
 };
 
+export const buildPendingPermanentCreatePayload = (formData) => ({
+    entryType: "NEW_EMPLOYEE",
+    employeeNo: formData.employeeNo,
+    fullName: formData.fullName,
+    nic: formData.nic,
+    tin: formData.tin?.trim() || null,
+    dateOfBirth: toApiDate(formData.dateOfBirth),
+    gender: formData.gender,
+    maritalStatus: formData.maritalStatus || null,
+    employmentType: "PERMANENT",
+    permanentAddress: formData.permanentAddress,
+    residentDistrict: formData.residentDistrict || null,
+    contactNo: formData.contactNo,
+    emailAddress: formData.emailAddress?.trim() || null,
+    enteredDateToAllIslandService:
+        toApiOptionalDate(formData.enteredDateToAllIslandService),
+    incremantDate: formData.incremantDate || null,
+    widowsOrphansPensionNo: formData.widowsOrphansPensionNo?.trim() || null,
+    ...buildDependentPayloadFields(formData)
+});
+
+export const buildPendingPermanentUpdatePayload = (formData) => ({
+    employeeNo: formData.employeeNo,
+    fullName: formData.fullName,
+    nic: formData.nic,
+    tin: formData.tin?.trim() || null,
+    dateOfBirth: toApiDate(formData.dateOfBirth),
+    gender: formData.gender,
+    maritalStatus: formData.maritalStatus || null,
+    employmentType: "PERMANENT",
+    permanentAddress: formData.permanentAddress,
+    residentDistrict: formData.residentDistrict || null,
+    contactNo: formData.contactNo,
+    emailAddress: formData.emailAddress?.trim() || null,
+    enteredDateToAllIslandService:
+        toApiOptionalDate(formData.enteredDateToAllIslandService),
+    incremantDate: formData.incremantDate || null,
+    widowsOrphansPensionNo: formData.widowsOrphansPensionNo?.trim() || null,
+    ...buildDependentPayloadFields(formData)
+});
+
 export const buildNonPermanentCreatePayload = (
     formData,
     designation,
@@ -979,6 +1021,7 @@ const mapActionToCareerEvent = (action, designations, serviceLevelFallback, empl
                 ...base,
                 actionType: "NEW_APPOINTMENT",
                 designationId: action.newDesignationId ?? "",
+                specialDesignationName: action.specialDesignationName ?? "",
                 grade: action.newGrade || "III",
                 serviceLevelId: inferServiceLevelId(
                     action.newDesignationId,
@@ -1026,6 +1069,7 @@ const mapActionToCareerEvent = (action, designations, serviceLevelFallback, empl
                 ...base,
                 actionType: "PROMOTION",
                 designationId: action.newDesignationId ?? "",
+                specialDesignationName: action.specialDesignationName ?? "",
                 grade: action.newGrade ?? "",
                 serviceLevelId: inferServiceLevelId(
                     action.newDesignationId,
@@ -1050,6 +1094,7 @@ const mapActionToCareerEvent = (action, designations, serviceLevelFallback, empl
                 actionType: "TRANSFER_OUT",
                 designationId: action.newDesignationId ?? "",
                 recordedDesignationName: action.recordedDesignationName ?? "",
+                specialDesignationName: action.specialDesignationName ?? "",
                 serviceLevelId: inferServiceLevelId(
                     action.newDesignationId,
                     designations,
@@ -1108,8 +1153,14 @@ const mapActionToCareerEvent = (action, designations, serviceLevelFallback, empl
     }
 };
 
-export const mapActionsToCareerHistory = (actions, designations, employee) => {
+export const mapActionsToCareerHistory = (actions, designations, employee, options = {}) => {
+    const { isSystemPending = false } = options;
+
     if (!actions?.length) {
+        if (isSystemPending) {
+            return [];
+        }
+
         return [
             {
                 actionType: "NEW_APPOINTMENT",
@@ -1118,6 +1169,9 @@ export const mapActionsToCareerHistory = (actions, designations, employee) => {
                     ? null
                     : employee?.designation?.id ?? "",
                 recordedDesignationName: employee?.recordedDesignationName ?? "",
+                specialDesignationName: employee?.recordedDesignationName
+                    ? null
+                    : employee?.specialDesignationName ?? "",
                 serviceId: employee?.service?.id
                     ?? employee?.designation?.service?.id
                     ?? "",
@@ -1247,6 +1301,7 @@ export const buildTransferInCompanionEvent = ({
     fromDepartment,
     designationId,
     recordedDesignationName,
+    specialDesignationName,
     grade,
     serviceLevelId,
     remarks
@@ -1255,6 +1310,7 @@ export const buildTransferInCompanionEvent = ({
     actionDate,
     designationId: designationId ?? null,
     recordedDesignationName: recordedDesignationName ?? null,
+    specialDesignationName: specialDesignationName ?? null,
     grade: grade || "III",
     serviceLevelId: serviceLevelId ?? null,
     department: toDepartment,
@@ -1472,12 +1528,14 @@ const applyEventToTimelineState = (state, event) => {
             if (event.recordedDesignationName) {
                 next.recordedDesignationName = event.recordedDesignationName;
                 next.designationId = null;
+                next.specialDesignationName = null;
                 if (event.serviceId) {
                     next.serviceId = event.serviceId;
                 }
             } else {
                 next.designationId = event.designationId;
                 next.recordedDesignationName = null;
+                next.specialDesignationName = event.specialDesignationName?.trim() || null;
             }
             next.grade = event.grade || "III";
             next.firstAppointmentDate = event.actionDate;
@@ -1504,9 +1562,13 @@ const applyEventToTimelineState = (state, event) => {
             if (event.recordedDesignationName) {
                 next.recordedDesignationName = event.recordedDesignationName;
                 next.designationId = null;
+                next.specialDesignationName = null;
             } else if (event.designationId) {
                 next.designationId = event.designationId;
                 next.recordedDesignationName = null;
+                next.specialDesignationName = event.specialDesignationName?.trim() || null;
+            } else if (event.specialDesignationName != null) {
+                next.specialDesignationName = event.specialDesignationName?.trim() || null;
             }
             if (event.grade) {
                 if (next.grade === "III" && event.grade === "II") {
@@ -1550,9 +1612,11 @@ const applyEventToTimelineState = (state, event) => {
             if (event.recordedDesignationName) {
                 next.recordedDesignationName = event.recordedDesignationName;
                 next.designationId = null;
+                next.specialDesignationName = null;
             } else if (event.designationId) {
                 next.designationId = event.designationId;
                 next.recordedDesignationName = null;
+                next.specialDesignationName = event.specialDesignationName?.trim() || null;
             }
             if (event.serviceLevelId) {
                 next.serviceLevelId = event.serviceLevelId;
@@ -1746,6 +1810,7 @@ export const validateCareerHistoryTimeline = (
     let timelineState = {
         designationId: null,
         recordedDesignationName: null,
+        specialDesignationName: null,
         serviceId: null,
         grade: null,
         serviceLevelId: null,
