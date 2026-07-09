@@ -24,8 +24,9 @@ import { useEffect, useState } from "react";
 import {
     ACTION_TYPE_LABELS,
     getActionTypeLabel,
+    getPrimaryDepartmentName,
     isOtherDesignation,
-    NWP_ENGINEERING_DEPARTMENT,
+    isPrimaryDepartment,
     OTHER_DESIGNATION_VALUE
 } from "../constants/hrms";
 import DepartmentOfficeFields, {
@@ -34,8 +35,10 @@ import DepartmentOfficeFields, {
     resolveDepartmentValue
 } from "./workplace/DepartmentOfficeFields";
 import DateInput from "./DateInput";
+import DesignationOptionContent from "./DesignationOptionContent";
 import { getServices } from "../services/serviceService";
 import { createFormFieldProps } from "../utils/formLayout";
+import { renderDesignationSelectValue } from "../utils/designationDisplay";
 import {
     getServiceLevelsForDesignation,
     buildTransferInCompanionEvent,
@@ -107,7 +110,7 @@ const formatDisplayDate = (date) => {
 const eventDistrictLabel = (district) => district?.label ?? district ?? null;
 
 const applyNwpDistrict = (department, district, currentDistrictOfWorking) => {
-    if (department === NWP_ENGINEERING_DEPARTMENT) {
+    if (isPrimaryDepartment(department)) {
         const nextDistrict = eventDistrictLabel(district);
         return nextDistrict || currentDistrictOfWorking;
     }
@@ -125,7 +128,7 @@ const isFirstNwpJoinEvent = (event) => {
             ? event.toDepartment || event.department
             : event.department;
 
-    if (department !== NWP_ENGINEERING_DEPARTMENT) {
+    if (!isPrimaryDepartment(department)) {
         return false;
     }
 
@@ -743,7 +746,7 @@ export default function CareerHistoryBuilder({
         }
 
         if (firstDraft.departmentType === DEPARTMENT_OPTIONS.NWP && !firstDraft.district) {
-            setError("Working district is required for N.W.P. Engineering Department");
+            setError(`Working district is required for ${getPrimaryDepartmentName()}`);
             return;
         }
 
@@ -812,7 +815,7 @@ export default function CareerHistoryBuilder({
                     return "Promotion requires the grade";
                 }
                 if (
-                    state.currentDepartment === NWP_ENGINEERING_DEPARTMENT
+                    isPrimaryDepartment(state.currentDepartment)
                     && eventDraft.promotionOutcome === "transferringOut"
                 ) {
                     const promotionDestination = resolveDepartmentValue(
@@ -846,8 +849,8 @@ export default function CareerHistoryBuilder({
                 if (!toDepartment || !eventDraft.toOffice?.trim()) {
                     return "Transfer out requires destination department and office";
                 }
-                if (toDepartment === NWP_ENGINEERING_DEPARTMENT && !eventDraft.toDistrict) {
-                    return "Transfer to N.W.P. Engineering Department requires a working district";
+                if (isPrimaryDepartment(toDepartment) && !eventDraft.toDistrict) {
+                    return `Transfer to ${getPrimaryDepartmentName()} requires a working district`;
                 }
                 if (state.currentDepartment
                     && state.currentDepartment.toLowerCase() === toDepartment.toLowerCase()) {
@@ -859,7 +862,7 @@ export default function CareerHistoryBuilder({
                 if (!eventDraft.office?.trim()) {
                     return "Office change requires the new office";
                 }
-                if (state.currentDepartment === NWP_ENGINEERING_DEPARTMENT) {
+                if (isPrimaryDepartment(state.currentDepartment)) {
                     if (!eventDraft.district) {
                         return "Office change requires the working district";
                     }
@@ -953,7 +956,7 @@ export default function CareerHistoryBuilder({
                 ? {
                     department: state.currentDepartment,
                     office: eventDraft.office.trim(),
-                    district: state.currentDepartment === NWP_ENGINEERING_DEPARTMENT
+                    district: isPrimaryDepartment(state.currentDepartment)
                         ? eventDraft.district
                         : null
                 }
@@ -962,13 +965,13 @@ export default function CareerHistoryBuilder({
                 ? {
                     toDepartment,
                     toOffice: eventDraft.toOffice.trim(),
-                    toDistrict: toDepartment === NWP_ENGINEERING_DEPARTMENT
+                    toDistrict: isPrimaryDepartment(toDepartment)
                         ? eventDraft.toDistrict
                         : null
                 }
                 : {}),
             ...(eventDraft.actionType === "PROMOTION"
-                && state.currentDepartment === NWP_ENGINEERING_DEPARTMENT
+                && isPrimaryDepartment(state.currentDepartment)
                 && eventDraft.promotionOutcome === "transferringOut"
                 ? {
                     transferringOut: true,
@@ -1059,7 +1062,7 @@ export default function CareerHistoryBuilder({
     const showTransferDestination = draftType === "TRANSFER_OUT";
     const showPromotionOutcome =
         draftType === "PROMOTION"
-        && state.currentDepartment === NWP_ENGINEERING_DEPARTMENT;
+        && isPrimaryDepartment(state.currentDepartment);
     const promotionTransferringOut = eventDraft.promotionOutcome === "transferringOut";
     const showPromotionTransferDestination =
         showPromotionOutcome && promotionTransferringOut;
@@ -1158,13 +1161,26 @@ export default function CareerHistoryBuilder({
                                 helperText={requiredServiceLevelHelper(
                                     firstDraftDesignation
                                 )}
+                                slotProps={{
+                                    ...selectFieldProps.slotProps,
+                                    select: {
+                                        ...selectFieldProps.slotProps?.select,
+                                        renderValue: (value) =>
+                                            renderDesignationSelectValue(
+                                                value,
+                                                designations
+                                            )
+                                    }
+                                }}
                             >
                                 {designations.map((designation) => (
                                     <MenuItem
                                         key={designation.id}
                                         value={designation.id}
                                     >
-                                        {designation.designationName}
+                                        <DesignationOptionContent
+                                            designation={designation}
+                                        />
                                     </MenuItem>
                                 ))}
                                 <MenuItem value={OTHER_DESIGNATION_VALUE}>
@@ -1345,13 +1361,26 @@ export default function CareerHistoryBuilder({
                                                 eventDraftDesignation
                                             ) || "Same service only")
                                     }
+                                    slotProps={{
+                                        ...selectFieldProps.slotProps,
+                                        select: {
+                                            ...selectFieldProps.slotProps?.select,
+                                            renderValue: (value) =>
+                                                renderDesignationSelectValue(
+                                                    value,
+                                                    promotionDesignations
+                                                )
+                                        }
+                                    }}
                                 >
                                     {promotionDesignations.map((designation) => (
                                         <MenuItem
                                             key={designation.id}
                                             value={designation.id}
                                         >
-                                            {designation.designationName}
+                                            <DesignationOptionContent
+                                                designation={designation}
+                                            />
                                         </MenuItem>
                                     ))}
                                     <MenuItem value={OTHER_DESIGNATION_VALUE}>
@@ -1450,7 +1479,7 @@ export default function CareerHistoryBuilder({
                                         <FormControlLabel
                                             value="staying"
                                             control={<Radio />}
-                                            label="Stays in N.W.P. Engineering Department"
+                                            label={`Stays in ${getPrimaryDepartmentName()}`}
                                         />
                                         <FormControlLabel
                                             value="transferringOut"
@@ -1546,12 +1575,12 @@ export default function CareerHistoryBuilder({
                                 />
                                 <DepartmentOfficeFields
                                     departmentType={
-                                        state.currentDepartment === NWP_ENGINEERING_DEPARTMENT
+                                        isPrimaryDepartment(state.currentDepartment)
                                             ? DEPARTMENT_OPTIONS.NWP
                                             : DEPARTMENT_OPTIONS.OTHER
                                     }
                                     otherDepartmentName={
-                                        state.currentDepartment === NWP_ENGINEERING_DEPARTMENT
+                                        isPrimaryDepartment(state.currentDepartment)
                                             ? ""
                                             : state.currentDepartment || ""
                                     }
@@ -1570,7 +1599,7 @@ export default function CareerHistoryBuilder({
                                         setEventDraft((prev) => ({ ...prev, office: value }))
                                     }
                                     departmentReadOnly
-                                    showDepartment={state.currentDepartment === NWP_ENGINEERING_DEPARTMENT}
+                                    showDepartment={isPrimaryDepartment(state.currentDepartment)}
                                     officeLabel="New Office"
                                 />
                             </>

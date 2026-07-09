@@ -18,7 +18,6 @@ import com.nwpengdep.hrms.dto.TrainingRevertSnapshot;
 import com.nwpengdep.hrms.dto.TransferOutRequest;
 import com.nwpengdep.hrms.dto.VacationOfPostRequest;
 import com.nwpengdep.hrms.entity.Designation;
-import com.nwpengdep.hrms.entity.District;
 import com.nwpengdep.hrms.entity.Employee;
 import com.nwpengdep.hrms.entity.EmployeeAction;
 import com.nwpengdep.hrms.entity.EmployeeActionType;
@@ -162,11 +161,12 @@ public class EmployeeLifecycleService {
         }
 
         String newOffice = request.getOffice().trim();
-        District newDistrict = request.getDistrict();
+        String newDistrict = request.getDistrict();
         if (DepartmentConstants.isNwpEngineering(currentDepartment)) {
-            if (newDistrict == null) {
+            if (newDistrict == null || newDistrict.isBlank()) {
                 throw new RuntimeException(
-                        "Working district is required for N.W.P. Engineering Department"
+                        "Working district is required for "
+                                + DepartmentConstants.getPrimaryDepartmentName()
                 );
             }
             officeService.validateNwpWorkplace(newOffice, newDistrict);
@@ -175,7 +175,9 @@ public class EmployeeLifecycleService {
         boolean sameOffice = employee.getCurrentOffice() != null
                 && employee.getCurrentOffice().equalsIgnoreCase(newOffice);
         boolean sameDistrict = DepartmentConstants.isNwpEngineering(currentDepartment)
-                && employee.getCurrentDistrictOfWorking() == newDistrict;
+                && employee.getCurrentDistrictOfWorking() != null
+                && newDistrict != null
+                && employee.getCurrentDistrictOfWorking().equalsIgnoreCase(newDistrict);
         boolean noNwpChange = DepartmentConstants.isNwpEngineering(currentDepartment)
                 && sameOffice
                 && sameDistrict;

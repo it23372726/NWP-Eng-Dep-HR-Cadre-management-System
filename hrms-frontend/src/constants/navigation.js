@@ -15,9 +15,11 @@ import ManageAccountsIcon from "@mui/icons-material/ManageAccounts";
 import GroupsIcon from "@mui/icons-material/Groups";
 import CorporateFareIcon from "@mui/icons-material/CorporateFare";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
+import SettingsIcon from "@mui/icons-material/Settings";
+import { canViewEmployees, hasPermission } from "./permissions";
 
 export const STANDALONE_NAV_ITEMS = [
-    { label: "Dashboard", path: "/dashboard", icon: DashboardIcon }
+    { label: "Dashboard", path: "/dashboard", icon: DashboardIcon, permission: "DASHBOARD" }
 ];
 
 export const NAV_SECTIONS = [
@@ -25,6 +27,7 @@ export const NAV_SECTIONS = [
         id: "employees",
         label: "Employees",
         icon: GroupsIcon,
+        canAccess: canViewEmployees,
         items: [
             {
                 label: "Active Employees",
@@ -42,6 +45,7 @@ export const NAV_SECTIONS = [
         id: "organization",
         label: "Organization",
         icon: CorporateFareIcon,
+        permission: "ORGANIZATION",
         items: [
             { label: "Designations", path: "/designations", icon: BadgeIcon },
             { label: "Services", path: "/services", icon: ApartmentIcon },
@@ -51,13 +55,15 @@ export const NAV_SECTIONS = [
                 path: "/service-levels",
                 icon: LayersIcon
             },
-            { label: "Cadres", path: "/cadres", icon: AccountTreeIcon }
+            { label: "Cadres", path: "/cadres", icon: AccountTreeIcon },
+            { label: "Settings", path: "/settings", icon: SettingsIcon }
         ]
     },
     {
         id: "reports",
         label: "Reports",
         icon: AssessmentIcon,
+        permission: "REPORTS",
         items: [
             {
                 label: "Cadre Vacancy & Excess",
@@ -85,7 +91,7 @@ export const NAV_SECTIONS = [
         id: "administration",
         label: "Administration",
         icon: AdminPanelSettingsIcon,
-        superAdminOnly: true,
+        permission: "ADMINISTRATIONS",
         items: [
             {
                 label: "User Management",
@@ -109,22 +115,27 @@ const TITLE_BY_PATH = [
     return acc;
 }, {});
 
-function isSuperAdmin(user) {
-    return user?.role === "SUPER_ADMIN";
+function canAccessNavEntry(user, entry) {
+    if (typeof entry.canAccess === "function") {
+        return entry.canAccess(user);
+    }
+    return hasPermission(user, entry.permission);
 }
 
 export function getVisibleNavigation(user) {
-    const sections = NAV_SECTIONS.filter(
-        (section) => !section.superAdminOnly || isSuperAdmin(user)
+    const standaloneItems = STANDALONE_NAV_ITEMS.filter((item) =>
+        canAccessNavEntry(user, item)
+    );
+
+    const sections = NAV_SECTIONS.filter((section) =>
+        canAccessNavEntry(user, section)
     ).map((section) => ({
         ...section,
-        items: section.items.filter(
-            (item) => !item.superAdminOnly || isSuperAdmin(user)
-        )
+        items: section.items
     }));
 
     return {
-        standaloneItems: STANDALONE_NAV_ITEMS,
+        standaloneItems,
         sections
     };
 }

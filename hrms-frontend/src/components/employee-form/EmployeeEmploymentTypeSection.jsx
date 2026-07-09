@@ -14,7 +14,9 @@ import {
 } from "@mui/material";
 
 import { EMPLOYMENT_TYPES, TRAINING_PERIOD_OPTIONS } from "../../constants/hrms";
+import DesignationOptionContent from "../DesignationOptionContent";
 import FormSection from "../FormSection";
+import { renderDesignationSelectValue } from "../../utils/designationDisplay";
 
 function TrainingPeriodField({ value, onChange }) {
     return (
@@ -136,13 +138,26 @@ export function EmployeeContractPositionSection({
                         name="designationId"
                         value={formData.designationId}
                         disabled={designationDisabled}
+                        slotProps={{
+                            ...selectFieldProps.slotProps,
+                            select: {
+                                ...selectFieldProps.slotProps?.select,
+                                renderValue: (value) =>
+                                    renderDesignationSelectValue(
+                                        value,
+                                        designations
+                                    )
+                            }
+                        }}
                     >
                         {designations.map((designation) => (
                             <MenuItem
                                 key={designation.id}
                                 value={designation.id}
                             >
-                                {designation.designationName}
+                                <DesignationOptionContent
+                                    designation={designation}
+                                />
                             </MenuItem>
                         ))}
                     </TextField>
@@ -172,13 +187,26 @@ export function EmployeeTrainingPositionSection({
                         name="designationId"
                         value={formData.designationId}
                         disabled={designationDisabled}
+                        slotProps={{
+                            ...selectFieldProps.slotProps,
+                            select: {
+                                ...selectFieldProps.slotProps?.select,
+                                renderValue: (value) =>
+                                    renderDesignationSelectValue(
+                                        value,
+                                        designations
+                                    )
+                            }
+                        }}
                     >
                         {designations.map((designation) => (
                             <MenuItem
                                 key={designation.id}
                                 value={designation.id}
                             >
-                                {designation.designationName}
+                                <DesignationOptionContent
+                                    designation={designation}
+                                />
                             </MenuItem>
                         ))}
                     </TextField>
@@ -228,13 +256,26 @@ export function EmployeeNonPermanentPositionSection({
                                 ? "Change designation through career history or promotion"
                                 : undefined
                         }
+                        slotProps={{
+                            ...selectFieldProps.slotProps,
+                            select: {
+                                ...selectFieldProps.slotProps?.select,
+                                renderValue: (value) =>
+                                    renderDesignationSelectValue(
+                                        value,
+                                        designations
+                                    )
+                            }
+                        }}
                     >
                         {designations.map((designation) => (
                             <MenuItem
                                 key={designation.id}
                                 value={designation.id}
                             >
-                                {designation.designationName}
+                                <DesignationOptionContent
+                                    designation={designation}
+                                />
                             </MenuItem>
                         ))}
                     </TextField>

@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
@@ -20,6 +21,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/cadres")
 @RequiredArgsConstructor
+@PreAuthorize("hasAuthority('ORGANIZATION')")
 public class CadrePositionController {
 
     private final CadrePositionService
@@ -74,6 +76,7 @@ public class CadrePositionController {
     }
 
     @GetMapping("/vacancies")
+    @PreAuthorize("hasAuthority('REPORTS')")
     public List<VacancyReportResponse>
     getVacancyReport() {
 
@@ -82,6 +85,7 @@ public class CadrePositionController {
     }
 
     @GetMapping("/vacancies/export/excel")
+    @PreAuthorize("hasAuthority('REPORTS')")
     public ResponseEntity<byte[]> exportVacancyExcel() {
         byte[] data = vacancyReportExportService.exportExcel();
 
@@ -97,6 +101,7 @@ public class CadrePositionController {
     }
 
     @GetMapping("/vacancies/export/pdf")
+    @PreAuthorize("hasAuthority('REPORTS')")
     public ResponseEntity<byte[]> exportVacancyPdf() {
         byte[] data = vacancyReportExportService.exportPdf();
 

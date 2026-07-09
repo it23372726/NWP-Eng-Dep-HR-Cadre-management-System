@@ -16,11 +16,6 @@ import {
     Typography
 } from "@mui/material";
 import {
-    FIXED_GRADE1_REQUIREMENTS,
-    FIXED_GRADE2_REQUIREMENTS,
-    FIXED_PERMANENT_REQUIREMENTS,
-    FIXED_SPECIAL_REQUIREMENTS,
-    FIXED_SUPRA_REQUIREMENTS,
     FIXED_TRAINING_GRADUATION_REQUIREMENTS,
     getEmployeeServiceRules,
     getTrainingGraduationBlockReason,
@@ -475,69 +470,54 @@ export default function EmployeeQualificationsCard({
         careerProgression.permanentQualificationDate || threeYearServiceDate;
 
     const permanentRows = appendServicePeriodRow(
-        [
-            ...buildFixedRows(FIXED_PERMANENT_REQUIREMENTS, employee),
-            ...buildCustomRows(
-                "CUSTOM_PERMANENT_REQUIREMENT",
-                service?.permanentRequirements,
-                employee
-            )
-        ],
+        buildCustomRows(
+            "CUSTOM_PERMANENT_REQUIREMENT",
+            service?.permanentRequirements,
+            employee
+        ),
         "3 Years Government Service Completed",
         threeYearServiceDate
     );
 
     const grade2Rows = appendServicePeriodRow(
-        [
-            ...buildFixedRows(FIXED_GRADE2_REQUIREMENTS, employee),
-            ...buildCustomRows(
-                "CUSTOM_GRADE_2_REQUIREMENT",
-                service?.grade2Requirements,
-                employee
-            )
-        ],
+        buildCustomRows(
+            "CUSTOM_GRADE_2_REQUIREMENT",
+            service?.grade2Requirements,
+            employee
+        ),
         `${grade2RequiredYears} Year(s) Service From First Appointment`,
         careerProgression.grade2EligibilityDate
             ?? getGrade2EligibilityDate(employee, { service }),
     );
 
     const grade1Rows = appendServicePeriodRow(
-        [
-            ...buildFixedRows(FIXED_GRADE1_REQUIREMENTS, employee),
-            ...buildCustomRows(
-                "CUSTOM_GRADE_1_REQUIREMENT",
-                service?.grade1Requirements,
-                employee
-            )
-        ],
+        buildCustomRows(
+            "CUSTOM_GRADE_1_REQUIREMENT",
+            service?.grade1Requirements,
+            employee
+        ),
         `${grade1RequiredYears} Year(s) Grade II Service Period`,
         careerProgression.grade1EligibilityDate
             ?? getGrade1EligibilityDate(employee, { service }),
     );
 
     const supraRows = appendServicePeriodRow(
-        [
-            ...buildFixedRows(FIXED_SUPRA_REQUIREMENTS, employee),
-            ...buildCustomRows(
-                "CUSTOM_SUPRA_REQUIREMENT",
-                service?.supraRequirements,
-                employee
-            )
-        ],
+        buildCustomRows(
+            "CUSTOM_SUPRA_REQUIREMENT",
+            service?.supraRequirements,
+            employee
+        ),
         `${supraRequiredYears} Year(s) Grade I Service Period`,
         careerProgression.supraEligibilityDate
             ?? getSupraEligibilityDate(employee, { service })
     );
 
     const specialRows = appendServicePeriodRow(
-        [
-            ...buildFixedRows(FIXED_SPECIAL_REQUIREMENTS, employee),
-            ...buildCustomRows(
-                "CUSTOM_SPECIAL_REQUIREMENT",
-                service?.specialRequirements,
-                employee
-            )
-        ],
+        buildCustomRows(
+            "CUSTOM_SPECIAL_REQUIREMENT",
+            service?.specialRequirements,
+            employee
+        ),
         `${specialRequiredYears} Year(s) Grade I Service Period`,
         careerProgression.specialEligibilityDate
             ?? getSpecialEligibilityDate(employee, { service })

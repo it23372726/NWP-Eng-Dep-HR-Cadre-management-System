@@ -1,8 +1,37 @@
+import {
+    DEFAULT_DISTRICTS,
+    DEFAULT_PRIMARY_DEPARTMENT,
+    getPrimaryDepartmentName,
+    isPrimaryDepartment,
+    getDistricts,
+    getDistrictFilterOptions,
+    normalizeDistrictLabel,
+    toApiDistrict,
+    getApplicationName,
+    getCouncilLabel,
+    getDepartmentShortName,
+    getReportHeaderSubtitle,
+    getReportHeaderUppercase
+} from "../utils/organizationSettingsStore";
+
 export const GRADES = ["None", "III", "II", "I", "Supra", "Special"];
 
-export const DISTRICTS = ["Kurunegala", "Puttalam"];
-
-export const NWP_ENGINEERING_DEPARTMENT = "N.W.P. Engineering Department";
+export {
+    DEFAULT_DISTRICTS,
+    DEFAULT_DISTRICTS as DISTRICTS,
+    DEFAULT_PRIMARY_DEPARTMENT as NWP_ENGINEERING_DEPARTMENT,
+    getPrimaryDepartmentName,
+    isPrimaryDepartment,
+    getDistricts,
+    getDistrictFilterOptions,
+    normalizeDistrictLabel,
+    toApiDistrict,
+    getApplicationName,
+    getCouncilLabel,
+    getDepartmentShortName,
+    getReportHeaderSubtitle,
+    getReportHeaderUppercase
+};
 
 export const OTHER_DESIGNATION_VALUE = "OTHER";
 
@@ -100,32 +129,6 @@ export const canShowDependentDetails = (employeeOrForm) =>
 export const canShowPrivateVehicleFields = (employmentType) =>
     isPermanentEmployee(employmentType);
 
-export function normalizeDistrictLabel(value) {
-    if (value === null || value === undefined) {
-        return "";
-    }
-
-    const text = String(value?.label ?? value).trim();
-    if (!text) {
-        return "";
-    }
-
-    const upper = text.toUpperCase();
-    if (upper === "KURUNEGALA") {
-        return "Kurunegala";
-    }
-    if (upper === "PUTTALAM") {
-        return "Puttalam";
-    }
-
-    return text;
-}
-
-export function toApiDistrict(value) {
-    const label = normalizeDistrictLabel(value);
-    return label || null;
-}
-
 export const EMPLOYMENT_TYPES = [
     { value: "PERMANENT", label: "Permanent" },
     { value: "ACTING", label: "Acting" },
@@ -200,10 +203,7 @@ export const RETIREMENT_FILTER_OPTIONS = [
     { value: "60", label: "Retiring within 5 years" }
 ];
 
-export const DISTRICT_FILTER_OPTIONS = [
-    { value: "", label: "All districts" },
-    ...DISTRICTS.map((district) => ({ value: district, label: district }))
-];
+export const DISTRICT_FILTER_OPTIONS = getDistrictFilterOptions();
 
 export const PERMANENT_STATUS_LABELS = {
     PROBATION: "Probation",
@@ -244,9 +244,9 @@ export function isPromotionTransferOut(action) {
         return true;
     }
     return Boolean(
-        action.fromDepartment === NWP_ENGINEERING_DEPARTMENT
+        isPrimaryDepartment(action.fromDepartment)
         && action.department
-        && action.department !== NWP_ENGINEERING_DEPARTMENT
+        && !isPrimaryDepartment(action.department)
     );
 }
 
@@ -296,34 +296,50 @@ export const REQUIREMENT_TYPE_LABELS = {
     CUSTOM_SPECIAL_REQUIREMENT: "Custom Special Requirement"
 };
 
-export const FIXED_PERMANENT_REQUIREMENTS = [
-    { requirementType: "EB_GRADE_3", label: "EB Grade III Passed" },
-    {
-        requirementType: "GOVERNMENT_LANGUAGE_QUALIFICATION",
-        label: "Government Language Qualification Passed"
-    },
-    { requirementType: "MEDICAL_REPORT", label: "Medical Report Completed" },
-    { requirementType: "OL_CERTIFICATE", label: "O/L Approved" },
-    { requirementType: "AL_CERTIFICATE", label: "A/L Approved" },
-    { requirementType: "DEGREE_CERTIFICATE", label: "Degree Approved" },
-    { requirementType: "BIRTH_CERTIFICATE", label: "Birth Certificate Approved" }
+export const DEFAULT_PERMANENT_REQUIREMENTS = [
+    "EB Grade III Passed",
+    "Government Language Qualification Passed",
+    "Medical Report Completed",
+    "O/L Approved",
+    "A/L Approved",
+    "Degree Approved",
+    "Birth Certificate Approved"
 ];
 
-export const FIXED_GRADE2_REQUIREMENTS = [
-    { requirementType: "EB_GRADE_2", label: "EB Grade II Passed" }
+export const DEFAULT_GRADE2_REQUIREMENTS = ["EB Grade II Passed"];
+
+export const DEFAULT_GRADE1_REQUIREMENTS = ["EB Grade I Passed"];
+
+export const DEFAULT_SUPRA_REQUIREMENTS = [
+    "Supra Grade Examination Passed"
 ];
 
-export const FIXED_GRADE1_REQUIREMENTS = [
-    { requirementType: "EB_GRADE_1", label: "EB Grade I Passed" }
-];
+export const DEFAULT_SPECIAL_REQUIREMENTS = ["Masters Degree Completed"];
 
-export const FIXED_SUPRA_REQUIREMENTS = [
-    { requirementType: "SUPRA_REQUIREMENT", label: "Supra Grade Examination Passed" }
-];
+/** @deprecated Use DEFAULT_* string templates for service configuration */
+export const FIXED_PERMANENT_REQUIREMENTS = DEFAULT_PERMANENT_REQUIREMENTS.map(
+    (label) => ({ requirementType: "CUSTOM_PERMANENT_REQUIREMENT", label })
+);
 
-export const FIXED_SPECIAL_REQUIREMENTS = [
-    { requirementType: "MASTERS_DEGREE", label: "Masters Degree Completed" }
-];
+/** @deprecated Use DEFAULT_* string templates for service configuration */
+export const FIXED_GRADE2_REQUIREMENTS = DEFAULT_GRADE2_REQUIREMENTS.map(
+    (label) => ({ requirementType: "CUSTOM_GRADE_2_REQUIREMENT", label })
+);
+
+/** @deprecated Use DEFAULT_* string templates for service configuration */
+export const FIXED_GRADE1_REQUIREMENTS = DEFAULT_GRADE1_REQUIREMENTS.map(
+    (label) => ({ requirementType: "CUSTOM_GRADE_1_REQUIREMENT", label })
+);
+
+/** @deprecated Use DEFAULT_* string templates for service configuration */
+export const FIXED_SUPRA_REQUIREMENTS = DEFAULT_SUPRA_REQUIREMENTS.map(
+    (label) => ({ requirementType: "CUSTOM_SUPRA_REQUIREMENT", label })
+);
+
+/** @deprecated Use DEFAULT_* string templates for service configuration */
+export const FIXED_SPECIAL_REQUIREMENTS = DEFAULT_SPECIAL_REQUIREMENTS.map(
+    (label) => ({ requirementType: "CUSTOM_SPECIAL_REQUIREMENT", label })
+);
 
 export function serviceAllowsSupra(service) {
     return (service?.allowedGrades || []).includes("Supra");
@@ -436,29 +452,17 @@ export const QUALIFICATION_FILTER_OPTIONS = [
     { value: "PENDING_PERMANENT", label: "Pending permanent requirements" },
     { value: "PENDING_GRADE_2", label: "Pending Grade II requirements" },
     { value: "PENDING_GRADE_1", label: "Pending Grade I requirements" },
-    ...FIXED_PERMANENT_REQUIREMENTS.map((requirement) => ({
-        value: requirement.requirementType,
-        label: `Pending: ${requirement.label}`
-    })),
-    ...FIXED_GRADE2_REQUIREMENTS.map((requirement) => ({
-        value: requirement.requirementType,
-        label: `Pending: ${requirement.label}`
-    })),
-    ...FIXED_GRADE1_REQUIREMENTS.map((requirement) => ({
-        value: requirement.requirementType,
-        label: `Pending: ${requirement.label}`
-    })),
     {
         value: "CUSTOM_PERMANENT_REQUIREMENT",
-        label: "Pending: custom permanent requirement"
+        label: "Pending: permanent requirement"
     },
     {
         value: "CUSTOM_GRADE_2_REQUIREMENT",
-        label: "Pending: custom Grade II requirement"
+        label: "Pending: Grade II requirement"
     },
     {
         value: "CUSTOM_GRADE_1_REQUIREMENT",
-        label: "Pending: custom Grade I requirement"
+        label: "Pending: Grade I requirement"
     }
 ];
 

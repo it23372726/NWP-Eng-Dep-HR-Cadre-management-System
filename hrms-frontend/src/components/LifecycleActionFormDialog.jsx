@@ -20,14 +20,16 @@ import {
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { updateEmployeeAction } from "../services/employeeLifecycleService";
+import DesignationOptionContent from "./DesignationOptionContent";
 import { getServiceLevels } from "../services/serviceLevelService";
 import {
     ACTION_TYPE_LABELS,
     GRADES,
     getActionTypeLabel,
     getApiErrorMessage,
+    getPrimaryDepartmentName,
     isOtherDesignation,
-    NWP_ENGINEERING_DEPARTMENT,
+    isPrimaryDepartment,
     OTHER_DESIGNATION_VALUE,
     validateCustomDesignationAssignment,
     validateDesignationAssignment
@@ -43,6 +45,7 @@ const PROMOTION_OUTCOME = {
     TRANSFERRING_OUT: "transferringOut"
 };
 import { createFormFieldProps, dialogActionsSx } from "../utils/formLayout";
+import { renderDesignationSelectValue } from "../utils/designationDisplay";
 import DateInput from "./DateInput";
 import { getMinimumPromotionEffectiveDate } from "../utils/gradeAchievementDates";
 import {
@@ -107,9 +110,9 @@ export default function LifecycleActionFormDialog({
                 ?? (action.canModify ? employee?.serviceLevel?.id : null);
 
             const transferringOut = Boolean(
-                action.fromDepartment === NWP_ENGINEERING_DEPARTMENT
+                isPrimaryDepartment(action.fromDepartment)
                 && action.department
-                && action.department !== NWP_ENGINEERING_DEPARTMENT
+                && !isPrimaryDepartment(action.department)
             );
             const destination = transferringOut
                 ? parseDepartmentValue(action.department)
@@ -138,8 +141,7 @@ export default function LifecycleActionFormDialog({
         });
     }, [open, action, employee]);
 
-    const inNwpDepartment =
-        employee?.currentDepartment === NWP_ENGINEERING_DEPARTMENT;
+    const inNwpDepartment = isPrimaryDepartment(employee?.currentDepartment);
     const transferringOut = form.promotionOutcome === PROMOTION_OUTCOME.TRANSFERRING_OUT;
     const showPromotionOutcome = isPromotion && inNwpDepartment;
     const toDepartment = resolveDepartmentValue(
@@ -422,10 +424,23 @@ export default function LifecycleActionFormDialog({
                                 label="To Designation"
                                 name="newDesignationId"
                                 value={form.newDesignationId}
+                                slotProps={{
+                                    ...selectFieldProps.slotProps,
+                                    select: {
+                                        ...selectFieldProps.slotProps?.select,
+                                        renderValue: (value) =>
+                                            renderDesignationSelectValue(
+                                                value,
+                                                promotionDesignations
+                                            )
+                                    }
+                                }}
                             >
                                 {promotionDesignations.map((d) => (
                                     <MenuItem key={d.id} value={d.id}>
-                                        {d.designationName}
+                                        <DesignationOptionContent
+                                            designation={d}
+                                        />
                                     </MenuItem>
                                 ))}
                                 <MenuItem value={OTHER_DESIGNATION_VALUE}>
@@ -506,7 +521,7 @@ export default function LifecycleActionFormDialog({
                                     <FormControlLabel
                                         value={PROMOTION_OUTCOME.STAYING}
                                         control={<Radio />}
-                                        label="Stays in N.W.P. Engineering Department"
+                                        label={`Stays in ${getPrimaryDepartmentName()}`}
                                     />
                                     <FormControlLabel
                                         value={PROMOTION_OUTCOME.TRANSFERRING_OUT}

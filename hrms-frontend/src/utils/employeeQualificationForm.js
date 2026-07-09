@@ -1,9 +1,4 @@
 import {
-    FIXED_GRADE1_REQUIREMENTS,
-    FIXED_GRADE2_REQUIREMENTS,
-    FIXED_PERMANENT_REQUIREMENTS,
-    FIXED_SPECIAL_REQUIREMENTS,
-    FIXED_SUPRA_REQUIREMENTS,
     FIXED_TRAINING_GRADUATION_REQUIREMENTS,
     getEmployeeServiceRules,
     isRequirementCompleted,
@@ -24,7 +19,7 @@ const SECTION_DEFINITIONS = {
         title: "Permanent Requirements",
         description:
             "Grade III permanency qualifications and certificate approvals.",
-        fixedRequirements: FIXED_PERMANENT_REQUIREMENTS,
+        fixedRequirements: [],
         customType: "CUSTOM_PERMANENT_REQUIREMENT",
         customField: "permanentRequirements"
     },
@@ -33,7 +28,7 @@ const SECTION_DEFINITIONS = {
         title: "Grade II Promotion Requirements",
         description:
             "Requirements completed toward promotion from Grade III to Grade II.",
-        fixedRequirements: FIXED_GRADE2_REQUIREMENTS,
+        fixedRequirements: [],
         customType: "CUSTOM_GRADE_2_REQUIREMENT",
         customField: "grade2Requirements",
         showGrade2Years: true
@@ -43,7 +38,7 @@ const SECTION_DEFINITIONS = {
         title: "Grade I Promotion Requirements",
         description:
             "Requirements completed toward promotion from Grade II to Grade I.",
-        fixedRequirements: FIXED_GRADE1_REQUIREMENTS,
+        fixedRequirements: [],
         customType: "CUSTOM_GRADE_1_REQUIREMENT",
         customField: "grade1Requirements",
         showGrade1Years: true
@@ -53,7 +48,7 @@ const SECTION_DEFINITIONS = {
         title: "Supra Promotion Requirements",
         description:
             "Requirements completed toward promotion from Grade I to Supra.",
-        fixedRequirements: FIXED_SUPRA_REQUIREMENTS,
+        fixedRequirements: [],
         customType: "CUSTOM_SUPRA_REQUIREMENT",
         customField: "supraRequirements",
         showSupraYears: true
@@ -63,7 +58,7 @@ const SECTION_DEFINITIONS = {
         title: "Special Promotion Requirements",
         description:
             "Requirements completed toward promotion from Grade I to Special.",
-        fixedRequirements: FIXED_SPECIAL_REQUIREMENTS,
+        fixedRequirements: [],
         customType: "CUSTOM_SPECIAL_REQUIREMENT",
         customField: "specialRequirements",
         showSpecialYears: true
@@ -101,21 +96,10 @@ export const isNamedRequirementCompleted = (employee, type, name) =>
     );
 
 const REQUIREMENT_SECTION_BY_TYPE = {
-    EB_GRADE_3: "permanent",
-    GOVERNMENT_LANGUAGE_QUALIFICATION: "permanent",
-    MEDICAL_REPORT: "permanent",
-    OL_CERTIFICATE: "permanent",
-    AL_CERTIFICATE: "permanent",
-    DEGREE_CERTIFICATE: "permanent",
-    BIRTH_CERTIFICATE: "permanent",
     CUSTOM_PERMANENT_REQUIREMENT: "permanent",
-    EB_GRADE_2: "grade2",
     CUSTOM_GRADE_2_REQUIREMENT: "grade2",
-    EB_GRADE_1: "grade1",
     CUSTOM_GRADE_1_REQUIREMENT: "grade1",
-    SUPRA_REQUIREMENT: "supra",
     CUSTOM_SUPRA_REQUIREMENT: "supra",
-    MASTERS_DEGREE: "special",
     CUSTOM_SPECIAL_REQUIREMENT: "special",
     TRAINING_EXAM: "trainingGraduation"
 };
@@ -174,13 +158,9 @@ export function isRequirementLocked(employee, type, name = null, sectionId = nul
     }
 
     if (isTrainingEmployee(employee)) {
-        return type === "EB_GRADE_2"
-            || type === "EB_GRADE_1"
-            || type === "CUSTOM_GRADE_2_REQUIREMENT"
+        return type === "CUSTOM_GRADE_2_REQUIREMENT"
             || type === "CUSTOM_GRADE_1_REQUIREMENT"
-            || type === "SUPRA_REQUIREMENT"
             || type === "CUSTOM_SUPRA_REQUIREMENT"
-            || type === "MASTERS_DEGREE"
             || type === "CUSTOM_SPECIAL_REQUIREMENT";
     }
 
@@ -286,24 +266,7 @@ export function mapEmployeeToQualificationForm(employee) {
     }
 
     const form = {
-        trainingExamPassed: isRequirementCompleted(employee, "TRAINING_EXAM"),
-        ebGrade3Passed: isRequirementCompleted(employee, "EB_GRADE_3"),
-        languageQualificationPassed: isRequirementCompleted(
-            employee,
-            "GOVERNMENT_LANGUAGE_QUALIFICATION"
-        ),
-        medicalReportCompleted: isRequirementCompleted(employee, "MEDICAL_REPORT"),
-        olApproved: isRequirementCompleted(employee, "OL_CERTIFICATE"),
-        alApproved: isRequirementCompleted(employee, "AL_CERTIFICATE"),
-        degreeApproved: isRequirementCompleted(employee, "DEGREE_CERTIFICATE"),
-        birthCertificateApproved: isRequirementCompleted(
-            employee,
-            "BIRTH_CERTIFICATE"
-        ),
-        ebGrade2Passed: isRequirementCompleted(employee, "EB_GRADE_2"),
-        ebGrade1Passed: isRequirementCompleted(employee, "EB_GRADE_1"),
-        supraExamPassed: isRequirementCompleted(employee, "SUPRA_REQUIREMENT"),
-        mastersDegreeCompleted: isRequirementCompleted(employee, "MASTERS_DEGREE")
+        trainingExamPassed: isRequirementCompleted(employee, "TRAINING_EXAM")
     };
 
     appendCustomRequirementFields(form, employee);
@@ -326,124 +289,8 @@ export function buildRequirements(formData, employee) {
         ];
     }
 
-    const requirements = [
-        {
-            requirementType: "EB_GRADE_3",
-            status: resolveRequirementStatus(
-                employee,
-                "EB_GRADE_3",
-                null,
-                formData.ebGrade3Passed,
-                "permanent"
-            )
-        },
-        {
-            requirementType: "GOVERNMENT_LANGUAGE_QUALIFICATION",
-            status: resolveRequirementStatus(
-                employee,
-                "GOVERNMENT_LANGUAGE_QUALIFICATION",
-                null,
-                formData.languageQualificationPassed,
-                "permanent"
-            )
-        },
-        {
-            requirementType: "MEDICAL_REPORT",
-            status: resolveRequirementStatus(
-                employee,
-                "MEDICAL_REPORT",
-                null,
-                formData.medicalReportCompleted,
-                "permanent"
-            )
-        },
-        {
-            requirementType: "OL_CERTIFICATE",
-            status: resolveRequirementStatus(
-                employee,
-                "OL_CERTIFICATE",
-                null,
-                formData.olApproved,
-                "permanent"
-            )
-        },
-        {
-            requirementType: "AL_CERTIFICATE",
-            status: resolveRequirementStatus(
-                employee,
-                "AL_CERTIFICATE",
-                null,
-                formData.alApproved,
-                "permanent"
-            )
-        },
-        {
-            requirementType: "DEGREE_CERTIFICATE",
-            status: resolveRequirementStatus(
-                employee,
-                "DEGREE_CERTIFICATE",
-                null,
-                formData.degreeApproved,
-                "permanent"
-            )
-        },
-        {
-            requirementType: "BIRTH_CERTIFICATE",
-            status: resolveRequirementStatus(
-                employee,
-                "BIRTH_CERTIFICATE",
-                null,
-                formData.birthCertificateApproved,
-                "permanent"
-            )
-        },
-        {
-            requirementType: "EB_GRADE_2",
-            status: resolveRequirementStatus(
-                employee,
-                "EB_GRADE_2",
-                null,
-                formData.ebGrade2Passed,
-                "grade2"
-            )
-        },
-        {
-            requirementType: "EB_GRADE_1",
-            status: resolveRequirementStatus(
-                employee,
-                "EB_GRADE_1",
-                null,
-                formData.ebGrade1Passed,
-                "grade1"
-            )
-        }
-    ];
-
+    const requirements = [];
     const service = getEmployeeServiceRules(employee);
-    if (serviceAllowsSupra(service)) {
-        requirements.push({
-            requirementType: "SUPRA_REQUIREMENT",
-            status: resolveRequirementStatus(
-                employee,
-                "SUPRA_REQUIREMENT",
-                null,
-                formData.supraExamPassed,
-                "supra"
-            )
-        });
-    }
-    if (serviceAllowsSpecial(service)) {
-        requirements.push({
-            requirementType: "MASTERS_DEGREE",
-            status: resolveRequirementStatus(
-                employee,
-                "MASTERS_DEGREE",
-                null,
-                formData.mastersDegreeCompleted,
-                "special"
-            )
-        });
-    }
 
     const appendCustomRequirements = (
         type,

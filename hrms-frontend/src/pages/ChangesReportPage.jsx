@@ -11,7 +11,6 @@ import {
     Table,
     TableBody,
     TableCell,
-    TableContainer,
     TableHead,
     TableRow,
     Typography,
@@ -26,8 +25,13 @@ import {
     downloadChangesReportPdf,
     triggerDownload
 } from "../services/changesReportService";
+import ResponsiveTableContainer from "../components/ResponsiveTableContainer";
 import { formatDisplayDate } from "./CadreReportPage";
-import { getApiErrorMessage } from "../constants/hrms";
+import {
+    getApiErrorMessage,
+    getPrimaryDepartmentName,
+    getReportHeaderSubtitle
+} from "../constants/hrms";
 
 const STORAGE_KEY = "hrms.changesReport.state.v1";
 
@@ -192,7 +196,7 @@ export default function ChangesReportPage() {
                     Changes Report
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                    North Western Provincial Council — Engineering Department
+                    {getReportHeaderSubtitle()}
                 </Typography>
             </Box>
 
@@ -291,7 +295,7 @@ export default function ChangesReportPage() {
                 >
                     <Box sx={{ mb: 2 }} className="print-only-meta">
                         <Typography variant="h6" align="center">
-                            Changes Report — N.W.P. Engineering Department
+                            Changes Report — {getPrimaryDepartmentName()}
                         </Typography>
                         <Typography variant="body2" align="center">
                             Period: {periodLabel}
@@ -305,7 +309,8 @@ export default function ChangesReportPage() {
                         </Typography>
                     </Box>
 
-                    <TableContainer
+                    <ResponsiveTableContainer
+                        tableMinWidth={1000}
                         sx={{
                             maxHeight: "70vh",
                             border: "1px solid",
@@ -361,7 +366,7 @@ export default function ChangesReportPage() {
                                 )}
                             </TableBody>
                         </Table>
-                    </TableContainer>
+                    </ResponsiveTableContainer>
                 </Paper>
             )}
 

@@ -7,6 +7,7 @@ import VerifiedIcon from "@mui/icons-material/Verified";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import { useNavigate } from "react-router-dom";
 import { KPI_COLORS } from "../constants/dashboardTheme";
+import { useOrganizationSettings } from "../context/OrganizationSettingsContext";
 import { buildEmployeeListUrl, buildVacancyReportUrl } from "../utils/dashboardNavigation";
 
 const SummaryCard = ({ icon: Icon, title, value, subtitle, color, loading, onClick }) => {
@@ -68,13 +69,14 @@ const SummaryCard = ({ icon: Icon, title, value, subtitle, color, loading, onCli
 
 export default function WorkforceSummaryCards({ summary, loading }) {
     const navigate = useNavigate();
+    const { departmentShortName } = useOrganizationSettings();
 
     const cards = [
         {
             icon: PeopleIcon,
             title: "Active Employees",
             value: summary?.activeEmployees ?? summary?.totalEmployees ?? 0,
-            subtitle: "NWP Engineering",
+            subtitle: departmentShortName || "Primary department",
             color: KPI_COLORS.active,
             onClick: () => navigate(buildEmployeeListUrl())
         },

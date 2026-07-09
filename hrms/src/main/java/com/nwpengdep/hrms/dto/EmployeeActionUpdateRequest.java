@@ -1,6 +1,5 @@
 package com.nwpengdep.hrms.dto;
 
-import com.nwpengdep.hrms.entity.District;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -43,5 +42,5 @@ public class EmployeeActionUpdateRequest {
     /** Promotion outcome: when true, employee leaves N.W.P. Engineering on promotion. */
     private Boolean transferringOut;
 
-    private District toDistrict;
+    private String toDistrict;
 }

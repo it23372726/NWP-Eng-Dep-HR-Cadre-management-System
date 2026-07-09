@@ -20,7 +20,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
-import { getApiErrorMessage } from "../constants/hrms";
+import { getApiErrorMessage, getPrimaryDepartmentName } from "../constants/hrms";
+import { canEditEmployees } from "../constants/permissions";
+import { useOrganizationSettings } from "../context/OrganizationSettingsContext";
+import { getStoredUser } from "../hooks/useAuth";
 import {
     getActiveEmployees,
     createEmployee,
@@ -106,6 +109,8 @@ function resolveActiveShortcut(filterState) {
 
 export default function EmployeePage() {
     const [searchParams, setSearchParams] = useSearchParams();
+    const { primaryDepartmentName, districts } = useOrganizationSettings();
+    const canEdit = canEditEmployees(getStoredUser());
     const [allEmployees, setAllEmployees] = useState([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
@@ -293,7 +298,7 @@ export default function EmployeePage() {
         : `Showing ${employees.length} of ${allEmployees.length} employee${allEmployees.length !== 1 ? "s" : ""}`;
 
     const departmentLabel = departmentScope === "NWP"
-        ? "N.W.P. Engineering Department"
+        ? primaryDepartmentName || getPrimaryDepartmentName()
         : departmentScope === "SYSTEM_PENDING"
             ? "System Pending Employees"
             : "Other Departments";
@@ -323,7 +328,7 @@ export default function EmployeePage() {
                             : isSystemPendingScope
                                 ? "No system pending employees"
                                 : departmentScope === "NWP"
-                                    ? "No active employees in N.W.P. Engineering Department"
+                                    ? `No active employees in ${primaryDepartmentName || getPrimaryDepartmentName()}`
                                     : "No active employees in other departments"
                     }
                     description={
@@ -331,10 +336,12 @@ export default function EmployeePage() {
                             ? "Try adjusting your search or filter criteria"
                             : isSystemPendingScope
                                 ? "Employees without career history appear here after quick profile entry"
-                                : "Add a new employee to get started"
+                                : canEdit
+                                    ? "Add a new employee to get started"
+                                    : "No active employees to display"
                     }
                     action={
-                        !filtersActive ? (
+                        !filtersActive && canEdit ? (
                             <Button
                                 variant="contained"
                                 startIcon={<AddIcon />}
@@ -342,7 +349,7 @@ export default function EmployeePage() {
                             >
                                 Add Employee
                             </Button>
-                        ) : (
+                        ) : filtersActive ? (
                             <Button
                                 variant="outlined"
                                 startIcon={<FilterListOffIcon />}
@@ -350,7 +357,7 @@ export default function EmployeePage() {
                             >
                                 Clear Filters
                             </Button>
-                        )
+                        ) : null
                     }
                 />
             );
@@ -410,7 +417,7 @@ export default function EmployeePage() {
                     spacing={2}
                     sx={{ justifyContent: "space-between", alignItems: { sm: "center" } }}
                 >
-                    <Stack direction="row" spacing={2} alignItems="flex-start">
+                    <Stack direction="row" spacing={2} sx={{ alignItems: "flex-start" }}>
                         <Box
                             sx={{
                                 p: 1.5,
@@ -435,24 +442,17 @@ export default function EmployeePage() {
                                 <Stack
                                     direction="row"
                                     spacing={1}
-                                    flexWrap="wrap"
                                     useFlexGap
-                                    sx={{ mt: 1.5 }}
+                                    sx={{ mt: 1.5, flexWrap: "wrap" }}
                                 >
-                                    {departmentScope === "NWP" && (
-                                        <>
-                                            <Chip
-                                                size="small"
-                                                label={`${stats.kurunegala} Kurunegala`}
-                                                variant="outlined"
-                                            />
-                                            <Chip
-                                                size="small"
-                                                label={`${stats.puttalam} Puttalam`}
-                                                variant="outlined"
-                                            />
-                                        </>
-                                    )}
+                                    {departmentScope === "NWP" && districts.map((district) => (
+                                        <Chip
+                                            key={district}
+                                            size="small"
+                                            label={`${stats.districtCounts?.[district] ?? 0} ${district}`}
+                                            variant="outlined"
+                                        />
+                                    ))}
                                     <Chip
                                         size="small"
                                         label={departmentLabel}
@@ -463,14 +463,16 @@ export default function EmployeePage() {
                             )}
                         </Box>
                     </Stack>
-                    <Button
-                        variant="contained"
-                        startIcon={<AddIcon />}
-                        onClick={() => setOpen(true)}
-                        sx={{ alignSelf: { xs: "flex-start", sm: "center" }, flexShrink: 0 }}
-                    >
-                        Add Employee
-                    </Button>
+                    {canEdit && (
+                        <Button
+                            variant="contained"
+                            startIcon={<AddIcon />}
+                            onClick={() => setOpen(true)}
+                            sx={{ alignSelf: { xs: "flex-start", sm: "center" }, flexShrink: 0 }}
+                        >
+                            Add Employee
+                        </Button>
+                    )}
                 </Stack>
             </Paper>
 
@@ -495,7 +497,7 @@ export default function EmployeePage() {
                         borderColor: "divider"
                     }}
                 >
-                    <Tab label="N.W.P. Engineering Department" value="NWP" />
+                    <Tab label={primaryDepartmentName || getPrimaryDepartmentName()} value="NWP" />
                     <Tab label="Other Departments" value="OTHER" />
                     <Tab label="System Pending Employees" value="SYSTEM_PENDING" />
                 </Tabs>
@@ -567,13 +569,15 @@ export default function EmployeePage() {
 
             {renderListContent()}
 
-            <EmployeeForm
-                open={open}
-                handleClose={() => setOpen(false)}
-                handleSubmit={handleCreate}
-                selectedEmployee={null}
-                saving={creatingEmployee}
-            />
+            {canEdit && (
+                <EmployeeForm
+                    open={open}
+                    handleClose={() => setOpen(false)}
+                    handleSubmit={handleCreate}
+                    selectedEmployee={null}
+                    saving={creatingEmployee}
+                />
+            )}
         </Container>
     );
 }

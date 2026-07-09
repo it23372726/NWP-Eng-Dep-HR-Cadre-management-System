@@ -36,6 +36,7 @@ public class DashboardService {
     private final CareerProgressionService careerProgressionService;
     private final SalaryIncrementService salaryIncrementService;
     private final EmployeeServiceResolver employeeServiceResolver;
+    private final OrganizationSettingsService organizationSettingsService;
 
     public DashboardStatsResponse getDashboardStats() {
         List<Employee> activeNwpEmployees = getActiveNwpEmployees();
@@ -323,10 +324,14 @@ public class DashboardService {
 
     public List<DistrictWorkplaceDistributionDto> getWorkplaceDistributionByDistrict() {
         List<Employee> activeEmployees = getActiveNwpEmployees();
-        return Arrays.stream(District.values())
+        return organizationSettingsService.getDistricts()
+                .stream()
                 .map(district -> {
                     List<Employee> districtEmployees = activeEmployees.stream()
-                            .filter(employee -> district.equals(employee.getCurrentDistrictOfWorking()))
+                            .filter(employee -> districtEquals(
+                                    district,
+                                    employee.getCurrentDistrictOfWorking()
+                            ))
                             .toList();
 
                     Map<String, Long> officeCounts = districtEmployees.stream()
@@ -358,7 +363,7 @@ public class DashboardService {
                             .collect(Collectors.toList());
 
                     return DistrictWorkplaceDistributionDto.builder()
-                            .district(district.getLabel())
+                            .district(district)
                             .workplaces(workplaces)
                             .build();
                 })
@@ -419,13 +424,17 @@ public class DashboardService {
 
     public List<DistrictDistributionDto> getDistrictDistribution() {
         List<Employee> activeEmployees = getActiveNwpEmployees();
-        List<DistrictDistributionDto> distribution = Arrays.stream(District.values())
+        List<DistrictDistributionDto> distribution = organizationSettingsService.getDistricts()
+                .stream()
                 .map(district -> {
                     long count = activeEmployees.stream()
-                            .filter(e -> district.equals(e.getCurrentDistrictOfWorking()))
+                            .filter(e -> districtEquals(
+                                    district,
+                                    e.getCurrentDistrictOfWorking()
+                            ))
                             .count();
                     return DistrictDistributionDto.builder()
-                            .district(district.getLabel())
+                            .district(district)
                             .employeeCount(count)
                             .build();
                 })
@@ -434,7 +443,8 @@ public class DashboardService {
                 .collect(Collectors.toList());
 
         long unassignedCount = activeEmployees.stream()
-                .filter(e -> e.getCurrentDistrictOfWorking() == null)
+                .filter(e -> e.getCurrentDistrictOfWorking() == null
+                        || e.getCurrentDistrictOfWorking().isBlank())
                 .count();
         if (unassignedCount > 0) {
             distribution.add(DistrictDistributionDto.builder()
@@ -789,6 +799,12 @@ public class DashboardService {
 
     private boolean isNwpEmployee(Employee employee) {
         return DepartmentConstants.isNwpEngineering(employee.getCurrentDepartment());
+    }
+
+    private boolean districtEquals(String configuredDistrict, String employeeDistrict) {
+        return configuredDistrict != null
+                && employeeDistrict != null
+                && configuredDistrict.equalsIgnoreCase(employeeDistrict.trim());
     }
 
     private boolean isNwpAction(EmployeeAction action) {

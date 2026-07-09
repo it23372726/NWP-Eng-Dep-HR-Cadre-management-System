@@ -30,18 +30,7 @@ import {
 } from "../utils/employeeQualificationForm";
 
 const FIXED_REQUIREMENT_FIELD_NAMES = {
-    TRAINING_EXAM: "trainingExamPassed",
-    EB_GRADE_3: "ebGrade3Passed",
-    GOVERNMENT_LANGUAGE_QUALIFICATION: "languageQualificationPassed",
-    MEDICAL_REPORT: "medicalReportCompleted",
-    OL_CERTIFICATE: "olApproved",
-    AL_CERTIFICATE: "alApproved",
-    DEGREE_CERTIFICATE: "degreeApproved",
-    BIRTH_CERTIFICATE: "birthCertificateApproved",
-    EB_GRADE_2: "ebGrade2Passed",
-    EB_GRADE_1: "ebGrade1Passed",
-    SUPRA_REQUIREMENT: "supraExamPassed",
-    MASTERS_DEGREE: "mastersDegreeCompleted"
+    TRAINING_EXAM: "trainingExamPassed"
 };
 
 const normalizeRequirements = (requirements) => {
@@ -160,6 +149,9 @@ function renderCustomRequirementCheckboxes(
 
 function renderSectionContent(section, employee, formData, handleChange) {
     const service = getEmployeeServiceRules(employee);
+    const configuredRequirements = section.customField
+        ? normalizeRequirements(service?.[section.customField])
+        : [];
 
     return (
         <>
@@ -207,9 +199,9 @@ function renderSectionContent(section, employee, formData, handleChange) {
                     employee,
                     section.id
                 )}
-                {renderCustomRequirementCheckboxes(
+                {section.customType && renderCustomRequirementCheckboxes(
                     section.customType,
-                    service?.[section.customField],
+                    configuredRequirements,
                     formData,
                     employee,
                     handleChange,
@@ -217,9 +209,9 @@ function renderSectionContent(section, employee, formData, handleChange) {
                 )}
             </Grid>
             {section.customType
-                && normalizeRequirements(service?.[section.customField]).length === 0 && (
+                && configuredRequirements.length === 0 && (
                 <Alert severity="info" sx={{ mt: 1 }}>
-                    No custom requirements are configured for this service
+                    No requirements are configured for this service
                     in this section.
                 </Alert>
             )}
@@ -257,7 +249,8 @@ export default function EmployeeQualificationsForm({
                 );
             }
 
-            return name.startsWith(`${section.customType}:`);
+            return section.customType
+                && name.startsWith(`${section.customType}:`);
         })?.id;
 
         if (!checked && isFieldLocked(name, employee, sectionId)) {

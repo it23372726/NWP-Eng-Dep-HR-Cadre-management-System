@@ -18,8 +18,8 @@ from "./layouts/DashboardLayout";
 import ProtectedRoute
 from "./routes/ProtectedRoute";
 
-import SuperAdminRoute
-from "./routes/SuperAdminRoute";
+import PermissionRoute
+from "./routes/PermissionRoute";
 
 import DesignationPage
 from "./pages/DesignationPage";
@@ -62,6 +62,9 @@ from "./pages/AuditLogPage";
 import UsersPage
 from "./pages/UsersPage";
 
+import OrganizationSettingsPage
+from "./pages/OrganizationSettingsPage";
+
 
 export default function App() {
 
@@ -84,84 +87,145 @@ export default function App() {
 
                 <Route
                     path="/dashboard"
-                    element={<DashboardPage />}
+                    element={
+                        <PermissionRoute permission="DASHBOARD">
+                            <DashboardPage />
+                        </PermissionRoute>
+                    }
                 />
 
                 <Route
                     path="/employees"
-                    element={<EmployeePage />}
+                    element={
+                        <PermissionRoute anyOf={["EMPLOYEE_VIEW", "EMPLOYEE_EDIT"]}>
+                            <EmployeePage />
+                        </PermissionRoute>
+                    }
                 />
 
                 <Route
                     path="/employees/inactive"
-                    element={<InactiveEmployeesPage />}
+                    element={
+                        <PermissionRoute anyOf={["EMPLOYEE_VIEW", "EMPLOYEE_EDIT"]}>
+                            <InactiveEmployeesPage />
+                        </PermissionRoute>
+                    }
                 />
 
                 <Route
                     path="/designations"
-                    element={<DesignationPage />}
+                    element={
+                        <PermissionRoute permission="ORGANIZATION">
+                            <DesignationPage />
+                        </PermissionRoute>
+                    }
                 />
 
                 <Route
                     path="/services"
-                    element={<ServicePage />}
+                    element={
+                        <PermissionRoute permission="ORGANIZATION">
+                            <ServicePage />
+                        </PermissionRoute>
+                    }
                 />
 
                 <Route
                     path="/offices"
-                    element={<OfficePage />}
+                    element={
+                        <PermissionRoute permission="ORGANIZATION">
+                            <OfficePage />
+                        </PermissionRoute>
+                    }
                 />
 
                 <Route
                     path="/service-levels"
-                    element={<ServiceLevelPage />}
+                    element={
+                        <PermissionRoute permission="ORGANIZATION">
+                            <ServiceLevelPage />
+                        </PermissionRoute>
+                    }
                 />
 
                 <Route
                     path="/employees/:id"
-                    element={<EmployeeProfilePage />}
+                    element={
+                        <PermissionRoute anyOf={["EMPLOYEE_VIEW", "EMPLOYEE_EDIT"]}>
+                            <EmployeeProfilePage />
+                        </PermissionRoute>
+                    }
                 />
 
                 <Route
                     path="/cadres"
-                    element={<CadrePage />}
+                    element={
+                        <PermissionRoute permission="ORGANIZATION">
+                            <CadrePage />
+                        </PermissionRoute>
+                    }
+                />
+
+                <Route
+                    path="/settings"
+                    element={
+                        <PermissionRoute permission="ORGANIZATION">
+                            <OrganizationSettingsPage />
+                        </PermissionRoute>
+                    }
                 />
 
                 <Route
                     path="/vacancies"
-                    element={<VacancyReportPage />}
+                    element={
+                        <PermissionRoute permission="REPORTS">
+                            <VacancyReportPage />
+                        </PermissionRoute>
+                    }
                 />
 
                 <Route
                     path="/cadre-report"
-                    element={<CadreReportPage />}
+                    element={
+                        <PermissionRoute permission="REPORTS">
+                            <CadreReportPage />
+                        </PermissionRoute>
+                    }
                 />
 
                 <Route
                     path="/reports/all-employee-details"
-                    element={<AllEmployeeDetailsReportPage />}
+                    element={
+                        <PermissionRoute permission="REPORTS">
+                            <AllEmployeeDetailsReportPage />
+                        </PermissionRoute>
+                    }
                 />
 
                 <Route
                     path="/reports/changes"
-                    element={<ChangesReportPage />}
+                    element={
+                        <PermissionRoute permission="REPORTS">
+                            <ChangesReportPage />
+                        </PermissionRoute>
+                    }
                 />
 
                 <Route
                     path="/audit-logs"
                     element={
-                        <SuperAdminRoute>
+                        <PermissionRoute permission="ADMINISTRATIONS">
                             <AuditLogPage />
-                        </SuperAdminRoute>
+                        </PermissionRoute>
                     }
                 />
 
                 <Route
                     path="/users"
                     element={
-                        <SuperAdminRoute>
+                        <PermissionRoute permission="ADMINISTRATIONS">
                             <UsersPage />
-                        </SuperAdminRoute>
+                        </PermissionRoute>
                     }
                 />
 

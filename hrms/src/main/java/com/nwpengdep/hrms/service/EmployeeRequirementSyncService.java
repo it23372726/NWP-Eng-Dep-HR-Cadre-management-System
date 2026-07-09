@@ -10,7 +10,6 @@ import java.util.Set;
 
 import org.springframework.stereotype.Service;
 
-import com.nwpengdep.hrms.entity.Designation;
 import com.nwpengdep.hrms.entity.Employee;
 import com.nwpengdep.hrms.entity.EmployeeRequirement;
 import com.nwpengdep.hrms.entity.EmploymentType;
@@ -23,6 +22,7 @@ import com.nwpengdep.hrms.entity.ServicePermanentRequirement;
 import com.nwpengdep.hrms.entity.ServiceSpecialRequirement;
 import com.nwpengdep.hrms.entity.ServiceSupraRequirement;
 import com.nwpengdep.hrms.entity.ServiceType;
+import com.nwpengdep.hrms.util.DefaultServiceRequirements;
 import com.nwpengdep.hrms.util.EmployeeTrainingUtil;
 import com.nwpengdep.hrms.util.TrainingGraduationRequirements;
 
@@ -34,16 +34,6 @@ public class EmployeeRequirementSyncService {
                     RequirementType.OTHER_CERTIFICATE,
                     RequirementType.OTHER_GRADE_2_REQUIREMENT
             );
-
-    private static final List<RequirementType> PERMANENT_FIXED_TYPES = List.of(
-            RequirementType.EB_GRADE_3,
-            RequirementType.GOVERNMENT_LANGUAGE_QUALIFICATION,
-            RequirementType.MEDICAL_REPORT,
-            RequirementType.OL_CERTIFICATE,
-            RequirementType.AL_CERTIFICATE,
-            RequirementType.DEGREE_CERTIFICATE,
-            RequirementType.BIRTH_CERTIFICATE
-    );
 
     public void syncEmployeeRequirements(Employee employee) {
         if (employee == null) {
@@ -140,19 +130,6 @@ public class EmployeeRequirementSyncService {
             Employee employee,
             LocalDate completedDate
     ) {
-        setRequirementCompleted(employee, RequirementType.EB_GRADE_3, null, completedDate);
-        setRequirementCompleted(
-                employee,
-                RequirementType.GOVERNMENT_LANGUAGE_QUALIFICATION,
-                null,
-                completedDate
-        );
-        setRequirementCompleted(employee, RequirementType.MEDICAL_REPORT, null, completedDate);
-        setRequirementCompleted(employee, RequirementType.OL_CERTIFICATE, null, completedDate);
-        setRequirementCompleted(employee, RequirementType.AL_CERTIFICATE, null, completedDate);
-        setRequirementCompleted(employee, RequirementType.DEGREE_CERTIFICATE, null, completedDate);
-        setRequirementCompleted(employee, RequirementType.BIRTH_CERTIFICATE, null, completedDate);
-
         ServiceType service = resolveService(employee);
         if (service != null && service.getPermanentRequirements() != null) {
             service.getPermanentRequirements()
@@ -169,7 +146,6 @@ public class EmployeeRequirementSyncService {
             Employee employee,
             LocalDate completedDate
     ) {
-        setRequirementCompleted(employee, RequirementType.EB_GRADE_2, null, completedDate);
         ServiceType service = resolveService(employee);
         if (service == null || service.getGrade2Requirements() == null) {
             return;
@@ -188,7 +164,6 @@ public class EmployeeRequirementSyncService {
             Employee employee,
             LocalDate completedDate
     ) {
-        setRequirementCompleted(employee, RequirementType.EB_GRADE_1, null, completedDate);
         ServiceType service = resolveService(employee);
         if (service == null || service.getGrade1Requirements() == null) {
             return;
@@ -207,12 +182,6 @@ public class EmployeeRequirementSyncService {
             Employee employee,
             LocalDate completedDate
     ) {
-        setRequirementCompleted(
-                employee,
-                RequirementType.SUPRA_REQUIREMENT,
-                null,
-                completedDate
-        );
         ServiceType service = resolveService(employee);
         if (service == null || service.getSupraRequirements() == null) {
             return;
@@ -231,7 +200,6 @@ public class EmployeeRequirementSyncService {
             Employee employee,
             LocalDate completedDate
     ) {
-        setRequirementCompleted(employee, RequirementType.MASTERS_DEGREE, null, completedDate);
         ServiceType service = resolveService(employee);
         if (service == null || service.getSpecialRequirements() == null) {
             return;
@@ -297,86 +265,54 @@ public class EmployeeRequirementSyncService {
         Grade grade = employee.getGrade() != null ? employee.getGrade() : Grade.NONE;
 
         if (grade == Grade.III || isHigherPermanentGrade(grade)) {
-            PERMANENT_FIXED_TYPES.forEach(type ->
-                    expected.add(new ExpectedRequirement(type, null))
+            appendConfiguredRequirements(
+                    expected,
+                    service != null ? service.getPermanentRequirements() : null,
+                    ServicePermanentRequirement::getRequirementName,
+                    RequirementType.CUSTOM_PERMANENT_REQUIREMENT
             );
-
-            if (service != null && service.getPermanentRequirements() != null) {
-                service.getPermanentRequirements()
-                        .stream()
-                        .map(ServicePermanentRequirement::getRequirementName)
-                        .filter(this::hasText)
-                        .forEach(name -> expected.add(new ExpectedRequirement(
-                                RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
-                                name
-                        )));
-            }
         }
 
         if (grade == Grade.II || grade == Grade.I || grade == Grade.SUPRA || grade == Grade.SPECIAL) {
-            expected.add(new ExpectedRequirement(RequirementType.EB_GRADE_2, null));
-
-            if (service != null && service.getGrade2Requirements() != null) {
-                service.getGrade2Requirements()
-                        .stream()
-                        .map(ServiceGrade2Requirement::getRequirementName)
-                        .filter(this::hasText)
-                        .forEach(name -> expected.add(new ExpectedRequirement(
-                                RequirementType.CUSTOM_GRADE_2_REQUIREMENT,
-                                name
-                        )));
-            }
+            appendConfiguredRequirements(
+                    expected,
+                    service != null ? service.getGrade2Requirements() : null,
+                    ServiceGrade2Requirement::getRequirementName,
+                    RequirementType.CUSTOM_GRADE_2_REQUIREMENT
+            );
         }
 
         if (grade == Grade.II
                 || grade == Grade.I
                 || grade == Grade.SUPRA
                 || grade == Grade.SPECIAL) {
-            expected.add(new ExpectedRequirement(RequirementType.EB_GRADE_1, null));
-
-            if (service != null && service.getGrade1Requirements() != null) {
-                service.getGrade1Requirements()
-                        .stream()
-                        .map(ServiceGrade1Requirement::getRequirementName)
-                        .filter(this::hasText)
-                        .forEach(name -> expected.add(new ExpectedRequirement(
-                                RequirementType.CUSTOM_GRADE_1_REQUIREMENT,
-                                name
-                        )));
-            }
+            appendConfiguredRequirements(
+                    expected,
+                    service != null ? service.getGrade1Requirements() : null,
+                    ServiceGrade1Requirement::getRequirementName,
+                    RequirementType.CUSTOM_GRADE_1_REQUIREMENT
+            );
         }
 
         if (grade == Grade.I || grade == Grade.SUPRA) {
             if (service != null && serviceAllowsSupra(service)) {
-                expected.add(new ExpectedRequirement(RequirementType.SUPRA_REQUIREMENT, null));
-
-                if (service.getSupraRequirements() != null) {
-                    service.getSupraRequirements()
-                            .stream()
-                            .map(ServiceSupraRequirement::getRequirementName)
-                            .filter(this::hasText)
-                            .forEach(name -> expected.add(new ExpectedRequirement(
-                                    RequirementType.CUSTOM_SUPRA_REQUIREMENT,
-                                    name
-                            )));
-                }
+                appendConfiguredRequirements(
+                        expected,
+                        service.getSupraRequirements(),
+                        ServiceSupraRequirement::getRequirementName,
+                        RequirementType.CUSTOM_SUPRA_REQUIREMENT
+                );
             }
         }
 
         if (grade == Grade.I || grade == Grade.SPECIAL) {
             if (service != null && serviceAllowsSpecial(service)) {
-                expected.add(new ExpectedRequirement(RequirementType.MASTERS_DEGREE, null));
-
-                if (service.getSpecialRequirements() != null) {
-                    service.getSpecialRequirements()
-                            .stream()
-                            .map(ServiceSpecialRequirement::getRequirementName)
-                            .filter(this::hasText)
-                            .forEach(name -> expected.add(new ExpectedRequirement(
-                                    RequirementType.CUSTOM_SPECIAL_REQUIREMENT,
-                                    name
-                            )));
-                }
+                appendConfiguredRequirements(
+                        expected,
+                        service.getSpecialRequirements(),
+                        ServiceSpecialRequirement::getRequirementName,
+                        RequirementType.CUSTOM_SPECIAL_REQUIREMENT
+                );
             }
         }
 
@@ -460,16 +396,24 @@ public class EmployeeRequirementSyncService {
             if (type == RequirementType.CUSTOM_SPECIAL_REQUIREMENT) {
                 return !containsName(specialNames, requirement.getRequirementName());
             }
-            if (type == RequirementType.SUPRA_REQUIREMENT
-                    && !serviceAllowsSupra(service)) {
-                return true;
-            }
-            if (type == RequirementType.MASTERS_DEGREE
-                    && !serviceAllowsSpecial(service)) {
-                return true;
-            }
-            return false;
+            return DefaultServiceRequirements.legacyFixedTypes().contains(type);
         });
+    }
+
+    private <T> void appendConfiguredRequirements(
+            List<ExpectedRequirement> expected,
+            Set<T> requirements,
+            java.util.function.Function<T, String> nameExtractor,
+            RequirementType customType
+    ) {
+        if (requirements == null) {
+            return;
+        }
+
+        requirements.stream()
+                .map(nameExtractor)
+                .filter(this::hasText)
+                .forEach(name -> expected.add(new ExpectedRequirement(customType, name)));
     }
 
     private <T> Set<String> requirementNames(

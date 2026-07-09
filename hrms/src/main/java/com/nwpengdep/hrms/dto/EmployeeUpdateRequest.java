@@ -1,6 +1,5 @@
 package com.nwpengdep.hrms.dto;
 
-import com.nwpengdep.hrms.entity.District;
 import com.nwpengdep.hrms.entity.EmploymentType;
 import com.nwpengdep.hrms.entity.Grade;
 import jakarta.validation.constraints.NotBlank;
@@ -50,7 +49,7 @@ public class EmployeeUpdateRequest {
 
     private String currentDepartment;
 
-    private District currentDistrictOfWorking;
+    private String currentDistrictOfWorking;
 
     private LocalDate appointmentDateToPresentClassGrade;
 

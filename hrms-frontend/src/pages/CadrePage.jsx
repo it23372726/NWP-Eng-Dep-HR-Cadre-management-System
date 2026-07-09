@@ -57,6 +57,10 @@ import {
     reorderCadres
 } from "../services/cadreService";
 import CadreForm from "../components/CadreForm";
+import MobileDataCard, {
+    DesktopTableWrapper,
+    MobileDataCardList
+} from "../components/MobileDataCard";
 import { getApiErrorMessage } from "../constants/hrms";
 
 function matchesSearch(cadre, keyword) {
@@ -424,6 +428,8 @@ export default function CadrePage() {
                     )}
                 </Paper>
             ) : (
+                <>
+                <DesktopTableWrapper>
                 <DndContext
                     sensors={sensors}
                     collisionDetection={closestCenter}
@@ -465,6 +471,56 @@ export default function CadrePage() {
                         </Table>
                     </TableContainer>
                 </DndContext>
+                </DesktopTableWrapper>
+
+                <MobileDataCardList>
+                    {filteredCadres.map((cadre) => (
+                        <MobileDataCard
+                            key={cadre.id}
+                            title={cadre.designation?.designationName ?? "—"}
+                            subtitle={cadre.designation?.service?.serviceCode ?? "—"}
+                            fields={[
+                                {
+                                    label: "Service Level",
+                                    value: cadre.designation?.serviceLevel?.levelName ?? "—"
+                                },
+                                {
+                                    label: "Approved Count",
+                                    value: (
+                                        <Chip
+                                            label={cadre.approvedCount}
+                                            size="small"
+                                            color="primary"
+                                            variant="outlined"
+                                        />
+                                    )
+                                }
+                            ]}
+                            actions={
+                                <>
+                                    <Tooltip title="Edit cadre position">
+                                        <IconButton
+                                            size="small"
+                                            onClick={() => openEditDialog(cadre)}
+                                        >
+                                            <EditIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
+                                    <Tooltip title="Delete cadre position">
+                                        <IconButton
+                                            size="small"
+                                            color="error"
+                                            onClick={() => handleDeleteClick(cadre)}
+                                        >
+                                            <DeleteIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
+                                </>
+                            }
+                        />
+                    ))}
+                </MobileDataCardList>
+                </>
             )}
 
             <CadreForm

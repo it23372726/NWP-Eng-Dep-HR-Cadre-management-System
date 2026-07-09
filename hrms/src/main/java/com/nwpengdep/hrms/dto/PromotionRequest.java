@@ -1,6 +1,5 @@
 package com.nwpengdep.hrms.dto;
 
-import com.nwpengdep.hrms.entity.District;
 import com.nwpengdep.hrms.entity.Grade;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -43,5 +42,5 @@ public class PromotionRequest {
 
     private String toOffice;
 
-    private District toDistrict;
+    private String toDistrict;
 }

@@ -90,8 +90,8 @@ public class Employee {
 
     private String currentOffice;
 
-    @Enumerated(EnumType.STRING)
-    private District currentDistrictOfWorking;
+    @Column(name = "current_district_of_working", length = 100)
+    private String currentDistrictOfWorking;
 
     private LocalDate appointmentDateToPresentClassGrade;
 

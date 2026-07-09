@@ -64,8 +64,8 @@ import { getQualificationUpdateContext } from "../utils/employeeQualificationFor
 import {
     getApiErrorMessage,
     canShowDependentDetails,
+    getEmployeeServiceRules,
     isContractEmployee,
-    isRequirementCompleted,
     isTrainingEmployee,
     isTrainingGraduationEligible,
     getTrainingGraduationBlockReason,
@@ -73,9 +73,12 @@ import {
     resolveEmployeeService,
     isSystemPendingEmployee
 } from "../constants/hrms";
+import { canEditEmployees } from "../constants/permissions";
+import { getStoredUser } from "../hooks/useAuth";
 import { normalizeRequiredYears } from "../utils/gradeAchievementDates";
 import { getLatestEventDate } from "../utils/timelineDates";
 import { buildRevokePrivateVehiclePayload } from "../utils/employeeFormUtils";
+import { isNamedRequirementCompleted } from "../utils/employeeQualificationForm";
 import { isMarriedStatus } from "../utils/employeeDependentForm";
 import { isSeniorEmployee } from "../utils/vehiclePermit";
 import {
@@ -109,20 +112,23 @@ const meetsGradeThreePermanentRequirements = (employee) => {
         return false;
     }
 
-    return Boolean(
-        isRequirementCompleted(employee, "EB_GRADE_3")
-        && isRequirementCompleted(employee, "GOVERNMENT_LANGUAGE_QUALIFICATION")
-        && isRequirementCompleted(employee, "MEDICAL_REPORT")
-        && isRequirementCompleted(employee, "OL_CERTIFICATE")
-        && isRequirementCompleted(employee, "AL_CERTIFICATE")
-        && isRequirementCompleted(employee, "DEGREE_CERTIFICATE")
-        && isRequirementCompleted(employee, "BIRTH_CERTIFICATE")
-        && hasCompletedThreeYears(employee.dateOfFirstAppointment)
+    const service = getEmployeeServiceRules(employee);
+    const permanentRequirements = service?.permanentRequirements || [];
+    const configuredComplete = permanentRequirements.every((requirement) =>
+        isNamedRequirementCompleted(
+            employee,
+            "CUSTOM_PERMANENT_REQUIREMENT",
+            requirement.requirementName
+        )
     );
+
+    return configuredComplete
+        && hasCompletedThreeYears(employee.dateOfFirstAppointment);
 };
 
 export default function EmployeeProfilePage() {
     const { id } = useParams();
+    const canEdit = canEditEmployees(getStoredUser());
 
     const [employee, setEmployee] = useState(null);
     const [actionHistory, setActionHistory] = useState([]);
@@ -177,15 +183,20 @@ export default function EmployeeProfilePage() {
 
     const loadProfile = async () => {
         try {
-            const [selectedEmployee, actions, designationsData] = await Promise.all([
+            const [selectedEmployee, actions] = await Promise.all([
                 getEmployeeById(id),
-                getEmployeeActions(id),
-                getDesignations()
+                getEmployeeActions(id)
             ]);
 
             setEmployee(selectedEmployee);
             setActionHistory(actions);
-            setDesignations(designationsData);
+
+            try {
+                const designationsData = await getDesignations();
+                setDesignations(designationsData);
+            } catch {
+                setDesignations([]);
+            }
 
             if (isSeniorEmployee(selectedEmployee)) {
                 const status = await getVehiclePermitStatus(id);
@@ -456,11 +467,11 @@ export default function EmployeeProfilePage() {
     return (
         <Box>
             <Stack
-                direction="row"
+                direction={{ xs: "column", sm: "row" }}
                 sx={{
                     mb: 3,
                     justifyContent: "space-between",
-                    alignItems: "flex-start",
+                    alignItems: { xs: "stretch", sm: "flex-start" },
                     flexWrap: "wrap",
                     gap: 2
                 }}
@@ -494,7 +505,15 @@ export default function EmployeeProfilePage() {
                     </Box>
                 </Stack>
 
-                <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
+                <Stack
+                    direction={{ xs: "column", sm: "row" }}
+                    spacing={1}
+                    sx={{
+                        flexWrap: "wrap",
+                        alignItems: { xs: "stretch", sm: "center" },
+                        "& .MuiButton-root": { justifyContent: { xs: "flex-start", sm: "center" } }
+                    }}
+                >
                     {!isSimplifiedLifecycle && !isSystemPending && (
                     <Button
                         variant="outlined"
@@ -526,7 +545,7 @@ export default function EmployeeProfilePage() {
                             Dependent Details PDF
                         </Button>
                     )}
-                    {isActive && (
+                    {isActive && canEdit && (
                         <>
                         <Button
                             variant="outlined"
@@ -741,10 +760,15 @@ export default function EmployeeProfilePage() {
                 </Stack>
             </Stack>
 
-            {isSystemPending && (
+            {isSystemPending && canEdit && (
                 <Alert severity="info" sx={{ mb: 3 }}>
                     Career history has not been recorded yet. Use Edit Details to add the
                     employee&apos;s first appointment and complete their profile.
+                </Alert>
+            )}
+            {isSystemPending && !canEdit && (
+                <Alert severity="info" sx={{ mb: 3 }}>
+                    Career history has not been recorded yet for this employee.
                 </Alert>
             )}
 
@@ -772,8 +796,10 @@ export default function EmployeeProfilePage() {
                     grade2RequiredYears={grade2RequiredYears}
                     grade1RequiredYears={grade1RequiredYears}
                     threeYearDate={threeYearDate}
-                    canMakePermanent={canMakePermanent}
-                    onMakePermanent={() => setOpenMakePermanent(true)}
+                    canMakePermanent={canEdit && canMakePermanent}
+                    onMakePermanent={
+                        canEdit ? () => setOpenMakePermanent(true) : null
+                    }
                     isSystemPending={isSystemPending}
                 />
             )}
@@ -782,42 +808,42 @@ export default function EmployeeProfilePage() {
                 <EmployeeProfileBenefitsTab
                     employee={employee}
                     onRevokePrivateVehicle={
-                        isActive && employee.privateVehicleUsedForGovWork
+                        canEdit && isActive && employee.privateVehicleUsedForGovWork
                             ? () => setOpenRevokePrivateVehicle(true)
                             : null
                     }
                     vehiclePermitStatus={vehiclePermitStatus}
                     onRecordVehiclePermit={
-                        isActive && vehiclePermitStatus?.canCollectNow
+                        canEdit && isActive && vehiclePermitStatus?.canCollectNow
                             ? () => setOpenRecordVehiclePermit(true)
                             : null
                     }
                     onEditVehiclePermit={
-                        isActive && (vehiclePermitStatus?.lastCollectedDate
+                        canEdit && isActive && (vehiclePermitStatus?.lastCollectedDate
                             ?? employee.vehiclePermitCollectedDate)
                             ? () => setOpenEditVehiclePermit(true)
                             : null
                     }
                     onUndoVehiclePermit={
-                        isActive && (vehiclePermitStatus?.lastCollectedDate
+                        canEdit && isActive && (vehiclePermitStatus?.lastCollectedDate
                             ?? employee.vehiclePermitCollectedDate)
                             ? () => setOpenUndoVehiclePermit(true)
                             : null
                     }
                     salaryIncrementStatus={salaryIncrementStatus}
                     onRecordSalaryIncrement={
-                        isActive && salaryIncrementStatus?.canRecordNow
+                        canEdit && isActive && salaryIncrementStatus?.canRecordNow
                             ? () => setOpenRecordSalaryIncrement(true)
                             : null
                     }
                     onEditSalaryIncrement={
-                        isActive && (salaryIncrementStatus?.lastDoneDate
+                        canEdit && isActive && (salaryIncrementStatus?.lastDoneDate
                             ?? employee.salaryIncrementDoneDate)
                             ? () => setOpenEditSalaryIncrement(true)
                             : null
                     }
                     onUndoSalaryIncrement={
-                        isActive && (salaryIncrementStatus?.lastDoneDate
+                        canEdit && isActive && (salaryIncrementStatus?.lastDoneDate
                             ?? employee.salaryIncrementDoneDate)
                             ? () => setOpenUndoSalaryIncrement(true)
                             : null
@@ -830,7 +856,7 @@ export default function EmployeeProfilePage() {
                     employee={employee}
                     embedded
                     onUpdateQualifications={
-                        canUpdateQualifications
+                        canEdit && canUpdateQualifications
                             ? () => setOpenQualifications(true)
                             : null
                     }
@@ -844,6 +870,7 @@ export default function EmployeeProfilePage() {
                     designations={designations}
                     employee={employee}
                     onRefresh={loadProfile}
+                    canEdit={canEdit}
                 />
             )}
 

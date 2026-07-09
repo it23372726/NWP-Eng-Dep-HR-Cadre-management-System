@@ -21,11 +21,12 @@ import {
     EMPLOYEE_TYPE_FILTER_OPTIONS,
     GRADE_PROMOTION_FILTER_OPTIONS,
     RETIREMENT_FILTER_OPTIONS,
-    DISTRICT_FILTER_OPTIONS,
     QUALIFICATION_FILTER_OPTIONS
 } from "../constants/hrms";
+import { useOrganizationSettings } from "../context/OrganizationSettingsContext";
 import { PRIVATE_VEHICLE_FILTER_OPTIONS } from "../utils/privateVehicle";
 import { getActiveFilterLabels } from "../utils/employeeListFilters";
+import { getDistrictFilterOptions } from "../utils/organizationSettingsStore";
 
 const filterFieldSx = {
     minWidth: { xs: "100%", sm: 220 },
@@ -44,6 +45,8 @@ export default function EmployeeListFilterPanel({
     showDistrictFilter = true,
     compact = false
 }) {
+    useOrganizationSettings();
+    const districtFilterOptions = getDistrictFilterOptions();
     const activeFilterLabels = getActiveFilterLabels(filterState);
 
     return (
@@ -214,7 +217,7 @@ export default function EmployeeListFilterPanel({
                     })}
                     sx={filterFieldSx}
                 >
-                    {DISTRICT_FILTER_OPTIONS.map((option) => (
+                    {districtFilterOptions.map((option) => (
                         <MenuItem key={option.value || "ALL"} value={option.value}>
                             {option.label}
                         </MenuItem>
@@ -261,10 +264,8 @@ export default function EmployeeListFilterPanel({
             <Stack
                 direction="row"
                 spacing={1}
-                alignItems="center"
-                flexWrap="wrap"
                 useFlexGap
-                sx={{ mt: 2 }}
+                sx={{ mt: 2, alignItems: "center", flexWrap: "wrap" }}
             >
                 <Typography variant="body2" color="text.secondary">
                     {resultSummary}

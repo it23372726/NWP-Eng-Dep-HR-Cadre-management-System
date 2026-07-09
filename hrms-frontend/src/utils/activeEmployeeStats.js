@@ -1,10 +1,15 @@
 import { matchesRetiringWithin } from "./employeeListFilters";
 import { isPermanentEmployee } from "../constants/hrms";
+import { getDistricts, normalizeDistrictLabel } from "./organizationSettingsStore";
 
 export function computeActiveEmployeeStats(employees = []) {
     const list = Array.isArray(employees) ? employees : [];
     const permanentEmployees = list.filter((employee) =>
         isPermanentEmployee(employee?.employmentType)
+    );
+    const districts = getDistricts();
+    const districtCounts = Object.fromEntries(
+        districts.map((district) => [district, 0])
     );
 
     let probation = 0;
@@ -12,8 +17,6 @@ export function computeActiveEmployeeStats(employees = []) {
     let confirmedPermanent = 0;
     let gradePromotionReady = 0;
     let nearRetirement = 0;
-    let kurunegala = 0;
-    let puttalam = 0;
 
     permanentEmployees.forEach((employee) => {
         const status = employee?.permanentStatus;
@@ -42,11 +45,9 @@ export function computeActiveEmployeeStats(employees = []) {
             nearRetirement += 1;
         }
 
-        const district = String(employee?.currentDistrictOfWorking || "").toLowerCase();
-        if (district === "kurunegala") {
-            kurunegala += 1;
-        } else if (district === "puttalam") {
-            puttalam += 1;
+        const district = normalizeDistrictLabel(employee?.currentDistrictOfWorking);
+        if (district && Object.prototype.hasOwnProperty.call(districtCounts, district)) {
+            districtCounts[district] += 1;
         }
     });
 
@@ -57,7 +58,9 @@ export function computeActiveEmployeeStats(employees = []) {
         confirmedPermanent,
         gradePromotionReady,
         nearRetirement,
-        kurunegala,
-        puttalam
+        districtCounts,
+        // Backward-compatible aliases for default districts
+        kurunegala: districtCounts.Kurunegala ?? 0,
+        puttalam: districtCounts.Puttalam ?? 0
     };
 }

@@ -1,27 +1,39 @@
 import { Grid, MenuItem, TextField } from "@mui/material";
 
-import { NWP_ENGINEERING_DEPARTMENT } from "../../constants/hrms";
+import {
+    NWP_ENGINEERING_DEPARTMENT,
+    getPrimaryDepartmentName,
+    isPrimaryDepartment
+} from "../../constants/hrms";
+import { useOrganizationSettings } from "../../context/OrganizationSettingsContext";
 import { createFormFieldProps } from "../../utils/formLayout";
 import NwpOfficeSelect from "./NwpOfficeSelect";
 
 export const DEPARTMENT_OPTIONS = {
-    NWP: NWP_ENGINEERING_DEPARTMENT,
+    PRIMARY: "PRIMARY",
     OTHER: "OTHER"
 };
+DEPARTMENT_OPTIONS.NWP = DEPARTMENT_OPTIONS.PRIMARY;
 
 export function resolveDepartmentValue(departmentType, otherDepartmentName) {
-    if (departmentType === DEPARTMENT_OPTIONS.NWP) {
-        return NWP_ENGINEERING_DEPARTMENT;
+    if (
+        departmentType === DEPARTMENT_OPTIONS.PRIMARY
+        || departmentType === DEPARTMENT_OPTIONS.NWP
+    ) {
+        return getPrimaryDepartmentName();
     }
     return otherDepartmentName?.trim() || "";
 }
 
 export function parseDepartmentValue(department) {
     if (!department) {
-        return { departmentType: DEPARTMENT_OPTIONS.NWP, otherDepartmentName: "" };
+        return { departmentType: DEPARTMENT_OPTIONS.PRIMARY, otherDepartmentName: "" };
     }
-    if (department === NWP_ENGINEERING_DEPARTMENT) {
-        return { departmentType: DEPARTMENT_OPTIONS.NWP, otherDepartmentName: "" };
+    if (
+        isPrimaryDepartment(department)
+        || department === NWP_ENGINEERING_DEPARTMENT
+    ) {
+        return { departmentType: DEPARTMENT_OPTIONS.PRIMARY, otherDepartmentName: "" };
     }
     return { departmentType: DEPARTMENT_OPTIONS.OTHER, otherDepartmentName: department };
 }
@@ -46,15 +58,21 @@ export default function DepartmentOfficeFields({
     officeHelperText,
     excludeNwpDepartment = false
 }) {
-    const isNwp = departmentType === DEPARTMENT_OPTIONS.NWP;
-    const showNwpOfficeSelect = isNwp && showOffice && !officeReadOnly;
-    const showFreeTextOffice = showOffice && (!isNwp || officeReadOnly);
+    const { primaryDepartmentName } = useOrganizationSettings();
+    const isPrimary =
+        departmentType === DEPARTMENT_OPTIONS.PRIMARY
+        || departmentType === DEPARTMENT_OPTIONS.NWP;
+    const showNwpOfficeSelect = isPrimary && showOffice && !officeReadOnly;
+    const showFreeTextOffice = showOffice && (!isPrimary || officeReadOnly);
 
     const { fieldProps, selectFieldProps } = createFormFieldProps((event) => {
         const { name, value } = event.target;
         if (name === "departmentType") {
             onDepartmentTypeChange(value);
-            if (value === DEPARTMENT_OPTIONS.NWP) {
+            if (
+                value === DEPARTMENT_OPTIONS.PRIMARY
+                || value === DEPARTMENT_OPTIONS.NWP
+            ) {
                 onOfficeChange("");
                 onDistrictChange("");
             } else {
@@ -81,8 +99,8 @@ export default function DepartmentOfficeFields({
                             helperText={departmentHelperText}
                         >
                             {!excludeNwpDepartment && (
-                                <MenuItem value={DEPARTMENT_OPTIONS.NWP}>
-                                    {NWP_ENGINEERING_DEPARTMENT}
+                                <MenuItem value={DEPARTMENT_OPTIONS.PRIMARY}>
+                                    {primaryDepartmentName}
                                 </MenuItem>
                             )}
                             <MenuItem value={DEPARTMENT_OPTIONS.OTHER}>Other</MenuItem>
@@ -170,7 +188,10 @@ export function ReadonlyWorkplaceFields({
                     disabled
                 />
             </Grid>
-            {parsed.departmentType === DEPARTMENT_OPTIONS.NWP && district && (
+            {(
+                parsed.departmentType === DEPARTMENT_OPTIONS.PRIMARY
+                || parsed.departmentType === DEPARTMENT_OPTIONS.NWP
+            ) && district && (
                 <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
                         {...fieldProps}

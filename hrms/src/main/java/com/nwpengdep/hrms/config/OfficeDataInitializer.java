@@ -1,7 +1,6 @@
 package com.nwpengdep.hrms.config;
 
 import com.nwpengdep.hrms.dto.OfficeRequest;
-import com.nwpengdep.hrms.entity.District;
 import com.nwpengdep.hrms.repository.OfficeRepository;
 import com.nwpengdep.hrms.service.OfficeService;
 import lombok.RequiredArgsConstructor;
@@ -18,17 +17,17 @@ import java.util.List;
 @RequiredArgsConstructor
 public class OfficeDataInitializer {
 
-    private record OfficeSeed(String name, District district) {}
+    private record OfficeSeed(String name, String district) {}
 
     private static final List<OfficeSeed> DEFAULT_OFFICES = List.of(
-            new OfficeSeed("Engineering Department - Head Office", District.KURUNEGALA),
-            new OfficeSeed("Kurunegala", District.KURUNEGALA),
-            new OfficeSeed("Kuliyapitiya", District.KURUNEGALA),
-            new OfficeSeed("Maho", District.KURUNEGALA),
-            new OfficeSeed("Rideegama", District.KURUNEGALA),
-            new OfficeSeed("Wariyapola", District.KURUNEGALA),
-            new OfficeSeed("Puttalam", District.PUTTALAM),
-            new OfficeSeed("Wennappuwa", District.PUTTALAM)
+            new OfficeSeed("Engineering Department - Head Office", "Kurunegala"),
+            new OfficeSeed("Kurunegala", "Kurunegala"),
+            new OfficeSeed("Kuliyapitiya", "Kurunegala"),
+            new OfficeSeed("Maho", "Kurunegala"),
+            new OfficeSeed("Rideegama", "Kurunegala"),
+            new OfficeSeed("Wariyapola", "Kurunegala"),
+            new OfficeSeed("Puttalam", "Puttalam"),
+            new OfficeSeed("Wennappuwa", "Puttalam")
     );
 
     private final OfficeRepository officeRepository;
@@ -38,7 +37,7 @@ public class OfficeDataInitializer {
     @EventListener(ApplicationReadyEvent.class)
     public void seedOffices() {
         for (OfficeSeed seed : DEFAULT_OFFICES) {
-            if (officeRepository.existsByNameIgnoreCaseAndDistrict(
+            if (officeRepository.existsByNameIgnoreCaseAndDistrictIgnoreCase(
                     seed.name(),
                     seed.district()
             )) {
@@ -53,7 +52,7 @@ public class OfficeDataInitializer {
             log.info(
                     "Seeded office: {} ({})",
                     seed.name(),
-                    seed.district().getLabel()
+                    seed.district()
             );
         }
     }

@@ -28,6 +28,14 @@ export const gradeRank = (grade) => {
     return index >= 0 ? index : Number.MAX_SAFE_INTEGER;
 };
 
+export const sortGradesForDisplay = (grades = []) => {
+    if (!Array.isArray(grades) || grades.length === 0) {
+        return [];
+    }
+
+    return [...grades].sort((left, right) => gradeRank(left) - gradeRank(right));
+};
+
 export const bestAllowedGradeRank = (allowedGrades = []) => {
     if (!Array.isArray(allowedGrades) || allowedGrades.length === 0) {
         return Number.MAX_SAFE_INTEGER;

@@ -33,7 +33,12 @@ import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 
 import OfficeForm from "../components/OfficeForm";
-import { DISTRICTS, getApiErrorMessage } from "../constants/hrms";
+import MobileDataCard, {
+    DesktopTableWrapper,
+    MobileDataCardList
+} from "../components/MobileDataCard";
+import { getApiErrorMessage } from "../constants/hrms";
+import { useOrganizationSettings } from "../context/OrganizationSettingsContext";
 import {
     createOffice,
     deleteOffice,
@@ -45,6 +50,7 @@ const districtLabel = (district) =>
     district?.label ?? district ?? "—";
 
 export default function OfficePage() {
+    const { districts, primaryDepartmentName } = useOrganizationSettings();
     const [offices, setOffices] = useState([]);
     const [open, setOpen] = useState(false);
     const [selectedOffice, setSelectedOffice] = useState(null);
@@ -132,7 +138,7 @@ export default function OfficePage() {
                         Offices
                     </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                        Manage N.W.P. Engineering Department workplaces by district.
+                        Manage {primaryDepartmentName} workplaces by district.
                     </Typography>
                 </Box>
                 <Button
@@ -183,7 +189,7 @@ export default function OfficePage() {
                     sx={{ minWidth: 180 }}
                 >
                     <MenuItem value="">All districts</MenuItem>
-                    {DISTRICTS.map((district) => (
+                    {districts.map((district) => (
                         <MenuItem key={district} value={district}>
                             {district}
                         </MenuItem>
@@ -200,6 +206,8 @@ export default function OfficePage() {
                     </Typography>
                 </Paper>
             ) : (
+                <>
+                <DesktopTableWrapper>
                 <TableContainer component={Paper}>
                     <Table>
                         <TableHead>
@@ -242,6 +250,48 @@ export default function OfficePage() {
                         </TableBody>
                     </Table>
                 </TableContainer>
+                </DesktopTableWrapper>
+
+                <MobileDataCardList>
+                    {filteredOffices.map((office) => (
+                        <MobileDataCard
+                            key={office.id}
+                            title={office.name}
+                            fields={[
+                                {
+                                    label: "District",
+                                    value: districtLabel(office.district)
+                                }
+                            ]}
+                            actions={
+                                <>
+                                    <Tooltip title="Edit">
+                                        <IconButton
+                                            onClick={() => {
+                                                setSelectedOffice(office);
+                                                setOpen(true);
+                                            }}
+                                        >
+                                            <EditIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
+                                    <Tooltip title="Delete">
+                                        <IconButton
+                                            color="error"
+                                            onClick={() => {
+                                                setOfficeToDelete(office);
+                                                setDeleteDialogOpen(true);
+                                            }}
+                                        >
+                                            <DeleteIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
+                                </>
+                            }
+                        />
+                    ))}
+                </MobileDataCardList>
+                </>
             )}
 
             <OfficeForm

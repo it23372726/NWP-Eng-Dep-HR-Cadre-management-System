@@ -21,18 +21,18 @@ import BusinessIcon from "@mui/icons-material/Business";
 import PeopleIcon from "@mui/icons-material/People";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import { useNavigate } from "react-router-dom";
-import { DISTRICTS } from "../constants/hrms";
+import { useOrganizationSettings } from "../context/OrganizationSettingsContext";
 import { BAR_CHART_PREVIEW_HEIGHT, getDistrictColor } from "../constants/dashboardTheme";
 import { buildEmployeeListUrl } from "../utils/dashboardNavigation";
 import ExpandableVerticalBarChart from "./ExpandableVerticalBarChart";
 
-function resolveAvailableDistricts(districtData, workplaceDistributionByDistrict) {
+function resolveAvailableDistricts(configuredDistricts, districtData, workplaceDistributionByDistrict) {
     const fromWorkplaces = (workplaceDistributionByDistrict || []).map((item) => item.district);
     const fromCounts = (districtData || [])
         .filter((district) => district.district !== "Not assigned")
         .map((district) => district.district);
 
-    return DISTRICTS.filter(
+    return (configuredDistricts || []).filter(
         (district) => fromWorkplaces.includes(district) || fromCounts.includes(district)
     );
 }
@@ -213,14 +213,19 @@ export default function GeographicDistributionPanel({
     loading
 }) {
     const navigate = useNavigate();
+    const { districts } = useOrganizationSettings();
     const [selectedDistrict, setSelectedDistrict] = useState("");
 
     const districtsWithEmployees = (districtData || []).filter(
         (district) => (district.employeeCount ?? 0) > 0
     );
     const availableDistricts = useMemo(
-        () => resolveAvailableDistricts(districtData, workplaceDistributionByDistrict),
-        [districtData, workplaceDistributionByDistrict]
+        () => resolveAvailableDistricts(
+            districts,
+            districtData,
+            workplaceDistributionByDistrict
+        ),
+        [districts, districtData, workplaceDistributionByDistrict]
     );
 
     useEffect(() => {

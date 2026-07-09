@@ -4,7 +4,6 @@ import {
     Table,
     TableBody,
     TableCell,
-    TableContainer,
     TableHead,
     TableRow,
     Typography,
@@ -14,6 +13,8 @@ import {
     TextField,
     Box
 } from "@mui/material";
+
+import ResponsiveTableContainer from "./ResponsiveTableContainer";
 
 export default function CadreStatusTable({ data, loading }) {
     const [searchTerm, setSearchTerm] = useState("");
@@ -60,7 +61,7 @@ export default function CadreStatusTable({ data, loading }) {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 sx={{ mb: 2 }}
             />
-            <TableContainer>
+            <ResponsiveTableContainer tableMinWidth={600}>
                 <Table>
                     <TableHead>
                         <TableRow sx={{ bgcolor: "#F1F5F9" }}>
@@ -91,7 +92,7 @@ export default function CadreStatusTable({ data, loading }) {
                         ))}
                     </TableBody>
                 </Table>
-            </TableContainer>
+            </ResponsiveTableContainer>
         </Paper>
     );
 }

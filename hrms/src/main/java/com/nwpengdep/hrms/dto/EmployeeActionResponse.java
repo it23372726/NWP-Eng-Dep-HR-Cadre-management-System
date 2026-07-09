@@ -1,6 +1,5 @@
 package com.nwpengdep.hrms.dto;
 
-import com.nwpengdep.hrms.entity.District;
 import com.nwpengdep.hrms.entity.EmployeeActionType;
 import lombok.*;
 
@@ -52,7 +51,7 @@ public class EmployeeActionResponse {
 
     private String toOffice;
 
-    private District district;
+    private String district;
 
     private Long linkedActionId;
 

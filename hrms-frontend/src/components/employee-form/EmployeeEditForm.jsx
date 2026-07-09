@@ -223,7 +223,13 @@ const EmployeeEditForm = forwardRef(function EmployeeEditForm(
         );
         nextFormData = applyMaritalStatusFormChanges(nextFormData, name, value);
 
-        nextFormData = applyGradeDerivedRequirements(nextFormData);
+        const designationForRules = designations.find(
+            (item) => item.id === Number(nextFormData.designationId)
+        ) ?? selectedDesignation;
+        nextFormData = applyGradeDerivedRequirements(
+            nextFormData,
+            designationForRules
+        );
 
         setFormData(nextFormData);
         setSubmitError("");

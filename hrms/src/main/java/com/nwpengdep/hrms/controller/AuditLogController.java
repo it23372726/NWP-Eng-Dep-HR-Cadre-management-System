@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/audit-logs")
 @RequiredArgsConstructor
-@PreAuthorize("hasAuthority('SUPER_ADMIN')")
+@PreAuthorize("hasAuthority('ADMINISTRATIONS')")
 public class AuditLogController {
 
     private final AuditLogService auditLogService;

@@ -11,7 +11,6 @@ import com.nwpengdep.hrms.dto.ActionWorkplaceFields;
 import com.nwpengdep.hrms.dto.EmployeeActionResponse;
 import com.nwpengdep.hrms.dto.EmployeeActionUpdateRequest;
 import com.nwpengdep.hrms.entity.Designation;
-import com.nwpengdep.hrms.entity.District;
 import com.nwpengdep.hrms.entity.Employee;
 import com.nwpengdep.hrms.entity.EmployeeAction;
 import com.nwpengdep.hrms.entity.EmployeeActionType;
@@ -194,7 +193,7 @@ public class EmployeeActionService {
             String fromOffice,
             String toDepartment,
             String toOffice,
-            District toDistrict,
+            String toDistrict,
             String remarks
     ) {
         String normalizedFromDept = DepartmentConstants.normalize(fromDepartment);
@@ -209,7 +208,7 @@ public class EmployeeActionService {
 
         officeService.validateNwpWorkplaceIfNwp(normalizedToDept, toOffice, toDistrict);
 
-        District actionDistrict = DepartmentConstants.isNwpEngineering(normalizedToDept)
+        String actionDistrict = DepartmentConstants.isNwpEngineering(normalizedToDept)
                 ? toDistrict
                 : null;
 
@@ -473,7 +472,7 @@ public class EmployeeActionService {
         EmployeeStatus currentStatus = EmployeeStatus.ACTIVE;
         String currentDepartment = null;
         String currentOffice = null;
-        District currentDistrict = employee.getCurrentDistrictOfWorking();
+        String currentDistrict = employee.getCurrentDistrictOfWorking();
         Grade currentGrade = null;
         EmployeeCareerProgression careerProgression =
                 careerProgressionService.ensureCareerProgression(employee);
@@ -944,16 +943,16 @@ public class EmployeeActionService {
         }
     }
 
-    private District resolveDistrictForDepartment(
+    private String resolveDistrictForDepartment(
             String department,
-            District actionDistrict,
+            String actionDistrict,
             String office,
-            District fallback
+            String fallback
     ) {
         if (!DepartmentConstants.isNwpEngineering(department)) {
             return null;
         }
-        if (actionDistrict != null) {
+        if (actionDistrict != null && !actionDistrict.isBlank()) {
             return actionDistrict;
         }
         return officeService.findDistrictByOfficeName(office).orElse(fallback);

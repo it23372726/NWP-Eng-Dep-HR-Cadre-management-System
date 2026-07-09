@@ -1,14 +1,13 @@
 import { deriveTimelineState } from "../components/CareerHistoryBuilder";
 import {
     ACTION_TYPE_LABELS,
-    FIXED_GRADE1_REQUIREMENTS,
-    FIXED_GRADE2_REQUIREMENTS,
-    FIXED_PERMANENT_REQUIREMENTS,
     getServiceRules,
     isRequirementCompleted,
     NWP_ENGINEERING_DEPARTMENT,
     REQUIREMENT_STATUS,
+    getPrimaryDepartmentName,
     isOtherDesignation,
+    isPrimaryDepartment,
     isTrainingEmployee,
     normalizeDistrictLabel,
     toApiDistrict,
@@ -98,17 +97,8 @@ export const emptyForm = {
     serviceLevelId: "",
     trainingPeriodYears: "1",
     employmentType: "PERMANENT",
-    ebGrade3Passed: false,
-    languageQualificationPassed: false,
-    medicalReportCompleted: false,
-    olApproved: false,
-    alApproved: false,
-    degreeApproved: false,
-    birthCertificateApproved: false,
     alreadyConfirmedPermanent: false,
     permanentConfirmationDate: "",
-    ebGrade2Passed: false,
-    ebGrade1Passed: false,
     spouse: emptySpouseForm(),
     children: []
 };
@@ -162,6 +152,28 @@ export const appendCustomRequirementFields = (form, employee, designation) => {
             requirement.requirementName
         );
     });
+
+    (service?.supraRequirements || []).forEach((requirement) => {
+        form[requirementKey(
+            "CUSTOM_SUPRA_REQUIREMENT",
+            requirement.requirementName
+        )] = isNamedRequirementCompleted(
+            employee,
+            "CUSTOM_SUPRA_REQUIREMENT",
+            requirement.requirementName
+        );
+    });
+
+    (service?.specialRequirements || []).forEach((requirement) => {
+        form[requirementKey(
+            "CUSTOM_SPECIAL_REQUIREMENT",
+            requirement.requirementName
+        )] = isNamedRequirementCompleted(
+            employee,
+            "CUSTOM_SPECIAL_REQUIREMENT",
+            requirement.requirementName
+        );
+    });
 };
 
 export function mapEmployeeToForm(employee) {
@@ -192,7 +204,7 @@ export function mapEmployeeToForm(employee) {
             ?? employee.currentWorkingPlace
             ?? "",
         currentDepartment:
-            employee.currentDepartment ?? NWP_ENGINEERING_DEPARTMENT,
+            employee.currentDepartment ?? getPrimaryDepartmentName(),
         currentDistrictOfWorking: normalizeDistrictLabel(
             employee.currentDistrictOfWorking
         ),
@@ -220,26 +232,11 @@ export function mapEmployeeToForm(employee) {
         employmentType: isTrainingEmployee(employee)
             ? TRAINING_FORM_TYPE
             : (employee.employmentType ?? "PERMANENT"),
-        ebGrade3Passed: isRequirementCompleted(employee, "EB_GRADE_3"),
-        languageQualificationPassed: isRequirementCompleted(
-            employee,
-            "GOVERNMENT_LANGUAGE_QUALIFICATION"
-        ),
-        medicalReportCompleted: isRequirementCompleted(employee, "MEDICAL_REPORT"),
-        olApproved: isRequirementCompleted(employee, "OL_CERTIFICATE"),
-        alApproved: isRequirementCompleted(employee, "AL_CERTIFICATE"),
-        degreeApproved: isRequirementCompleted(employee, "DEGREE_CERTIFICATE"),
-        birthCertificateApproved: isRequirementCompleted(
-            employee,
-            "BIRTH_CERTIFICATE"
-        ),
         alreadyConfirmedPermanent: Boolean(
             careerProgression.permanentConfirmationDate
         ),
         permanentConfirmationDate:
             careerProgression.permanentConfirmationDate ?? "",
-        ebGrade2Passed: isRequirementCompleted(employee, "EB_GRADE_2"),
-        ebGrade1Passed: isRequirementCompleted(employee, "EB_GRADE_1"),
         spouse: mapSpouseToForm(employee.spouse),
         children: mapChildrenToForm(employee.children)
     };
@@ -376,7 +373,7 @@ export function validateTrainingFields(formData) {
 
 const buildTrainingPayloadBase = (formData) => {
     const department = formData.currentDepartment?.trim()
-        || NWP_ENGINEERING_DEPARTMENT;
+        || getPrimaryDepartmentName();
     const office = formData.currentWorkingPlace?.trim() || "";
     const district = toApiDistrict(formData.currentDistrictOfWorking);
 
@@ -502,7 +499,7 @@ function buildPrivateVehiclePayloadFields(formData) {
 
 const buildContractPayloadBase = (formData) => {
     const department = formData.currentDepartment?.trim()
-        || NWP_ENGINEERING_DEPARTMENT;
+        || getPrimaryDepartmentName();
     const office = formData.currentWorkingPlace?.trim() || "";
     const district = toApiDistrict(formData.currentDistrictOfWorking);
 
@@ -552,7 +549,7 @@ export function buildRevokePrivateVehiclePayload(employee) {
     return buildEmployeePayload(formData, employee.designation, employee);
 }
 
-export const applyGradeDerivedRequirements = (formData) => {
+export const applyGradeDerivedRequirements = (formData, designation = null) => {
     const next = { ...formData };
     const isPermanent = next.employmentType === "PERMANENT";
     const gradeImpliesPermanent =
@@ -562,20 +559,27 @@ export const applyGradeDerivedRequirements = (formData) => {
         isPermanent
         && next.grade === "III"
         && next.alreadyConfirmedPermanent;
+    const service = getServiceRules(designation);
+
+    const markConfiguredCompleted = (type, definitions) => {
+        (definitions || []).forEach((requirement) => {
+            next[requirementKey(type, requirement.requirementName)] = true;
+        });
+    };
 
     if (gradeImpliesPermanent || gradeThreeAlreadyConfirmed) {
-        next.ebGrade3Passed = true;
-        next.languageQualificationPassed = true;
-        next.medicalReportCompleted = true;
-        next.olApproved = true;
-        next.alApproved = true;
-        next.degreeApproved = true;
-        next.birthCertificateApproved = true;
+        markConfiguredCompleted(
+            "CUSTOM_PERMANENT_REQUIREMENT",
+            service?.permanentRequirements
+        );
     }
 
     if (gradeImpliesPermanent) {
         next.alreadyConfirmedPermanent = true;
-        next.ebGrade2Passed = true;
+        markConfiguredCompleted(
+            "CUSTOM_GRADE_2_REQUIREMENT",
+            service?.grade2Requirements
+        );
         if (!next.permanentConfirmationDate) {
             next.permanentConfirmationDate =
                 next.appointmentDateToPresentClassGrade;
@@ -622,8 +626,8 @@ export const applyTimelineToFormData = (formData, events, designation) => {
         next.currentWorkingPlace = `${state.currentDepartment} — ${state.currentOffice}`;
     }
 
-    next = applyGradeDerivedRequirements(next);
     const rulesDesignation = resolveRulesDesignation(designation, state, null);
+    next = applyGradeDerivedRequirements(next, rulesDesignation);
     appendCustomRequirementFields(next, null, rulesDesignation);
     return next;
 };
@@ -634,7 +638,7 @@ export const getQualificationSectionConfig = (grade, permanentConfirmed) => {
             title: "Permanent requirements",
             description:
                 "Grade III permanency requirements and certificate approvals.",
-            fixedRequirements: FIXED_PERMANENT_REQUIREMENTS,
+            fixedRequirements: [],
             customType: "CUSTOM_PERMANENT_REQUIREMENT",
             customField: "permanentRequirements"
         };
@@ -645,7 +649,7 @@ export const getQualificationSectionConfig = (grade, permanentConfirmed) => {
             title: "Grade II requirements",
             description:
                 "Requirements already completed toward future Grade II promotion.",
-            fixedRequirements: FIXED_GRADE2_REQUIREMENTS,
+            fixedRequirements: [],
             customType: "CUSTOM_GRADE_2_REQUIREMENT",
             customField: "grade2Requirements",
             showGrade2Years: true
@@ -657,7 +661,7 @@ export const getQualificationSectionConfig = (grade, permanentConfirmed) => {
             title: "Grade I requirements",
             description:
                 "Requirements already completed toward future Grade I promotion.",
-            fixedRequirements: FIXED_GRADE1_REQUIREMENTS,
+            fixedRequirements: [],
             customType: "CUSTOM_GRADE_1_REQUIREMENT",
             customField: "grade1Requirements",
             showGrade1Years: true
@@ -680,44 +684,7 @@ export const getQualificationSectionConfig = (grade, permanentConfirmed) => {
 };
 
 export const buildRequirements = (formData, designation, employee) => {
-    const requirements = [
-        {
-            requirementType: "EB_GRADE_3",
-            status: completedStatus(formData.ebGrade3Passed)
-        },
-        {
-            requirementType: "GOVERNMENT_LANGUAGE_QUALIFICATION",
-            status: completedStatus(formData.languageQualificationPassed)
-        },
-        {
-            requirementType: "MEDICAL_REPORT",
-            status: completedStatus(formData.medicalReportCompleted)
-        },
-        {
-            requirementType: "OL_CERTIFICATE",
-            status: completedStatus(formData.olApproved)
-        },
-        {
-            requirementType: "AL_CERTIFICATE",
-            status: completedStatus(formData.alApproved)
-        },
-        {
-            requirementType: "DEGREE_CERTIFICATE",
-            status: completedStatus(formData.degreeApproved)
-        },
-        {
-            requirementType: "BIRTH_CERTIFICATE",
-            status: completedStatus(formData.birthCertificateApproved)
-        },
-        {
-            requirementType: "EB_GRADE_2",
-            status: completedStatus(formData.ebGrade2Passed)
-        },
-        {
-            requirementType: "EB_GRADE_1",
-            status: completedStatus(formData.ebGrade1Passed)
-        }
-    ];
+    const requirements = [];
 
     const appendCustomRequirements = (type, designationRequirements) => {
         (designationRequirements || []).forEach((requirement) => {
@@ -748,6 +715,14 @@ export const buildRequirements = (formData, designation, employee) => {
     appendCustomRequirements(
         "CUSTOM_GRADE_1_REQUIREMENT",
         service?.grade1Requirements
+    );
+    appendCustomRequirements(
+        "CUSTOM_SUPRA_REQUIREMENT",
+        service?.supraRequirements
+    );
+    appendCustomRequirements(
+        "CUSTOM_SPECIAL_REQUIREMENT",
+        service?.specialRequirements
     );
 
     return requirements;
@@ -960,7 +935,7 @@ const districtValue = (district) => toApiDistrict(district);
 
 const backfillNwpDistrict = (event, employee) => {
     const department = event.department || employee?.currentDepartment;
-    if (department !== NWP_ENGINEERING_DEPARTMENT) {
+    if (!isPrimaryDepartment(department)) {
         return event;
     }
 
@@ -978,7 +953,7 @@ const backfillNwpDistrict = (event, employee) => {
     if (
         next.actionType === "TRANSFER_OUT"
         && !next.toDistrict
-        && (next.toDepartment || department) === NWP_ENGINEERING_DEPARTMENT
+        && isPrimaryDepartment(next.toDepartment || department)
     ) {
         next.toDistrict = fallbackDistrict;
     }
@@ -1052,9 +1027,9 @@ const mapActionToCareerEvent = (action, designations, serviceLevelFallback, empl
                         ?? serviceLevelFallback
                         ?? employee?.serviceLevel?.id
                         ?? "",
-                    ...(action.fromDepartment === NWP_ENGINEERING_DEPARTMENT
+                    ...(isPrimaryDepartment(action.fromDepartment)
                         && action.department
-                        && action.department !== NWP_ENGINEERING_DEPARTMENT
+                        && !isPrimaryDepartment(action.department)
                         ? {
                             transferringOut: true,
                             toDepartment: action.department,
@@ -1076,9 +1051,9 @@ const mapActionToCareerEvent = (action, designations, serviceLevelFallback, empl
                     designations,
                     serviceLevelFallback
                 ),
-                ...(action.fromDepartment === NWP_ENGINEERING_DEPARTMENT
+                ...(isPrimaryDepartment(action.fromDepartment)
                     && action.department
-                    && action.department !== NWP_ENGINEERING_DEPARTMENT
+                    && !isPrimaryDepartment(action.department)
                     ? {
                         transferringOut: true,
                         toDepartment: action.department,
@@ -1543,7 +1518,7 @@ const applyEventToTimelineState = (state, event) => {
             if (event.department) {
                 next.currentDepartment = event.department;
                 next.currentOffice = event.office;
-                if (event.department === NWP_ENGINEERING_DEPARTMENT) {
+                if (isPrimaryDepartment(event.department)) {
                     const district = districtValue(event.district);
                     if (district) {
                         next.currentDistrictOfWorking = district;
@@ -1586,7 +1561,7 @@ const applyEventToTimelineState = (state, event) => {
             if (event.toDepartment) {
                 next.currentDepartment = event.toDepartment;
                 next.currentOffice = event.toOffice;
-                if (event.toDepartment === NWP_ENGINEERING_DEPARTMENT) {
+                if (isPrimaryDepartment(event.toDepartment)) {
                     const district = districtValue(event.toDistrict);
                     if (district) {
                         next.currentDistrictOfWorking = district;
@@ -1597,7 +1572,7 @@ const applyEventToTimelineState = (state, event) => {
             } else if (event.department) {
                 next.currentDepartment = event.department;
                 next.currentOffice = event.office;
-                if (event.department === NWP_ENGINEERING_DEPARTMENT) {
+                if (isPrimaryDepartment(event.department)) {
                     const district = districtValue(event.district);
                     if (district) {
                         next.currentDistrictOfWorking = district;
@@ -1624,7 +1599,7 @@ const applyEventToTimelineState = (state, event) => {
             if (event.toDepartment) {
                 next.currentDepartment = event.toDepartment;
                 next.currentOffice = event.toOffice;
-                if (event.toDepartment === NWP_ENGINEERING_DEPARTMENT) {
+                if (isPrimaryDepartment(event.toDepartment)) {
                     const district = districtValue(event.toDistrict);
                     if (district) {
                         next.currentDistrictOfWorking = district;
@@ -1635,7 +1610,7 @@ const applyEventToTimelineState = (state, event) => {
             } else if (event.department) {
                 next.currentDepartment = event.department;
                 next.currentOffice = event.office;
-                if (event.department === NWP_ENGINEERING_DEPARTMENT) {
+                if (isPrimaryDepartment(event.department)) {
                     const district = districtValue(event.district);
                     if (district) {
                         next.currentDistrictOfWorking = district;

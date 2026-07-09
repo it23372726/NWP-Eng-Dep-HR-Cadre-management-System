@@ -34,6 +34,10 @@ import {
     deleteServiceLevel
 } from "../services/serviceLevelService";
 import ServiceLevelForm from "../components/ServiceLevelForm";
+import MobileDataCard, {
+    DesktopTableWrapper,
+    MobileDataCardList
+} from "../components/MobileDataCard";
 import { getApiErrorMessage } from "../constants/hrms";
 
 export default function ServiceLevelPage() {
@@ -176,6 +180,8 @@ export default function ServiceLevelPage() {
                     </Button>
                 </Paper>
             ) : (
+                <>
+                <DesktopTableWrapper>
                 <TableContainer component={Paper} variant="outlined">
                     <Table>
                         <TableHead>
@@ -233,6 +239,42 @@ export default function ServiceLevelPage() {
                         </TableBody>
                     </Table>
                 </TableContainer>
+                </DesktopTableWrapper>
+
+                <MobileDataCardList>
+                    {levels.map((level) => (
+                        <MobileDataCard
+                            key={level.id}
+                            title={level.levelName}
+                            fields={[
+                                { label: "Created", value: formatDate(level.createdAt) },
+                                { label: "Last Updated", value: formatDate(level.updatedAt) }
+                            ]}
+                            actions={
+                                <>
+                                    <Tooltip title="Edit service level">
+                                        <IconButton
+                                            size="small"
+                                            onClick={() => openEditDialog(level)}
+                                        >
+                                            <EditIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
+                                    <Tooltip title="Delete service level">
+                                        <IconButton
+                                            size="small"
+                                            color="error"
+                                            onClick={() => handleDeleteClick(level)}
+                                        >
+                                            <DeleteIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
+                                </>
+                            }
+                        />
+                    ))}
+                </MobileDataCardList>
+                </>
             )}
 
             <ServiceLevelForm

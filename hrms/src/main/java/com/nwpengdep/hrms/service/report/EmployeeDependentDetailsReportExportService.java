@@ -11,7 +11,9 @@ import com.lowagie.text.pdf.PdfPCell;
 import com.lowagie.text.pdf.PdfPTable;
 import com.lowagie.text.pdf.PdfWriter;
 import com.nwpengdep.hrms.dto.EmployeeDependentDetailsReportResponse;
+import com.nwpengdep.hrms.dto.OrganizationSettingsResponse;
 import com.nwpengdep.hrms.entity.ChildRelationship;
+import com.nwpengdep.hrms.service.OrganizationSettingsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -30,10 +32,12 @@ public class EmployeeDependentDetailsReportExportService {
             DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm");
 
     private final EmployeeDependentDetailsReportService reportService;
+    private final OrganizationSettingsService organizationSettingsService;
 
     public byte[] exportPdf(Long employeeId) {
         EmployeeDependentDetailsReportResponse report =
                 reportService.generateReport(employeeId);
+        OrganizationSettingsResponse branding = organizationSettingsService.getSettings();
 
         try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Document document = new Document(PageSize.A4, 48, 48, 54, 48);
@@ -58,7 +62,7 @@ public class EmployeeDependentDetailsReportExportService {
                     FontFactory.getFont(FontFactory.HELVETICA, 10);
 
             document.add(new Paragraph(
-                    "North Western Provincial Council — Engineering Department",
+                    branding.getReportHeaderSubtitle(),
                     titleFont
             ));
             document.add(new Paragraph("Dependent Details Report", subtitleFont));

@@ -9,12 +9,17 @@ import {
 import { useState } from "react";
 import { login } from "../services/authService";
 import { setStoredUser } from "../hooks/useAuth";
+import { getApplicationName } from "../constants/hrms";
+import { getDefaultRouteForUser } from "../constants/permissions";
 import { useNavigate } from "react-router-dom";
 import { generateCorrelationId } from "../utils/tokenUtils";
+import { useOrganizationSettings } from "../context/OrganizationSettingsContext";
 
 export default function LoginPage() {
 
     const navigate = useNavigate();
+    const { refresh } = useOrganizationSettings();
+    const applicationName = getApplicationName();
 
     const [formData, setFormData] = useState({
         username: "",
@@ -48,12 +53,15 @@ export default function LoginPage() {
                 localStorage.setItem("clientHost", formData.workstation.trim());
             }
 
-            setStoredUser({
+            const user = {
                 username: response.username,
-                role: response.role
-            });
+                role: response.role,
+                permissions: response.permissions ?? []
+            };
 
-            navigate("/dashboard");
+            setStoredUser(user);
+            await refresh();
+            navigate(getDefaultRouteForUser(user));
 
         } catch (error) {
 
@@ -62,13 +70,12 @@ export default function LoginPage() {
     };
 
     return (
-        <Container maxWidth="sm">
-
+        <Container maxWidth="sm" sx={{ px: { xs: 2, sm: 3 } }}>
             <Box
                 component="form"
                 onSubmit={handleLogin}
                 sx={{
-                    mt: 10,
+                    mt: { xs: 4, sm: 10 },
                     display: "flex",
                     flexDirection: "column",
                     gap: 2
@@ -76,7 +83,7 @@ export default function LoginPage() {
             >
 
                 <Typography variant="h4">
-                    NWP HRMS Login
+                    {applicationName} Login
                 </Typography>
 
                 <TextField

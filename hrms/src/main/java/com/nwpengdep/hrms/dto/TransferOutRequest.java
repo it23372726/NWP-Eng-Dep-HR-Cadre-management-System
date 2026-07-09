@@ -1,7 +1,5 @@
 package com.nwpengdep.hrms.dto;
 
-import com.nwpengdep.hrms.entity.District;
-
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -20,7 +18,7 @@ public class TransferOutRequest {
     @NotBlank(message = "Destination office is required")
     private String toOffice;
 
-    private District toDistrict;
+    private String toDistrict;
 
     private Long newDesignationId;
 

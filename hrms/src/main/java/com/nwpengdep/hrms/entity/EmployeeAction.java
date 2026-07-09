@@ -66,8 +66,8 @@ public class EmployeeAction {
 
     private String toOffice;
 
-    @Enumerated(EnumType.STRING)
-    private District district;
+    @Column(length = 100)
+    private String district;
 
     private Long linkedActionId;
 

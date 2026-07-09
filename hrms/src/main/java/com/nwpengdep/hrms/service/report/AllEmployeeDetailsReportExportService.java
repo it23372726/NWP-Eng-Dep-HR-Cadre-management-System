@@ -11,6 +11,8 @@ import com.lowagie.text.pdf.PdfPTable;
 import com.lowagie.text.pdf.PdfWriter;
 import com.nwpengdep.hrms.dto.AllEmployeeDetailsReportResponse;
 import com.nwpengdep.hrms.dto.AllEmployeeDetailsReportRowResponse;
+import com.nwpengdep.hrms.dto.OrganizationSettingsResponse;
+import com.nwpengdep.hrms.service.OrganizationSettingsService;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.Cell;
@@ -64,9 +66,11 @@ public class AllEmployeeDetailsReportExportService {
     };
 
     private final AllEmployeeDetailsReportService allEmployeeDetailsReportService;
+    private final OrganizationSettingsService organizationSettingsService;
 
     public byte[] exportExcel() {
         AllEmployeeDetailsReportResponse report = allEmployeeDetailsReportService.generateReport();
+        OrganizationSettingsResponse branding = organizationSettingsService.getSettings();
 
         try (Workbook workbook = new XSSFWorkbook();
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
@@ -80,7 +84,7 @@ public class AllEmployeeDetailsReportExportService {
             createTitleRow(
                     sheet,
                     rowIdx++,
-                    "NORTH WESTERN PROVINCIAL ENGINEERING DEPARTMENT",
+                    branding.getReportHeaderUppercase(),
                     styles.title
             );
             createTitleRow(sheet, rowIdx++, "ALL EMPLOYEE DETAILS REPORT", styles.subtitle);
@@ -122,6 +126,7 @@ public class AllEmployeeDetailsReportExportService {
 
     public byte[] exportPdf() {
         AllEmployeeDetailsReportResponse report = allEmployeeDetailsReportService.generateReport();
+        OrganizationSettingsResponse branding = organizationSettingsService.getSettings();
 
         try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Document document = new Document(PageSize.A4.rotate(), 36, 36, 54, 36);
@@ -138,7 +143,7 @@ public class AllEmployeeDetailsReportExportService {
                     FontFactory.getFont(FontFactory.HELVETICA, 7);
 
             document.add(new Paragraph(
-                    "North Western Provincial Council — Engineering Department",
+                    branding.getReportHeaderSubtitle(),
                     titleFont
             ));
             document.add(new Paragraph("All Employee Details Report", titleFont));

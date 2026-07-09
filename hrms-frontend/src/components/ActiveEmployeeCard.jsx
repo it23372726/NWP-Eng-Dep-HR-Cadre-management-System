@@ -291,11 +291,14 @@ export default function ActiveEmployeeCard({ employee, onClick }) {
 
             <Stack
                 direction="row"
-                alignItems="center"
-                justifyContent="space-between"
-                sx={{ px: 2, py: 1 }}
+                sx={{
+                    px: 2,
+                    py: 1,
+                    alignItems: "center",
+                    justifyContent: "space-between"
+                }}
             >
-                <Stack direction="row" spacing={0.5} alignItems="center">
+                <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
                     <BadgeIcon sx={{ fontSize: 15, color: "text.disabled" }} />
                     <Typography variant="caption" color="text.secondary">
                         View profile

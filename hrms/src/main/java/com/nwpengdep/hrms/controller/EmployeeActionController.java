@@ -6,6 +6,7 @@ import com.nwpengdep.hrms.entity.EmployeeAction;
 import com.nwpengdep.hrms.service.EmployeeActionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -16,6 +17,7 @@ public class EmployeeActionController {
     private final EmployeeActionService employeeActionService;
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('EMPLOYEE_EDIT')")
     public EmployeeActionResponse updateEmployeeAction(
             @PathVariable Long id,
             @Valid @RequestBody EmployeeActionUpdateRequest request
@@ -29,6 +31,7 @@ public class EmployeeActionController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('EMPLOYEE_EDIT')")
     public void deleteEmployeeAction(@PathVariable Long id) {
         employeeActionService.deleteEmployeeAction(id);
     }

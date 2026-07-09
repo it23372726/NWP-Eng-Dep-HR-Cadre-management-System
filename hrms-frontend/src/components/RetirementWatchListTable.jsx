@@ -5,7 +5,6 @@ import {
     Table,
     TableBody,
     TableCell,
-    TableContainer,
     TableHead,
     TableRow,
     Typography,
@@ -13,6 +12,8 @@ import {
     Alert,
     Chip
 } from "@mui/material";
+
+import ResponsiveTableContainer from "./ResponsiveTableContainer";
 
 const formatDate = (date) => {
     if (!date) return "—";
@@ -52,7 +53,7 @@ export default function RetirementWatchListTable({ data, loading }) {
             <Typography variant="h6" sx={{ mb: 3, fontWeight: 700 }}>
                 Employees Retiring Within 24 Months
             </Typography>
-            <TableContainer>
+            <ResponsiveTableContainer tableMinWidth={800}>
                 <Table>
                     <TableHead>
                         <TableRow sx={{ bgcolor: "#F1F5F9" }}>
@@ -90,7 +91,7 @@ export default function RetirementWatchListTable({ data, loading }) {
                         ))}
                     </TableBody>
                 </Table>
-            </TableContainer>
+            </ResponsiveTableContainer>
         </Paper>
     );
 }

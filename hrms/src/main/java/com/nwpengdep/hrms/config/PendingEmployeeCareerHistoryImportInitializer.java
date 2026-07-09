@@ -6,7 +6,6 @@ import com.nwpengdep.hrms.dto.EmployeeChildRequest;
 import com.nwpengdep.hrms.dto.EmployeeSpouseRequest;
 import com.nwpengdep.hrms.dto.EmployeeUpdateRequest;
 import com.nwpengdep.hrms.entity.Designation;
-import com.nwpengdep.hrms.entity.District;
 import com.nwpengdep.hrms.entity.Employee;
 import com.nwpengdep.hrms.entity.EmployeeActionType;
 import com.nwpengdep.hrms.entity.EmployeeCareerProgression;
@@ -380,11 +379,11 @@ public class PendingEmployeeCareerHistoryImportInitializer {
         }
     }
 
-    private District parseDistrict(String district) {
+    private String parseDistrict(String district) {
         if (district == null || district.isBlank()) {
             return null;
         }
-        return District.fromLabel(district.trim());
+        return district.trim();
     }
 
     private String trimToNull(String value) {

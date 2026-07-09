@@ -57,12 +57,11 @@ api.interceptors.response.use(
     (error) => {
         const status = error.response?.status;
 
-        // Handle 401 (Unauthorized) and 403 (Forbidden) errors
-        if (status === 401 || status === 403) {
-            // Clear auth data
+        // Only force re-login on authentication failure.
+        // 403 means authenticated but not allowed for that resource.
+        if (status === 401) {
             clearAuthData();
 
-            // Redirect to login page (only if not already on login page)
             if (window.location.pathname !== '/') {
                 redirectToLogin();
             }

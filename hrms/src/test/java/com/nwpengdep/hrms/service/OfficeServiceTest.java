@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -19,7 +20,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.nwpengdep.hrms.dto.OfficeRequest;
-import com.nwpengdep.hrms.entity.District;
 import com.nwpengdep.hrms.entity.EmployeeStatus;
 import com.nwpengdep.hrms.entity.Office;
 import com.nwpengdep.hrms.repository.EmployeeRepository;
@@ -34,6 +34,9 @@ class OfficeServiceTest {
     @Mock
     private EmployeeRepository employeeRepository;
 
+    @Mock
+    private OrganizationSettingsService organizationSettingsService;
+
     @InjectMocks
     private OfficeService officeService;
 
@@ -43,14 +46,18 @@ class OfficeServiceTest {
     void setUp() {
         request = new OfficeRequest();
         request.setName("District Office");
-        request.setDistrict(District.KURUNEGALA);
+        request.setDistrict("Kurunegala");
     }
 
     @Test
     void createPersistsOffice() {
-        when(officeRepository.existsByNameIgnoreCaseAndDistrict(
+        doNothing().when(organizationSettingsService)
+                .requireConfiguredDistrict("Kurunegala");
+        when(organizationSettingsService.normalizeDistrictLabel("Kurunegala"))
+                .thenReturn("Kurunegala");
+        when(officeRepository.existsByNameIgnoreCaseAndDistrictIgnoreCase(
                 "District Office",
-                District.KURUNEGALA
+                "Kurunegala"
         )).thenReturn(false);
         when(officeRepository.save(any(Office.class))).thenAnswer(invocation -> {
             Office office = invocation.getArgument(0);
@@ -61,14 +68,18 @@ class OfficeServiceTest {
         Office created = officeService.create(request);
 
         assertEquals("District Office", created.getName());
-        assertEquals(District.KURUNEGALA, created.getDistrict());
+        assertEquals("Kurunegala", created.getDistrict());
     }
 
     @Test
     void createRejectsDuplicateNameInDistrict() {
-        when(officeRepository.existsByNameIgnoreCaseAndDistrict(
+        doNothing().when(organizationSettingsService)
+                .requireConfiguredDistrict("Kurunegala");
+        when(organizationSettingsService.normalizeDistrictLabel("Kurunegala"))
+                .thenReturn("Kurunegala");
+        when(officeRepository.existsByNameIgnoreCaseAndDistrictIgnoreCase(
                 "District Office",
-                District.KURUNEGALA
+                "Kurunegala"
         )).thenReturn(true);
 
         RuntimeException exception = assertThrows(
@@ -84,7 +95,7 @@ class OfficeServiceTest {
         Office office = Office.builder()
                 .id(1L)
                 .name("District Office")
-                .district(District.KURUNEGALA)
+                .district("Kurunegala")
                 .build();
 
         when(officeRepository.findById(1L)).thenReturn(Optional.of(office));
@@ -103,14 +114,18 @@ class OfficeServiceTest {
 
     @Test
     void validateNwpWorkplaceRequiresRegisteredOffice() {
-        when(officeRepository.findByNameIgnoreCaseAndDistrict(
+        doNothing().when(organizationSettingsService)
+                .requireConfiguredDistrict("Puttalam");
+        when(organizationSettingsService.normalizeDistrictLabel("Puttalam"))
+                .thenReturn("Puttalam");
+        when(officeRepository.findByNameIgnoreCaseAndDistrictIgnoreCase(
                 "Unknown Office",
-                District.PUTTALAM
+                "Puttalam"
         )).thenReturn(Optional.empty());
 
         RuntimeException exception = assertThrows(
                 RuntimeException.class,
-                () -> officeService.validateNwpWorkplace("Unknown Office", District.PUTTALAM)
+                () -> officeService.validateNwpWorkplace("Unknown Office", "Puttalam")
         );
 
         assertTrue(exception.getMessage().contains("not registered"));
@@ -118,29 +133,35 @@ class OfficeServiceTest {
 
     @Test
     void validateNwpWorkplacePassesForRegisteredOffice() {
-        when(officeRepository.findByNameIgnoreCaseAndDistrict(
+        doNothing().when(organizationSettingsService)
+                .requireConfiguredDistrict("Kurunegala");
+        when(organizationSettingsService.normalizeDistrictLabel("Kurunegala"))
+                .thenReturn("Kurunegala");
+        when(officeRepository.findByNameIgnoreCaseAndDistrictIgnoreCase(
                 "District Office",
-                District.KURUNEGALA
+                "Kurunegala"
         )).thenReturn(Optional.of(Office.builder()
                 .name("District Office")
-                .district(District.KURUNEGALA)
+                .district("Kurunegala")
                 .build()));
 
-        officeService.validateNwpWorkplace("District Office", District.KURUNEGALA);
+        officeService.validateNwpWorkplace("District Office", "Kurunegala");
 
-        verify(officeRepository).findByNameIgnoreCaseAndDistrict(
+        verify(officeRepository).findByNameIgnoreCaseAndDistrictIgnoreCase(
                 "District Office",
-                District.KURUNEGALA
+                "Kurunegala"
         );
     }
 
     @Test
     void getAllCanFilterByDistrict() {
-        when(officeRepository.findByDistrictOrderByNameAsc(District.KURUNEGALA))
+        when(organizationSettingsService.normalizeDistrictLabel("Kurunegala"))
+                .thenReturn("Kurunegala");
+        when(officeRepository.findByDistrictIgnoreCaseOrderByNameAsc("Kurunegala"))
                 .thenReturn(List.of());
 
-        officeService.getAll(District.KURUNEGALA);
+        officeService.getAll("Kurunegala");
 
-        verify(officeRepository).findByDistrictOrderByNameAsc(eq(District.KURUNEGALA));
+        verify(officeRepository).findByDistrictIgnoreCaseOrderByNameAsc(eq("Kurunegala"));
     }
 }

@@ -201,8 +201,30 @@ export function getPermanentStatusColor(status) {
     return PERMANENT_STATUS_COLORS[status] || "#64748B";
 }
 
-export function getDistrictColor(district) {
-    return DISTRICT_COLORS[district] || "#0F2A4A";
+export function getDistrictColor(district, index = 0) {
+    if (!district) {
+        return "#0F2A4A";
+    }
+
+    if (DISTRICT_COLORS[district]) {
+        return DISTRICT_COLORS[district];
+    }
+
+    const known = Object.keys(DISTRICT_COLORS).find(
+        (key) => key.toLowerCase() === String(district).toLowerCase()
+    );
+    if (known) {
+        return DISTRICT_COLORS[known];
+    }
+
+    const text = String(district);
+    let hash = 0;
+    for (let i = 0; i < text.length; i += 1) {
+        hash = ((hash << 5) - hash) + text.charCodeAt(i);
+        hash |= 0;
+    }
+    const paletteIndex = Math.abs(hash + index) % SERVICE_COLOR_PALETTE.length;
+    return SERVICE_COLOR_PALETTE[paletteIndex];
 }
 
 export function getGradeColor(index) {

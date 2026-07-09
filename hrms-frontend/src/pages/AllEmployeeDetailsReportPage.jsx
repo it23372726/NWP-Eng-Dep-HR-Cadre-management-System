@@ -9,7 +9,6 @@ import {
     Table,
     TableBody,
     TableCell,
-    TableContainer,
     TableHead,
     TableRow,
     TextField,
@@ -29,8 +28,11 @@ import {
     downloadAllEmployeeDetailsReportPdf,
     triggerDownload
 } from "../services/allEmployeeDetailsReportService";
+import ResponsiveTableContainer from "../components/ResponsiveTableContainer";
 import { getDesignations } from "../services/designationService";
-import { getApiErrorMessage } from "../constants/hrms";
+import DesignationOptionContent from "../components/DesignationOptionContent";
+import { getApiErrorMessage, getReportHeaderSubtitle } from "../constants/hrms";
+import { formatDesignationOptionLabel } from "../utils/designationDisplay";
 import { formatMonthDayDisplay } from "../utils/monthDayDate";
 import { sortDesignationsForReport } from "../utils/reportSortOrder";
 
@@ -187,7 +189,7 @@ export default function AllEmployeeDetailsReportPage() {
                     All Employee Details Report
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                    North Western Provincial Council — Engineering Department
+                    {getReportHeaderSubtitle()}
                 </Typography>
             </Box>
 
@@ -238,16 +240,28 @@ export default function AllEmployeeDetailsReportPage() {
                         options={designations}
                         value={selectedDesignations}
                         onChange={(_, newValue) => setSelectedDesignations(newValue)}
-                        getOptionLabel={(option) => option.designationName || ""}
+                        getOptionLabel={(option) =>
+                            formatDesignationOptionLabel(option)
+                        }
                         isOptionEqualToValue={(option, value) => option.id === value.id}
                         sx={{ flex: "1 1 280px", minWidth: 240 }}
+                        renderOption={(props, option) => {
+                            const { key, ...optionProps } = props;
+                            return (
+                                <li key={key} {...optionProps}>
+                                    <DesignationOptionContent
+                                        designation={option}
+                                    />
+                                </li>
+                            );
+                        }}
                         renderTags={(value, getTagProps) =>
                             value.map((option, index) => {
                                 const { key, ...tagProps } = getTagProps({ index });
                                 return (
                                     <Chip
                                         key={key}
-                                        label={option.designationName}
+                                        label={formatDesignationOptionLabel(option)}
                                         size="small"
                                         {...tagProps}
                                     />
@@ -354,7 +368,8 @@ export default function AllEmployeeDetailsReportPage() {
                             </Typography>
                         </Box>
                     ) : (
-                        <TableContainer
+                        <ResponsiveTableContainer
+                            tableMinWidth={2600}
                             sx={{
                                 maxHeight: "70vh",
                                 border: "1px solid",
@@ -399,7 +414,7 @@ export default function AllEmployeeDetailsReportPage() {
                                 ))}
                             </TableBody>
                         </Table>
-                    </TableContainer>
+                        </ResponsiveTableContainer>
                     )}
                 </Paper>
             )}

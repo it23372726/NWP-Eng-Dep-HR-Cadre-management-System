@@ -16,7 +16,9 @@ import {
 import { useEffect, useState } from "react";
 
 import { getDesignations } from "../services/designationService";
+import DesignationOptionContent from "./DesignationOptionContent";
 import FormSection from "./FormSection";
+import { renderDesignationSelectValue } from "../utils/designationDisplay";
 import {
     createFormFieldProps,
     dialogActionsSx
@@ -139,13 +141,26 @@ export default function CadreForm({
                                 name="designationId"
                                 value={formData.designationId}
                                 required
+                                slotProps={{
+                                    ...selectFieldProps.slotProps,
+                                    select: {
+                                        ...selectFieldProps.slotProps?.select,
+                                        renderValue: (value) =>
+                                            renderDesignationSelectValue(
+                                                value,
+                                                designations
+                                            )
+                                    }
+                                }}
                             >
                                 {designations.map((designation) => (
                                     <MenuItem
                                         key={designation.id}
                                         value={designation.id}
                                     >
-                                        {designation.designationName}
+                                        <DesignationOptionContent
+                                            designation={designation}
+                                        />
                                     </MenuItem>
                                 ))}
                             </TextField>

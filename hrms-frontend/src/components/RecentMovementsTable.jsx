@@ -5,7 +5,6 @@ import {
     Table,
     TableBody,
     TableCell,
-    TableContainer,
     TableHead,
     TableRow,
     Typography,
@@ -15,6 +14,7 @@ import {
 } from "@mui/material";
 
 import { ACTION_TYPE_LABELS } from "../constants/hrms";
+import ResponsiveTableContainer from "./ResponsiveTableContainer";
 
 const formatDate = (date) => {
     if (!date) return "—";
@@ -72,7 +72,7 @@ export default function RecentMovementsTable({ data, loading }) {
             <Typography variant="h6" sx={{ mb: 3, fontWeight: 700 }}>
                 Recent Employee Actions
             </Typography>
-            <TableContainer>
+            <ResponsiveTableContainer tableMinWidth={700}>
                 <Table>
                     <TableHead>
                         <TableRow sx={{ bgcolor: "#F1F5F9" }}>
@@ -105,7 +105,7 @@ export default function RecentMovementsTable({ data, loading }) {
                         ))}
                     </TableBody>
                 </Table>
-            </TableContainer>
+            </ResponsiveTableContainer>
         </Paper>
     );
 }

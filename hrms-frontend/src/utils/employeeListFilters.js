@@ -3,9 +3,6 @@ import { hasCompletedProbationYears } from "./gradeAchievementDates";
 import { matchesIncrementStatus } from "./salaryIncrement";
 import { matchesPrivateVehicleFilter, findPrivateVehicleFilterLabel } from "./privateVehicle";
 import {
-    FIXED_GRADE1_REQUIREMENTS,
-    FIXED_GRADE2_REQUIREMENTS,
-    FIXED_PERMANENT_REQUIREMENTS,
     EMPLOYEE_TYPE_FILTER_OPTIONS,
     getEmploymentTypeLabel,
     isTrainingEmployee,
@@ -14,21 +11,12 @@ import {
     PERMANENT_TRACK_FILTER_VALUES,
     GRADE_PROMOTION_FILTER_OPTIONS,
     RETIREMENT_FILTER_OPTIONS,
-    DISTRICT_FILTER_OPTIONS,
     QUALIFICATION_FILTER_OPTIONS
 } from "../constants/hrms";
 
-const PERMANENT_REQUIREMENT_TYPES = FIXED_PERMANENT_REQUIREMENTS.map(
-    (requirement) => requirement.requirementType
-);
-const GRADE2_REQUIREMENT_TYPES = [
-    ...FIXED_GRADE2_REQUIREMENTS.map((requirement) => requirement.requirementType),
-    "CUSTOM_GRADE_2_REQUIREMENT"
-];
-const GRADE1_REQUIREMENT_TYPES = [
-    ...FIXED_GRADE1_REQUIREMENTS.map((requirement) => requirement.requirementType),
-    "CUSTOM_GRADE_1_REQUIREMENT"
-];
+const PERMANENT_REQUIREMENT_TYPES = ["CUSTOM_PERMANENT_REQUIREMENT"];
+const GRADE2_REQUIREMENT_TYPES = ["CUSTOM_GRADE_2_REQUIREMENT"];
+const GRADE1_REQUIREMENT_TYPES = ["CUSTOM_GRADE_1_REQUIREMENT"];
 const CUSTOM_PERMANENT_TYPE = "CUSTOM_PERMANENT_REQUIREMENT";
 
 function requiresProbationPeriodGate(filterValue) {

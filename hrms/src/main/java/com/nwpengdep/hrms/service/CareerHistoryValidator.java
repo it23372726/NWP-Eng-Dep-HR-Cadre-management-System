@@ -8,7 +8,6 @@ import org.springframework.stereotype.Component;
 import com.nwpengdep.hrms.constants.DepartmentConstants;
 import com.nwpengdep.hrms.dto.CareerHistoryEventRequest;
 import com.nwpengdep.hrms.entity.Designation;
-import com.nwpengdep.hrms.entity.District;
 import com.nwpengdep.hrms.entity.EmployeeActionType;
 import com.nwpengdep.hrms.entity.Grade;
 import com.nwpengdep.hrms.entity.ServiceType;
@@ -51,7 +50,7 @@ public class CareerHistoryValidator {
         Long currentServiceLevelId = null;
         String currentDepartment = null;
         String currentOffice = null;
-        District currentDistrict = null;
+        String currentDistrict = null;
         boolean active = false;
         boolean permanentConfirmed = false;
         boolean deathRecorded = false;
@@ -525,7 +524,7 @@ public class CareerHistoryValidator {
                         boolean sameOffice = currentOffice != null
                                 && currentOffice.equalsIgnoreCase(event.getOffice().trim());
                         boolean sameDistrict = currentDistrict != null
-                                && currentDistrict == event.getDistrict();
+                                && currentDistrict.equalsIgnoreCase(event.getDistrict());
                         if (sameOffice && sameDistrict) {
                             throw new RuntimeException(
                                     "Office change (event #" + position
@@ -753,19 +752,20 @@ public class CareerHistoryValidator {
     private void validateNwpWorkplaceFields(
             String department,
             String office,
-            District district,
+            String district,
             int position
     ) {
         if (!DepartmentConstants.isNwpEngineering(department)) {
             return;
         }
-        District effectiveDistrict = district != null
+        String effectiveDistrict = district != null && !district.isBlank()
                 ? district
                 : officeService.findDistrictByOfficeName(office).orElse(null);
-        if (effectiveDistrict == null) {
+        if (effectiveDistrict == null || effectiveDistrict.isBlank()) {
             throw new RuntimeException(
                     "Career history event #" + position
-                            + " requires a working district for N.W.P. Engineering Department"
+                            + " requires a working district for "
+                            + DepartmentConstants.getPrimaryDepartmentName()
             );
         }
         officeService.validateNwpWorkplace(office, effectiveDistrict);

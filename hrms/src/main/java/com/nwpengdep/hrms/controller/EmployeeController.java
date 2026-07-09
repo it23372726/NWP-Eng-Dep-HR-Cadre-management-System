@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -52,6 +53,10 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class EmployeeController {
 
+    private static final String EMPLOYEE_READ =
+            "hasAuthority('EMPLOYEE_VIEW') or hasAuthority('EMPLOYEE_EDIT')";
+    private static final String EMPLOYEE_WRITE = "hasAuthority('EMPLOYEE_EDIT')";
+
     private final EmployeeService employeeService;
     private final EmployeeLifecycleService employeeLifecycleService;
     private final EmployeeActionService employeeActionService;
@@ -63,6 +68,7 @@ public class EmployeeController {
     private final EmployeeDependentDetailsReportExportService employeeDependentDetailsReportExportService;
 
     @PostMapping
+    @PreAuthorize(EMPLOYEE_WRITE)
     public Employee createEmployee(
             @Valid @RequestBody EmployeeRequest request
     ) {
@@ -70,6 +76,7 @@ public class EmployeeController {
     }
 
     @GetMapping
+    @PreAuthorize(EMPLOYEE_READ)
     public List<Employee> getActiveEmployees(
             @RequestParam(required = false, defaultValue = "NWP") String departmentScope
     ) {
@@ -77,6 +84,7 @@ public class EmployeeController {
     }
 
     @GetMapping("/active")
+    @PreAuthorize(EMPLOYEE_READ)
     public List<Employee> getActiveEmployeesAlias(
             @RequestParam(required = false, defaultValue = "NWP") String departmentScope
     ) {
@@ -84,16 +92,19 @@ public class EmployeeController {
     }
 
     @GetMapping("/inactive")
+    @PreAuthorize(EMPLOYEE_READ)
     public List<Employee> getInactiveEmployees() {
         return employeeService.getInactiveEmployees();
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize(EMPLOYEE_READ)
     public Employee getEmployeeById(@PathVariable Long id) {
         return employeeService.getEmployeeById(id);
     }
 
     @GetMapping("/{id}/actions")
+    @PreAuthorize(EMPLOYEE_READ)
     public List<EmployeeActionResponse> getEmployeeActions(
             @PathVariable Long id
     ) {
@@ -102,6 +113,7 @@ public class EmployeeController {
     }
 
     @GetMapping("/{id}/export/summary-pdf")
+    @PreAuthorize(EMPLOYEE_READ)
     public ResponseEntity<byte[]> exportSummaryPdf(@PathVariable Long id) {
         employeeService.getEmployeeById(id);
         byte[] data = employeeSummaryReportExportService.exportPdf(id);
@@ -118,6 +130,7 @@ public class EmployeeController {
     }
 
     @GetMapping("/{id}/export/dependent-details-pdf")
+    @PreAuthorize(EMPLOYEE_READ)
     public ResponseEntity<byte[]> exportDependentDetailsPdf(@PathVariable Long id) {
         employeeService.getEmployeeById(id);
         byte[] data = employeeDependentDetailsReportExportService.exportPdf(id);
@@ -134,6 +147,7 @@ public class EmployeeController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize(EMPLOYEE_WRITE)
     public Employee updateEmployee(
             @PathVariable Long id,
             @Valid @RequestBody EmployeeUpdateRequest request
@@ -142,6 +156,7 @@ public class EmployeeController {
     }
 
     @PostMapping("/{id}/photo")
+    @PreAuthorize(EMPLOYEE_WRITE)
     public Employee uploadEmployeePhoto(
             @PathVariable Long id,
             @RequestParam("file") MultipartFile file
@@ -150,6 +165,7 @@ public class EmployeeController {
     }
 
     @GetMapping("/{id}/photo")
+    @PreAuthorize(EMPLOYEE_READ)
     public ResponseEntity<org.springframework.core.io.Resource> getEmployeePhoto(
             @PathVariable Long id
     ) {
@@ -165,21 +181,25 @@ public class EmployeeController {
     }
 
     @DeleteMapping("/{id}/photo")
+    @PreAuthorize(EMPLOYEE_WRITE)
     public Employee deleteEmployeePhoto(@PathVariable Long id) {
         return employeePhotoService.deletePhoto(id);
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize(EMPLOYEE_WRITE)
     public void deleteEmployee(@PathVariable Long id) {
         employeeService.deleteEmployee(id);
     }
 
     @DeleteMapping("/{id}/permanent")
+    @PreAuthorize(EMPLOYEE_WRITE)
     public void deleteEmployeePermanently(@PathVariable Long id) {
         employeeDeleteService.deleteEmployeePermanently(id);
     }
 
     @GetMapping("/search")
+    @PreAuthorize(EMPLOYEE_READ)
     public List<Employee> searchActiveEmployees(
             @RequestParam String keyword
     ) {
@@ -187,6 +207,7 @@ public class EmployeeController {
     }
 
     @GetMapping("/inactive/search")
+    @PreAuthorize(EMPLOYEE_READ)
     public List<Employee> searchInactiveEmployees(
             @RequestParam String keyword
     ) {
@@ -194,6 +215,7 @@ public class EmployeeController {
     }
 
     @PostMapping("/{id}/transfer-out")
+    @PreAuthorize(EMPLOYEE_WRITE)
     public Employee transferOut(
             @PathVariable Long id,
             @Valid @RequestBody TransferOutRequest request
@@ -202,6 +224,7 @@ public class EmployeeController {
     }
 
     @PostMapping("/{id}/office-change")
+    @PreAuthorize(EMPLOYEE_WRITE)
     public Employee officeChange(
             @PathVariable Long id,
             @Valid @RequestBody OfficeChangeRequest request
@@ -210,6 +233,7 @@ public class EmployeeController {
     }
 
     @PostMapping("/{id}/new-appointment")
+    @PreAuthorize(EMPLOYEE_WRITE)
     public Employee appointNewEmployee(
             @PathVariable Long id,
             @Valid @RequestBody NewAppointmentRequest request
@@ -218,6 +242,7 @@ public class EmployeeController {
     }
 
     @PostMapping("/{id}/training-appointment")
+    @PreAuthorize(EMPLOYEE_WRITE)
     public Employee graduateTrainingToPermanent(
             @PathVariable Long id,
             @Valid @RequestBody TrainingAppointmentRequest request
@@ -226,11 +251,13 @@ public class EmployeeController {
     }
 
     @PostMapping("/{id}/revert-training-appointment")
+    @PreAuthorize(EMPLOYEE_WRITE)
     public Employee revertTrainingGraduation(@PathVariable Long id) {
         return employeeLifecycleService.revertTrainingGraduation(id);
     }
 
     @PostMapping("/{id}/promote")
+    @PreAuthorize(EMPLOYEE_WRITE)
     public Employee promoteEmployee(
             @PathVariable Long id,
             @Valid @RequestBody PromotionRequest request
@@ -239,6 +266,7 @@ public class EmployeeController {
     }
 
     @PostMapping("/{id}/retire")
+    @PreAuthorize(EMPLOYEE_WRITE)
     public Employee retireEmployee(
             @PathVariable Long id,
             @Valid @RequestBody LifecycleActionRequest request
@@ -247,6 +275,7 @@ public class EmployeeController {
     }
 
     @PostMapping("/{id}/death")
+    @PreAuthorize(EMPLOYEE_WRITE)
     public Employee markDeath(
             @PathVariable Long id,
             @Valid @RequestBody LifecycleActionRequest request
@@ -255,6 +284,7 @@ public class EmployeeController {
     }
 
     @PostMapping("/{id}/dismiss")
+    @PreAuthorize(EMPLOYEE_WRITE)
     public Employee dismissEmployee(
             @PathVariable Long id,
             @Valid @RequestBody DismissalRequest request
@@ -263,6 +293,7 @@ public class EmployeeController {
     }
 
     @PostMapping("/{id}/vacation-of-post")
+    @PreAuthorize(EMPLOYEE_WRITE)
     public Employee vacatePostEmployee(
             @PathVariable Long id,
             @Valid @RequestBody VacationOfPostRequest request
@@ -271,6 +302,7 @@ public class EmployeeController {
     }
 
     @PostMapping("/{id}/make-permanent")
+    @PreAuthorize(EMPLOYEE_WRITE)
     public Employee makePermanent(
             @PathVariable Long id,
             @Valid @RequestBody MakePermanentRequest request
@@ -279,11 +311,13 @@ public class EmployeeController {
     }
 
     @GetMapping("/{id}/vehicle-permit")
+    @PreAuthorize(EMPLOYEE_READ)
     public VehiclePermitStatusDto getVehiclePermitStatus(@PathVariable Long id) {
         return vehiclePermitService.getStatus(id);
     }
 
     @PostMapping("/{id}/vehicle-permit")
+    @PreAuthorize(EMPLOYEE_WRITE)
     public VehiclePermitStatusDto recordVehiclePermitCollection(
             @PathVariable Long id,
             @Valid @RequestBody VehiclePermitCollectionRequest request
@@ -292,6 +326,7 @@ public class EmployeeController {
     }
 
     @PutMapping("/{id}/vehicle-permit")
+    @PreAuthorize(EMPLOYEE_WRITE)
     public VehiclePermitStatusDto updateVehiclePermitCollection(
             @PathVariable Long id,
             @Valid @RequestBody VehiclePermitCollectionRequest request
@@ -300,16 +335,19 @@ public class EmployeeController {
     }
 
     @DeleteMapping("/{id}/vehicle-permit")
+    @PreAuthorize(EMPLOYEE_WRITE)
     public VehiclePermitStatusDto undoVehiclePermitCollection(@PathVariable Long id) {
         return vehiclePermitService.undoCollection(id);
     }
 
     @GetMapping("/{id}/salary-increment")
+    @PreAuthorize(EMPLOYEE_READ)
     public SalaryIncrementStatusDto getSalaryIncrementStatus(@PathVariable Long id) {
         return salaryIncrementService.getStatus(id);
     }
 
     @PostMapping("/{id}/salary-increment")
+    @PreAuthorize(EMPLOYEE_WRITE)
     public SalaryIncrementStatusDto recordSalaryIncrement(
             @PathVariable Long id,
             @Valid @RequestBody SalaryIncrementRecordRequest request
@@ -318,6 +356,7 @@ public class EmployeeController {
     }
 
     @PutMapping("/{id}/salary-increment")
+    @PreAuthorize(EMPLOYEE_WRITE)
     public SalaryIncrementStatusDto updateSalaryIncrement(
             @PathVariable Long id,
             @Valid @RequestBody SalaryIncrementRecordRequest request
@@ -326,11 +365,13 @@ public class EmployeeController {
     }
 
     @DeleteMapping("/{id}/salary-increment")
+    @PreAuthorize(EMPLOYEE_WRITE)
     public SalaryIncrementStatusDto undoSalaryIncrement(@PathVariable Long id) {
         return salaryIncrementService.undoIncrement(id);
     }
 
     @GetMapping("/paginated")
+    @PreAuthorize(EMPLOYEE_READ)
     public Page<Employee> getEmployeesPaginated(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size

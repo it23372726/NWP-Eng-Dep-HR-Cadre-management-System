@@ -310,7 +310,7 @@ function ExpandedSection({ section, expanded, onToggle, location, onNavigate }) 
     );
 }
 
-export default function SidebarNav({ collapsed }) {
+export default function SidebarNav({ collapsed, onNavigate }) {
     const navigate = useNavigate();
     const location = useLocation();
     const user = getStoredUser();
@@ -345,6 +345,7 @@ export default function SidebarNav({ collapsed }) {
 
     const handleNavigate = (path) => {
         navigate(path);
+        onNavigate?.();
     };
 
     return (

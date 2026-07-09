@@ -3,12 +3,14 @@ package com.nwpengdep.hrms.controller;
 import com.nwpengdep.hrms.dto.*;
 import com.nwpengdep.hrms.service.DashboardService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/dashboard")
 @RequiredArgsConstructor
+@PreAuthorize("hasAuthority('DASHBOARD')")
 public class DashboardController {
 
     private final DashboardService dashboardService;

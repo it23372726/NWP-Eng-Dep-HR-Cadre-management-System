@@ -1,6 +1,5 @@
 package com.nwpengdep.hrms.dto;
 
-import com.nwpengdep.hrms.entity.District;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,8 +17,8 @@ public class ActionWorkplaceFields {
     private String fromOffice;
     private String toDepartment;
     private String toOffice;
-    private District district;
-    private District toDistrict;
+    private String district;
+    private String toDistrict;
     private Long linkedActionId;
 
     public static ActionWorkplaceFields of(String department, String office) {
@@ -32,7 +31,7 @@ public class ActionWorkplaceFields {
     public static ActionWorkplaceFields of(
             String department,
             String office,
-            District district
+            String district
     ) {
         return ActionWorkplaceFields.builder()
                 .department(department)

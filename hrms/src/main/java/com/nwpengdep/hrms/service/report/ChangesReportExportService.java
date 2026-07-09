@@ -13,6 +13,8 @@ import com.lowagie.text.FontFactory;
 import com.nwpengdep.hrms.dto.ChangesReportRequest;
 import com.nwpengdep.hrms.dto.ChangesReportResponse;
 import com.nwpengdep.hrms.dto.ChangesReportRowResponse;
+import com.nwpengdep.hrms.dto.OrganizationSettingsResponse;
+import com.nwpengdep.hrms.service.OrganizationSettingsService;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.Cell;
@@ -50,9 +52,11 @@ public class ChangesReportExportService {
     };
 
     private final ChangesReportService changesReportService;
+    private final OrganizationSettingsService organizationSettingsService;
 
     public byte[] exportExcel(ChangesReportRequest request) {
         ChangesReportResponse report = changesReportService.generateReport(request);
+        OrganizationSettingsResponse branding = organizationSettingsService.getSettings();
 
         try (Workbook workbook = new XSSFWorkbook();
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
@@ -66,7 +70,7 @@ public class ChangesReportExportService {
             createTitleRow(
                     sheet,
                     rowIdx++,
-                    "NORTH WESTERN PROVINCIAL ENGINEERING DEPARTMENT",
+                    branding.getReportHeaderUppercase(),
                     styles.title
             );
             createTitleRow(sheet, rowIdx++, "CHANGES REPORT", styles.subtitle);
@@ -116,6 +120,7 @@ public class ChangesReportExportService {
 
     public byte[] exportPdf(ChangesReportRequest request) {
         ChangesReportResponse report = changesReportService.generateReport(request);
+        OrganizationSettingsResponse branding = organizationSettingsService.getSettings();
 
         try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Document document = new Document(PageSize.A4.rotate(), 36, 36, 54, 36);
@@ -132,7 +137,7 @@ public class ChangesReportExportService {
                     FontFactory.getFont(FontFactory.HELVETICA, 9);
 
             document.add(new Paragraph(
-                    "North Western Provincial Council — Engineering Department",
+                    branding.getReportHeaderSubtitle(),
                     titleFont
             ));
             document.add(new Paragraph("Changes Report", titleFont));

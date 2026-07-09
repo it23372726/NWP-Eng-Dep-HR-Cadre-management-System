@@ -47,12 +47,12 @@ public class CadreReportService {
                         (a, b) -> b
                 ));
 
-        String nwpDepartment = DepartmentConstants.NWP_ENGINEERING;
+        String primaryDepartment = DepartmentConstants.getPrimaryDepartmentName();
 
         Map<Long, Long> transferInMap = toCountMap(
                 employeeActionRepository.countGroupedByNewDesignationAndDepartment(
                         EmployeeActionType.TRANSFER_IN,
-                        nwpDepartment,
+                        primaryDepartment,
                         request.getStartDate(),
                         request.getEndDate()
                 )
@@ -61,23 +61,25 @@ public class CadreReportService {
         Map<Long, Long> transferOutMap = toCountMap(
                 employeeActionRepository.countGroupedByOldDesignationAndFromDepartment(
                         EmployeeActionType.TRANSFER_OUT,
-                        nwpDepartment,
+                        primaryDepartment,
                         request.getStartDate(),
                         request.getEndDate()
                 )
         );
 
         Map<Long, Long> retiredMap = toCountMap(
-                employeeActionRepository.countGroupedByOldDesignation(
+                employeeActionRepository.countGroupedByOldDesignationAndDepartment(
                         EmployeeActionType.RETIREMENT_OR_RESIGNATION,
+                        primaryDepartment,
                         request.getStartDate(),
                         request.getEndDate()
                 )
         );
 
         Map<Long, Long> deathsMap = toCountMap(
-                employeeActionRepository.countGroupedByOldDesignation(
+                employeeActionRepository.countGroupedByOldDesignationAndDepartment(
                         EmployeeActionType.DEATH,
+                        primaryDepartment,
                         request.getStartDate(),
                         request.getEndDate()
                 )
@@ -86,7 +88,7 @@ public class CadreReportService {
         Map<Long, Long> promotionsOutMap = toCountMap(
                 employeeActionRepository.countPromotionOutByDepartment(
                         EmployeeActionType.PROMOTION,
-                        nwpDepartment,
+                        primaryDepartment,
                         request.getStartDate(),
                         request.getEndDate()
                 )
@@ -95,7 +97,7 @@ public class CadreReportService {
         Map<Long, Long> newAppointmentsMap = toCountMap(
                 employeeActionRepository.countCadreNewAppointmentsByDesignationAndDepartment(
                         EmployeeActionType.NEW_APPOINTMENT,
-                        nwpDepartment,
+                        primaryDepartment,
                         request.getStartDate(),
                         request.getEndDate()
                 )
@@ -104,23 +106,25 @@ public class CadreReportService {
         Map<Long, Long> promotionNewAppointmentsMap = toCountMap(
                 employeeActionRepository.countPromotionInByDepartment(
                         EmployeeActionType.PROMOTION,
-                        nwpDepartment,
+                        primaryDepartment,
                         request.getStartDate(),
                         request.getEndDate()
                 )
         );
 
         Map<Long, Long> dismissalsMap = toCountMap(
-                employeeActionRepository.countGroupedByOldDesignation(
+                employeeActionRepository.countGroupedByOldDesignationAndDepartment(
                         EmployeeActionType.DISMISSAL,
+                        primaryDepartment,
                         request.getStartDate(),
                         request.getEndDate()
                 )
         );
 
         Map<Long, Long> vacationOfPostMap = toCountMap(
-                employeeActionRepository.countGroupedByOldDesignation(
+                employeeActionRepository.countGroupedByOldDesignationAndDepartment(
                         EmployeeActionType.VACATION_OF_POST,
+                        primaryDepartment,
                         request.getStartDate(),
                         request.getEndDate()
                 )

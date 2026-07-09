@@ -182,13 +182,18 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
         nextFormData = applyPrivateVehicleFormChanges(nextFormData, name, value);
         nextFormData = applyMaritalStatusFormChanges(nextFormData, name, value);
 
-        nextFormData = applyGradeDerivedRequirements(nextFormData);
-
-        if (name === "designationId") {
-            const designation = designations.find(
-                (item) => item.id === Number(value)
+        const designationForRules = name === "designationId"
+            ? designations.find((item) => item.id === Number(value))
+            : designations.find(
+                (item) => item.id === Number(nextFormData.designationId)
             );
-            appendCustomRequirementFields(nextFormData, null, designation);
+        nextFormData = applyGradeDerivedRequirements(
+            nextFormData,
+            designationForRules
+        );
+
+        if (name === "designationId" && designationForRules) {
+            appendCustomRequirementFields(nextFormData, null, designationForRules);
         }
 
         setFormData(nextFormData);

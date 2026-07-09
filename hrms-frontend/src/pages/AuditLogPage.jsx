@@ -18,7 +18,6 @@ import {
     Table,
     TableBody,
     TableCell,
-    TableContainer,
     TableHead,
     TablePagination,
     TableRow,
@@ -36,6 +35,7 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import AuditTrailDetailDialog from "../components/AuditTrailDetailDialog";
+import ResponsiveTableContainer from "../components/ResponsiveTableContainer";
 import DateInput from "../components/DateInput";
 import FormSection from "../components/FormSection";
 import {
@@ -380,7 +380,7 @@ export default function AuditLogPage() {
                 </Collapse>
             </FormSection>
 
-            <TableContainer component={Paper}>
+            <ResponsiveTableContainer component={Paper} tableMinWidth={1100}>
                 <Table size="small">
                     <TableHead>
                         <TableRow>
@@ -479,7 +479,7 @@ export default function AuditLogPage() {
                         )}
                     </TableBody>
                 </Table>
-            </TableContainer>
+            </ResponsiveTableContainer>
 
             <TablePagination
                 component="div"

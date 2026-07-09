@@ -163,7 +163,7 @@ function TimelineCard({
                         </Typography>
                     </Stack>
 
-                    {isLatest && (
+                    {isLatest && onEdit && onDelete && (
                         <Stack direction="row" spacing={0.5}>
                             <Tooltip title="Edit latest action">
                                 <IconButton size="small" onClick={() => onEdit(action)}>
@@ -203,7 +203,8 @@ export default function EmployeeActionHistoryTable({
     actions,
     designations,
     employee,
-    onRefresh
+    onRefresh,
+    canEdit = true
 }) {
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [selectedAction, setSelectedAction] = useState(null);
@@ -261,10 +262,12 @@ export default function EmployeeActionHistoryTable({
                 <Typography variant="body1" color="text.secondary">
                     No lifecycle actions recorded yet.
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                    Use Employee Actions in the profile header to record appointments,
-                    transfers, promotions, and other lifecycle events.
-                </Typography>
+                {canEdit && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        Use Employee Actions in the profile header to record appointments,
+                        transfers, promotions, and other lifecycle events.
+                    </Typography>
+                )}
             </Paper>
         );
     }
@@ -276,7 +279,9 @@ export default function EmployeeActionHistoryTable({
                 color="text.secondary"
                 sx={{ display: "block", mb: 2 }}
             >
-                Most recent first · only the latest action can be edited or deleted
+                {canEdit
+                    ? "Most recent first · only the latest action can be edited or deleted"
+                    : "Most recent first"}
             </Typography>
 
             <Box>
@@ -287,12 +292,14 @@ export default function EmployeeActionHistoryTable({
                         isLatest={
                             action.canModify ?? action.id === latestActionId
                         }
-                        onEdit={handleEditClick}
-                        onDelete={handleDeleteClick}
+                        onEdit={canEdit ? handleEditClick : null}
+                        onDelete={canEdit ? handleDeleteClick : null}
                     />
                 ))}
             </Box>
 
+            {canEdit && (
+                <>
             <LifecycleActionFormDialog
                 open={editDialogOpen}
                 onClose={() => setEditDialogOpen(false)}
@@ -334,6 +341,8 @@ export default function EmployeeActionHistoryTable({
                     </Button>
                 </DialogActions>
             </Dialog>
+                </>
+            )}
         </>
     );
 }

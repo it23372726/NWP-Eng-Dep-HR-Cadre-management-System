@@ -14,18 +14,6 @@ import {
 import { getEmployeeServiceRules } from "../../constants/hrms";
 import FormSection from "../FormSection";
 
-const FIXED_REQUIREMENT_FIELD_NAMES = {
-    EB_GRADE_3: "ebGrade3Passed",
-    GOVERNMENT_LANGUAGE_QUALIFICATION: "languageQualificationPassed",
-    MEDICAL_REPORT: "medicalReportCompleted",
-    OL_CERTIFICATE: "olApproved",
-    AL_CERTIFICATE: "alApproved",
-    DEGREE_CERTIFICATE: "degreeApproved",
-    BIRTH_CERTIFICATE: "birthCertificateApproved",
-    EB_GRADE_2: "ebGrade2Passed",
-    EB_GRADE_1: "ebGrade1Passed"
-};
-
 export default function EmployeeQualificationsSection({
     formData,
     designation,
@@ -54,7 +42,7 @@ export default function EmployeeQualificationsSection({
 
     const service = getEmployeeServiceRules(employee)
         ?? (designation ? getEmployeeServiceRules({ designation }) : null);
-    const customRequirements = service?.[config.customField] || [];
+    const configuredRequirements = service?.[config.customField] || [];
 
     return (
         <FormSection title={config.title} description={config.description}>
@@ -77,32 +65,7 @@ export default function EmployeeQualificationsSection({
                 />
             )}
             <Grid container spacing={1.5}>
-                {config.fixedRequirements.map(({ requirementType, label }) => {
-                    const fieldName =
-                        FIXED_REQUIREMENT_FIELD_NAMES[requirementType];
-                    if (!fieldName) {
-                        return null;
-                    }
-
-                    return (
-                        <Grid
-                            key={requirementType}
-                            size={{ xs: 12, sm: 6, md: 4 }}
-                        >
-                            <FormControlLabel
-                                control={
-                                    <Checkbox
-                                        name={fieldName}
-                                        checked={Boolean(formData[fieldName])}
-                                        onChange={handleChange}
-                                    />
-                                }
-                                label={label}
-                            />
-                        </Grid>
-                    );
-                })}
-                {customRequirements.map((requirement) => {
+                {configuredRequirements.map((requirement) => {
                     const key = requirementKey(
                         config.customType,
                         requirement.requirementName
@@ -130,9 +93,9 @@ export default function EmployeeQualificationsSection({
                     );
                 })}
             </Grid>
-            {customRequirements.length === 0 && config.customType && (
+            {configuredRequirements.length === 0 && config.customType && (
                 <Alert severity="info" sx={{ mt: 1 }}>
-                    No custom requirements are configured for this service.
+                    No requirements are configured for this service.
                 </Alert>
             )}
         </FormSection>

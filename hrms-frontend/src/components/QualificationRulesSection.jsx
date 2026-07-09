@@ -1,83 +1,42 @@
 import {
-    Box,
     Button,
-    Divider,
     Grid,
     IconButton,
     Stack,
     TextField,
-    Typography,
-    alpha
+    Typography
 } from "@mui/material";
 import {
     Add as AddIcon,
     Delete as DeleteIcon,
-    CheckCircle as CheckCircleIcon
+    RestartAlt as RestartAltIcon
 } from "@mui/icons-material";
 
 import FormSection from "./FormSection";
 import {
-    FIXED_GRADE1_REQUIREMENTS,
-    FIXED_GRADE2_REQUIREMENTS,
-    FIXED_PERMANENT_REQUIREMENTS,
-    FIXED_SPECIAL_REQUIREMENTS,
-    FIXED_SUPRA_REQUIREMENTS
+    DEFAULT_GRADE1_REQUIREMENTS,
+    DEFAULT_GRADE2_REQUIREMENTS,
+    DEFAULT_PERMANENT_REQUIREMENTS,
+    DEFAULT_SPECIAL_REQUIREMENTS,
+    DEFAULT_SUPRA_REQUIREMENTS
 } from "../constants/hrms";
 
-function FixedRequirementsList({ requirements }) {
-    return (
-        <Box
-            sx={{
-                display: "grid",
-                gridTemplateColumns: {
-                    xs: "1fr",
-                    sm: "repeat(2, 1fr)"
-                },
-                gap: 1,
-                mt: 1
-            }}
-        >
-            {requirements.map((requirement) => (
-                <Stack
-                    key={requirement.requirementType}
-                    direction="row"
-                    spacing={1}
-                    alignItems="flex-start"
-                    sx={{
-                        px: 1.5,
-                        py: 1,
-                        borderRadius: 1,
-                        bgcolor: (theme) => alpha(theme.palette.success.main, 0.08),
-                        border: "1px solid",
-                        borderColor: (theme) => alpha(theme.palette.success.main, 0.2)
-                    }}
-                >
-                    <CheckCircleIcon
-                        fontSize="small"
-                        color="success"
-                        sx={{ mt: 0.25, flexShrink: 0 }}
-                    />
-                    <Typography variant="body2">{requirement.label}</Typography>
-                </Stack>
-            ))}
-        </Box>
-    );
-}
-
-function CustomRequirementsEditor({
+function RequirementsEditor({
     field,
     label,
     items,
+    defaults,
     onAdd,
     onUpdate,
     onRemove,
+    onRestoreDefaults,
     fieldProps
 }) {
     return (
-        <Stack spacing={1.5} sx={{ mt: 1.5 }}>
+        <Stack spacing={1.5} sx={{ mt: 0.5 }}>
             {items.length === 0 && (
                 <Typography variant="body2" color="text.secondary">
-                    No custom requirements added.
+                    No requirements configured.
                 </Typography>
             )}
             {items.map((requirement, index) => (
@@ -105,43 +64,29 @@ function CustomRequirementsEditor({
                     </IconButton>
                 </Stack>
             ))}
-            <Button
-                variant="outlined"
-                size="small"
-                startIcon={<AddIcon />}
-                onClick={() => onAdd(field)}
-                sx={{ alignSelf: "flex-start" }}
-            >
-                Add Requirement
-            </Button>
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<AddIcon />}
+                    onClick={() => onAdd(field)}
+                >
+                    Add Requirement
+                </Button>
+                {defaults?.length > 0 && (
+                    <Button
+                        variant="text"
+                        size="small"
+                        startIcon={<RestartAltIcon />}
+                        onClick={() => onRestoreDefaults(field, defaults)}
+                    >
+                        Restore defaults
+                    </Button>
+                )}
+            </Stack>
         </Stack>
     );
 }
-
-const grade2FixedRequirements = [
-    { requirementType: "ALL_PERMANENT", label: "All Permanent Requirements Completed" },
-    ...FIXED_GRADE2_REQUIREMENTS
-];
-
-const grade1FixedRequirements = [
-    { requirementType: "ALL_PERMANENT_G1", label: "All Permanent Requirements Completed" },
-    { requirementType: "ALL_GRADE2", label: "All Grade II Requirements Completed" },
-    ...FIXED_GRADE1_REQUIREMENTS
-];
-
-const supraFixedRequirements = [
-    { requirementType: "ALL_PERMANENT_SUPRA", label: "All Permanent Requirements Completed" },
-    { requirementType: "ALL_GRADE2_SUPRA", label: "All Grade II Requirements Completed" },
-    { requirementType: "ALL_GRADE1_SUPRA", label: "All Grade I Requirements Completed" },
-    ...FIXED_SUPRA_REQUIREMENTS
-];
-
-const specialFixedRequirements = [
-    { requirementType: "ALL_PERMANENT_SPECIAL", label: "All Permanent Requirements Completed" },
-    { requirementType: "ALL_GRADE2_SPECIAL", label: "All Grade II Requirements Completed" },
-    { requirementType: "ALL_GRADE1_SPECIAL", label: "All Grade I Requirements Completed" },
-    ...FIXED_SPECIAL_REQUIREMENTS
-];
 
 export default function QualificationRulesSection({
     formData,
@@ -149,7 +94,8 @@ export default function QualificationRulesSection({
     fieldProps,
     onAddCustomRequirement,
     onUpdateCustomRequirement,
-    onRemoveCustomRequirement
+    onRemoveCustomRequirement,
+    onRestoreDefaults
 }) {
     const showSupraRules = allowedGrades.includes("Supra");
     const showSpecialRules = allowedGrades.includes("Special");
@@ -166,39 +112,26 @@ export default function QualificationRulesSection({
 
             <FormSection
                 title="Permanent Requirements"
-                description="Standard and custom requirements before an employee becomes permanent."
+                description="Edit or remove defaults, or add service-specific requirements before an employee becomes permanent."
             >
-                <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                    Standard Requirements
-                </Typography>
-                <FixedRequirementsList requirements={FIXED_PERMANENT_REQUIREMENTS} />
-
-                <Divider sx={{ my: 2 }} />
-
-                <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                    Custom Requirements
-                </Typography>
-                <CustomRequirementsEditor
+                <RequirementsEditor
                     field="customPermanentRequirements"
-                    label="Custom Permanent Requirement"
+                    label="Requirement"
                     items={formData.customPermanentRequirements}
+                    defaults={DEFAULT_PERMANENT_REQUIREMENTS}
                     onAdd={onAddCustomRequirement}
                     onUpdate={onUpdateCustomRequirement}
                     onRemove={onRemoveCustomRequirement}
+                    onRestoreDefaults={onRestoreDefaults}
                     fieldProps={fieldProps}
                 />
             </FormSection>
 
             <FormSection
                 title="Grade III → Grade II Promotion"
-                description="Requirements and service period before promotion to Grade II."
+                description="Edit or remove defaults, or add service-specific requirements before promotion to Grade II."
             >
-                <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                    Standard Requirements
-                </Typography>
-                <FixedRequirementsList requirements={grade2FixedRequirements} />
-
-                <Grid container spacing={2} sx={{ mt: 2 }}>
+                <Grid container spacing={2} sx={{ mb: 2 }}>
                     <Grid size={{ xs: 12, sm: 6 }}>
                         <TextField
                             {...fieldProps}
@@ -212,32 +145,24 @@ export default function QualificationRulesSection({
                     </Grid>
                 </Grid>
 
-                <Divider sx={{ my: 2 }} />
-
-                <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                    Custom Requirements
-                </Typography>
-                <CustomRequirementsEditor
+                <RequirementsEditor
                     field="customGrade2Requirements"
-                    label="Custom Grade II Requirement"
+                    label="Requirement"
                     items={formData.customGrade2Requirements}
+                    defaults={DEFAULT_GRADE2_REQUIREMENTS}
                     onAdd={onAddCustomRequirement}
                     onUpdate={onUpdateCustomRequirement}
                     onRemove={onRemoveCustomRequirement}
+                    onRestoreDefaults={onRestoreDefaults}
                     fieldProps={fieldProps}
                 />
             </FormSection>
 
             <FormSection
                 title="Grade II → Grade I Promotion"
-                description="Requirements and service period before promotion to Grade I."
+                description="Edit or remove defaults, or add service-specific requirements before promotion to Grade I."
             >
-                <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                    Standard Requirements
-                </Typography>
-                <FixedRequirementsList requirements={grade1FixedRequirements} />
-
-                <Grid container spacing={2} sx={{ mt: 2 }}>
+                <Grid container spacing={2} sx={{ mb: 2 }}>
                     <Grid size={{ xs: 12, sm: 6 }}>
                         <TextField
                             {...fieldProps}
@@ -251,18 +176,15 @@ export default function QualificationRulesSection({
                     </Grid>
                 </Grid>
 
-                <Divider sx={{ my: 2 }} />
-
-                <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                    Custom Requirements
-                </Typography>
-                <CustomRequirementsEditor
+                <RequirementsEditor
                     field="customGrade1Requirements"
-                    label="Custom Grade I Requirement"
+                    label="Requirement"
                     items={formData.customGrade1Requirements}
+                    defaults={DEFAULT_GRADE1_REQUIREMENTS}
                     onAdd={onAddCustomRequirement}
                     onUpdate={onUpdateCustomRequirement}
                     onRemove={onRemoveCustomRequirement}
+                    onRestoreDefaults={onRestoreDefaults}
                     fieldProps={fieldProps}
                 />
             </FormSection>
@@ -270,14 +192,9 @@ export default function QualificationRulesSection({
             {showSupraRules && (
                 <FormSection
                     title="Grade I → Supra Promotion"
-                    description="Requirements and service period before promotion to Supra grade."
+                    description="Edit or remove defaults, or add service-specific requirements before promotion to Supra grade."
                 >
-                    <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                        Standard Requirements
-                    </Typography>
-                    <FixedRequirementsList requirements={supraFixedRequirements} />
-
-                    <Grid container spacing={2} sx={{ mt: 2 }}>
+                    <Grid container spacing={2} sx={{ mb: 2 }}>
                         <Grid size={{ xs: 12, sm: 6 }}>
                             <TextField
                                 {...fieldProps}
@@ -291,18 +208,15 @@ export default function QualificationRulesSection({
                         </Grid>
                     </Grid>
 
-                    <Divider sx={{ my: 2 }} />
-
-                    <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                        Custom Requirements
-                    </Typography>
-                    <CustomRequirementsEditor
+                    <RequirementsEditor
                         field="customSupraRequirements"
-                        label="Custom Supra Requirement"
+                        label="Requirement"
                         items={formData.customSupraRequirements}
+                        defaults={DEFAULT_SUPRA_REQUIREMENTS}
                         onAdd={onAddCustomRequirement}
                         onUpdate={onUpdateCustomRequirement}
                         onRemove={onRemoveCustomRequirement}
+                        onRestoreDefaults={onRestoreDefaults}
                         fieldProps={fieldProps}
                     />
                 </FormSection>
@@ -311,14 +225,9 @@ export default function QualificationRulesSection({
             {showSpecialRules && (
                 <FormSection
                     title="Grade I → Special Promotion"
-                    description="Requirements and service period before promotion to Special grade."
+                    description="Edit or remove defaults, or add service-specific requirements before promotion to Special grade."
                 >
-                    <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                        Standard Requirements
-                    </Typography>
-                    <FixedRequirementsList requirements={specialFixedRequirements} />
-
-                    <Grid container spacing={2} sx={{ mt: 2 }}>
+                    <Grid container spacing={2} sx={{ mb: 2 }}>
                         <Grid size={{ xs: 12, sm: 6 }}>
                             <TextField
                                 {...fieldProps}
@@ -332,18 +241,15 @@ export default function QualificationRulesSection({
                         </Grid>
                     </Grid>
 
-                    <Divider sx={{ my: 2 }} />
-
-                    <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                        Custom Requirements
-                    </Typography>
-                    <CustomRequirementsEditor
+                    <RequirementsEditor
                         field="customSpecialRequirements"
-                        label="Custom Special Requirement"
+                        label="Requirement"
                         items={formData.customSpecialRequirements}
+                        defaults={DEFAULT_SPECIAL_REQUIREMENTS}
                         onAdd={onAddCustomRequirement}
                         onUpdate={onUpdateCustomRequirement}
                         onRemove={onRemoveCustomRequirement}
+                        onRestoreDefaults={onRestoreDefaults}
                         fieldProps={fieldProps}
                     />
                 </FormSection>

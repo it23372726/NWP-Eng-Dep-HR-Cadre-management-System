@@ -13,8 +13,8 @@ import {
     getEmploymentTypeLabel,
     formatTrainingPeriodYears,
     isContractEmployee,
+    isPrimaryDepartment,
     isTrainingEmployee,
-    NWP_ENGINEERING_DEPARTMENT,
     resolveEmployeeDesignationName,
     resolveEmployeeService,
     canShowDependentDetails,
@@ -612,7 +612,7 @@ export default function EmployeeProfilePersonalTab({
                             label="Department"
                             value={employee.currentDepartment}
                         />
-                        {employee.currentDepartment === NWP_ENGINEERING_DEPARTMENT && (
+                        {isPrimaryDepartment(employee.currentDepartment) && (
                             <InfoField
                                 label="District of Working"
                                 value={

@@ -18,7 +18,6 @@ import org.junit.jupiter.api.Test;
 
 import com.nwpengdep.hrms.dto.EmployeeUpdateRequest;
 import com.nwpengdep.hrms.entity.Designation;
-import com.nwpengdep.hrms.entity.District;
 import com.nwpengdep.hrms.entity.Employee;
 import com.nwpengdep.hrms.entity.EmployeeCareerProgression;
 import com.nwpengdep.hrms.entity.EmployeeStatus;
@@ -295,7 +294,7 @@ class EmployeeServicePrivateVehicleTest {
         request.setDateOfFirstAppointment(LocalDate.parse("2015-01-01"));
         request.setReportedDateToPresentWorkingPlace(LocalDate.parse("2020-01-01"));
         request.setCurrentWorkingPlace("Head Office");
-        request.setCurrentDistrictOfWorking(District.KURUNEGALA);
+        request.setCurrentDistrictOfWorking("Kurunegala");
         request.setEnteredDateToNWPCouncil(LocalDate.parse("2015-01-01"));
         request.setPermanentAddress("123 Main Street");
         request.setContactNo("0712345678");

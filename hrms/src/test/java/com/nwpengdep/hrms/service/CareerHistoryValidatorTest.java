@@ -19,7 +19,6 @@ import org.junit.jupiter.api.Test;
 import com.nwpengdep.hrms.constants.DepartmentConstants;
 import com.nwpengdep.hrms.dto.CareerHistoryEventRequest;
 import com.nwpengdep.hrms.entity.Designation;
-import com.nwpengdep.hrms.entity.District;
 import com.nwpengdep.hrms.entity.EmployeeActionType;
 import com.nwpengdep.hrms.entity.Grade;
 import com.nwpengdep.hrms.entity.ServiceLevel;
@@ -430,11 +429,11 @@ class CareerHistoryValidatorTest {
     void nwpAppointmentRequiresRegisteredOffice() {
         CareerHistoryEventRequest appointment = appointment("2015-01-01", 1L);
         appointment.setOffice("Unknown Office");
-        appointment.setDistrict(District.KURUNEGALA);
+        appointment.setDistrict("Kurunegala");
 
         org.mockito.Mockito.doThrow(new RuntimeException("not registered"))
                 .when(officeService)
-                .validateNwpWorkplace("Unknown Office", District.KURUNEGALA);
+                .validateNwpWorkplace("Unknown Office", "Kurunegala");
 
         RuntimeException exception = assertThrows(
                 RuntimeException.class,
@@ -477,7 +476,7 @@ class CareerHistoryValidatorTest {
         if (type != EmployeeActionType.TRANSFER_OUT) {
             event.setDepartment(DepartmentConstants.NWP_ENGINEERING);
             event.setOffice("Main Office");
-            event.setDistrict(District.KURUNEGALA);
+            event.setDistrict("Kurunegala");
         }
         return event;
     }

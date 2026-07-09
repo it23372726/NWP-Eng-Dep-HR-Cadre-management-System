@@ -12,7 +12,7 @@ import {
 } from "@mui/material";
 import { useEffect, useState } from "react";
 
-import { DISTRICTS } from "../constants/hrms";
+import { useOrganizationSettings } from "../context/OrganizationSettingsContext";
 import FormSection from "./FormSection";
 import { createFormFieldProps, dialogActionsSx } from "../utils/formLayout";
 
@@ -27,9 +27,13 @@ export default function OfficeForm({
     handleSubmit,
     selectedOffice
 }) {
+    const { districts, primaryDepartmentName } = useOrganizationSettings();
     const [formData, setFormData] = useState(emptyForm);
 
     const isEdit = Boolean(selectedOffice);
+    const districtListLabel = districts.length > 0
+        ? districts.join(" or ")
+        : "a configured";
 
     useEffect(() => {
         if (selectedOffice) {
@@ -78,7 +82,7 @@ export default function OfficeForm({
                     {isEdit ? "Edit Office" : "Add Office"}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                    Register a workplace under Kurunegala or Puttalam district.
+                    Register a workplace under {districtListLabel} district.
                 </Typography>
             </DialogTitle>
 
@@ -92,7 +96,7 @@ export default function OfficeForm({
             >
                 <FormSection
                     title="Office Details"
-                    description="Offices are used when assigning N.W.P. Engineering Department employees."
+                    description={`Offices are used when assigning ${primaryDepartmentName} employees.`}
                 >
                     <Grid container spacing={2}>
                         <Grid size={{ xs: 12 }}>
@@ -101,7 +105,7 @@ export default function OfficeForm({
                                 label="Office Name"
                                 name="name"
                                 value={formData.name}
-                                placeholder="e.g. Kurunegala District Office"
+                                placeholder="e.g. District Office"
                                 required
                             />
                         </Grid>
@@ -114,7 +118,7 @@ export default function OfficeForm({
                                 value={formData.district}
                                 required
                             >
-                                {DISTRICTS.map((district) => (
+                                {districts.map((district) => (
                                     <MenuItem key={district} value={district}>
                                         {district}
                                     </MenuItem>

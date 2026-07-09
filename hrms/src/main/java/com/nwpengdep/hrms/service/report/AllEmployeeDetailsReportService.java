@@ -79,7 +79,9 @@ public class AllEmployeeDetailsReportService {
                 .enteredDateToAllIslandService(employee.getEnteredDateToAllIslandService())
                 .reportedDateToPresentWorkingPlace(employee.getReportedDateToPresentWorkingPlace())
                 .currentWorkingPlace(employee.getCurrentWorkingPlace() != null ? employee.getCurrentWorkingPlace() : "—")
-                .currentDistrictOfWorking(employee.getCurrentDistrictOfWorking() != null ? employee.getCurrentDistrictOfWorking().name() : "—")
+                .currentDistrictOfWorking(employee.getCurrentDistrictOfWorking() != null
+                        ? employee.getCurrentDistrictOfWorking()
+                        : "—")
                 .appointmentDateToPresentClassGrade(
                         isContract ? null : employee.getAppointmentDateToPresentClassGrade())
                 .enteredDateToNWPCouncil(employee.getEnteredDateToNWPCouncil())

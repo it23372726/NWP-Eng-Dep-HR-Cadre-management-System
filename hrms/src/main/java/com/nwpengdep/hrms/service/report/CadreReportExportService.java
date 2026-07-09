@@ -12,6 +12,8 @@ import com.lowagie.text.pdf.PdfWriter;
 import com.nwpengdep.hrms.dto.CadreReportRequest;
 import com.nwpengdep.hrms.dto.CadreReportResponse;
 import com.nwpengdep.hrms.dto.CadreReportRowResponse;
+import com.nwpengdep.hrms.dto.OrganizationSettingsResponse;
+import com.nwpengdep.hrms.service.OrganizationSettingsService;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.Cell;
@@ -79,9 +81,11 @@ public class CadreReportExportService {
             EXISTING_CADRE_START_COL + EXISTING_CADRE_SUB_HEADERS.length;
 
     private final CadreReportService cadreReportService;
+    private final OrganizationSettingsService organizationSettingsService;
 
     public byte[] exportExcel(CadreReportRequest request) {
         CadreReportResponse report = cadreReportService.generateReport(request);
+        OrganizationSettingsResponse branding = organizationSettingsService.getSettings();
 
         try (Workbook workbook = new XSSFWorkbook();
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
@@ -95,7 +99,7 @@ public class CadreReportExportService {
             createTitleRow(
                     sheet,
                     rowIdx++,
-                    "NORTH WESTERN PROVINCIAL ENGINEERING DEPARTMENT",
+                    branding.getReportHeaderUppercase(),
                     styles.title
             );
             createTitleRow(sheet, rowIdx++, "CADRE REPORT", styles.subtitle);
@@ -158,6 +162,7 @@ public class CadreReportExportService {
 
     public byte[] exportPdf(CadreReportRequest request) {
         CadreReportResponse report = cadreReportService.generateReport(request);
+        OrganizationSettingsResponse branding = organizationSettingsService.getSettings();
 
         try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Document document = new Document(PageSize.A4.rotate(), 36, 36, 54, 36);
@@ -174,7 +179,7 @@ public class CadreReportExportService {
                     FontFactory.getFont(FontFactory.HELVETICA, 7);
 
             document.add(new Paragraph(
-                    "North Western Provincial Council — Engineering Department",
+                    branding.getReportHeaderSubtitle(),
                     titleFont
             ));
             document.add(new Paragraph("Cadre Report", titleFont));

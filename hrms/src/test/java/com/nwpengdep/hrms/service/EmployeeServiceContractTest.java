@@ -16,7 +16,6 @@ import org.junit.jupiter.api.Test;
 import com.nwpengdep.hrms.constants.DepartmentConstants;
 import com.nwpengdep.hrms.dto.EmployeeRequest;
 import com.nwpengdep.hrms.entity.Designation;
-import com.nwpengdep.hrms.entity.District;
 import com.nwpengdep.hrms.entity.Employee;
 import com.nwpengdep.hrms.entity.EmployeeEntryType;
 import com.nwpengdep.hrms.entity.EmploymentType;
@@ -128,7 +127,7 @@ class EmployeeServiceContractTest {
         request.setReportedDateToPresentWorkingPlace(LocalDate.of(2026, 1, 15));
         request.setCurrentWorkingPlace("Main Office");
         request.setCurrentDepartment(DepartmentConstants.NWP_ENGINEERING);
-        request.setCurrentDistrictOfWorking(District.KURUNEGALA);
+        request.setCurrentDistrictOfWorking("Kurunegala");
         request.setEnteredDateToNWPCouncil(LocalDate.of(2026, 1, 10));
         request.setContractStartDate(LocalDate.of(2026, 1, 1));
         request.setContractEndDate(LocalDate.of(2026, 12, 31));

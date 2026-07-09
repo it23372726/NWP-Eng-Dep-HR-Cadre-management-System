@@ -15,6 +15,7 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { theme } from "./theme/theme";
 import { isTokenExpired, clearAuthData } from "./utils/tokenUtils";
+import { OrganizationSettingsProvider } from "./context/OrganizationSettingsContext";
 
 // Validate token on app startup
 const token = localStorage.getItem("token");
@@ -33,7 +34,9 @@ ReactDOM.createRoot(
         <LocalizationProvider dateAdapter={AdapterDayjs}>
             <ThemeProvider theme={theme}>
                 <CssBaseline />
-                <App />
+                <OrganizationSettingsProvider>
+                    <App />
+                </OrganizationSettingsProvider>
             </ThemeProvider>
         </LocalizationProvider>
 

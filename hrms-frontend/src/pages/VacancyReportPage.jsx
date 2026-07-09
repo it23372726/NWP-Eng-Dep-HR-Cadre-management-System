@@ -2,7 +2,6 @@ import {
     Table,
     TableBody,
     TableCell,
-    TableContainer,
     TableHead,
     TableRow,
     Paper,
@@ -24,6 +23,7 @@ import {
     downloadVacancyReportExcel,
     downloadVacancyReportPdf
 } from "../services/cadreService";
+import ResponsiveTableContainer from "../components/ResponsiveTableContainer";
 
 const triggerDownload = (blob, filename) => {
     const url = window.URL.createObjectURL(blob);
@@ -95,7 +95,7 @@ export default function VacancyReportPage() {
                 Cadre Vacancy & Excess Report
             </Typography>
 
-            <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mb: 2 }}>
                 <Button variant="outlined" onClick={handleExportExcel}>
                     Export Excel
                 </Button>
@@ -104,8 +104,9 @@ export default function VacancyReportPage() {
                 </Button>
             </Stack>
 
-            <TableContainer
+            <ResponsiveTableContainer
                 component={Paper}
+                tableMinWidth={900}
             >
 
                 <Table>
@@ -207,7 +208,7 @@ export default function VacancyReportPage() {
 
                 </Table>
 
-            </TableContainer>
+            </ResponsiveTableContainer>
 
         </Container>
     );

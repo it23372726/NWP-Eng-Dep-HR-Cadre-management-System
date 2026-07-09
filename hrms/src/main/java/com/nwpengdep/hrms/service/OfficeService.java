@@ -2,7 +2,6 @@ package com.nwpengdep.hrms.service;
 
 import com.nwpengdep.hrms.constants.DepartmentConstants;
 import com.nwpengdep.hrms.dto.OfficeRequest;
-import com.nwpengdep.hrms.entity.District;
 import com.nwpengdep.hrms.entity.EmployeeStatus;
 import com.nwpengdep.hrms.entity.Office;
 import com.nwpengdep.hrms.repository.EmployeeRepository;
@@ -21,14 +20,15 @@ public class OfficeService {
 
     private final OfficeRepository officeRepository;
     private final EmployeeRepository employeeRepository;
+    private final OrganizationSettingsService organizationSettingsService;
 
     public Office create(OfficeRequest request) {
         String name = validateName(request.getName());
-        District district = requireDistrict(request.getDistrict());
+        String district = requireDistrict(request.getDistrict());
 
-        if (officeRepository.existsByNameIgnoreCaseAndDistrict(name, district)) {
+        if (officeRepository.existsByNameIgnoreCaseAndDistrictIgnoreCase(name, district)) {
             throw new RuntimeException(
-                    "Office already exists in " + district.getLabel() + ": " + name
+                    "Office already exists in " + district + ": " + name
             );
         }
 
@@ -40,9 +40,10 @@ public class OfficeService {
         );
     }
 
-    public List<Office> getAll(District district) {
-        if (district != null) {
-            return officeRepository.findByDistrictOrderByNameAsc(district);
+    public List<Office> getAll(String district) {
+        if (district != null && !district.isBlank()) {
+            String normalized = organizationSettingsService.normalizeDistrictLabel(district);
+            return officeRepository.findByDistrictIgnoreCaseOrderByNameAsc(normalized);
         }
         return officeRepository.findAllByOrderByDistrictAscNameAsc();
     }
@@ -55,11 +56,15 @@ public class OfficeService {
     public Office update(Long id, OfficeRequest request) {
         Office office = getById(id);
         String name = validateName(request.getName());
-        District district = requireDistrict(request.getDistrict());
+        String district = requireDistrict(request.getDistrict());
 
-        if (officeRepository.existsByNameIgnoreCaseAndDistrictAndIdNot(name, district, id)) {
+        if (officeRepository.existsByNameIgnoreCaseAndDistrictIgnoreCaseAndIdNot(
+                name,
+                district,
+                id
+        )) {
             throw new RuntimeException(
-                    "Office already exists in " + district.getLabel() + ": " + name
+                    "Office already exists in " + district + ": " + name
             );
         }
 
@@ -82,28 +87,39 @@ public class OfficeService {
         officeRepository.deleteById(id);
     }
 
-    public void validateNwpWorkplace(String officeName, District district) {
+    public void validateNwpWorkplace(String officeName, String district) {
+        String primaryDepartment = DepartmentConstants.getPrimaryDepartmentName();
         if (officeName == null || officeName.isBlank()) {
-            throw new RuntimeException("Office is required for N.W.P. Engineering Department");
+            throw new RuntimeException("Office is required for " + primaryDepartment);
         }
-        if (district == null) {
-            throw new RuntimeException("Working district is required for N.W.P. Engineering Department");
+        if (district == null || district.isBlank()) {
+            throw new RuntimeException(
+                    "Working district is required for " + primaryDepartment
+            );
         }
 
-        officeRepository.findByNameIgnoreCaseAndDistrict(officeName.trim(), district)
+        String normalizedDistrict = requireDistrict(district);
+        officeRepository.findByNameIgnoreCaseAndDistrictIgnoreCase(
+                        officeName.trim(),
+                        normalizedDistrict
+                )
                 .orElseThrow(() -> new RuntimeException(
                         "Office \"" + officeName.trim() + "\" is not registered in "
-                                + district.getLabel()
+                                + normalizedDistrict
                 ));
     }
 
-    public void validateNwpWorkplaceIfNwp(String department, String officeName, District district) {
-        if (DepartmentConstants.isNwpEngineering(department)) {
+    public void validateNwpWorkplaceIfNwp(
+            String department,
+            String officeName,
+            String district
+    ) {
+        if (DepartmentConstants.isPrimaryDepartment(department)) {
             validateNwpWorkplace(officeName, district);
         }
     }
 
-    public Optional<District> findDistrictByOfficeName(String officeName) {
+    public Optional<String> findDistrictByOfficeName(String officeName) {
         if (officeName == null || officeName.isBlank()) {
             return Optional.empty();
         }
@@ -124,10 +140,8 @@ public class OfficeService {
         return trimmed;
     }
 
-    private District requireDistrict(District district) {
-        if (district == null) {
-            throw new RuntimeException("District is required");
-        }
-        return district;
+    private String requireDistrict(String district) {
+        organizationSettingsService.requireConfiguredDistrict(district);
+        return organizationSettingsService.normalizeDistrictLabel(district);
     }
 }

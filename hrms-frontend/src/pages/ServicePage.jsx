@@ -19,8 +19,7 @@ import {
     DialogTitle,
     DialogContent,
     DialogActions,
-    Alert,
-    Chip
+    Alert
 } from "@mui/material";
 import {
     Add as AddIcon,
@@ -40,30 +39,12 @@ import {
     searchServices
 } from "../services/serviceService";
 import ServiceForm from "../components/ServiceForm";
+import GradeChips from "../components/GradeChips";
+import MobileDataCard, {
+    DesktopTableWrapper,
+    MobileDataCardList
+} from "../components/MobileDataCard";
 import { getApiErrorMessage } from "../constants/hrms";
-
-function GradeChips({ grades }) {
-    if (!grades?.length) {
-        return (
-            <Typography variant="body2" color="text.secondary">
-                —
-            </Typography>
-        );
-    }
-
-    return (
-        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
-            {grades.map((grade) => (
-                <Chip
-                    key={grade}
-                    label={grade}
-                    size="small"
-                    variant="outlined"
-                />
-            ))}
-        </Stack>
-    );
-}
 
 export default function ServicePage() {
     const [services, setServices] = useState([]);
@@ -249,6 +230,8 @@ export default function ServicePage() {
                     )}
                 </Paper>
             ) : (
+                <>
+                <DesktopTableWrapper>
                 <TableContainer component={Paper} variant="outlined">
                     <Table>
                         <TableHead>
@@ -304,6 +287,45 @@ export default function ServicePage() {
                         </TableBody>
                     </Table>
                 </TableContainer>
+                </DesktopTableWrapper>
+
+                <MobileDataCardList>
+                    {services.map((service) => (
+                        <MobileDataCard
+                            key={service.id}
+                            title={service.serviceCode}
+                            subtitle={service.description}
+                            fields={[
+                                {
+                                    label: "Max Grades",
+                                    value: <GradeChips grades={service.allowedGrades} />
+                                }
+                            ]}
+                            actions={
+                                <>
+                                    <Tooltip title="Edit service">
+                                        <IconButton
+                                            size="small"
+                                            onClick={() => openEditDialog(service)}
+                                        >
+                                            <EditIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
+                                    <Tooltip title="Delete service">
+                                        <IconButton
+                                            size="small"
+                                            color="error"
+                                            onClick={() => handleDeleteClick(service)}
+                                        >
+                                            <DeleteIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
+                                </>
+                            }
+                        />
+                    ))}
+                </MobileDataCardList>
+                </>
             )}
 
             <ServiceForm

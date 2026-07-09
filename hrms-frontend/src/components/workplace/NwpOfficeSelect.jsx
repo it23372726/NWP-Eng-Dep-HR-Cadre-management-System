@@ -1,7 +1,8 @@
 import { Grid, MenuItem, TextField, Typography } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 
-import { DISTRICTS, normalizeDistrictLabel } from "../../constants/hrms";
+import { normalizeDistrictLabel } from "../../constants/hrms";
+import { useOrganizationSettings } from "../../context/OrganizationSettingsContext";
 import { getOffices } from "../../services/officeService";
 
 const fieldSx = {
@@ -38,6 +39,7 @@ export default function NwpOfficeSelect({
     districtLabelText = "Working District",
     officeLabel = "Office"
 }) {
+    const { districts } = useOrganizationSettings();
     const [offices, setOffices] = useState([]);
     const [loading, setLoading] = useState(false);
 
@@ -93,7 +95,7 @@ export default function NwpOfficeSelect({
                     sx={fieldSx}
                     {...selectMenuProps}
                 >
-                    {DISTRICTS.map((item) => (
+                    {districts.map((item) => (
                         <MenuItem key={item} value={item}>
                             {item}
                         </MenuItem>

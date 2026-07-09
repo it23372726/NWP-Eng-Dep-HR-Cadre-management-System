@@ -1,7 +1,7 @@
 package com.nwpengdep.hrms.service;
 
-import java.time.LocalDate;
 import java.time.DateTimeException;
+import java.time.LocalDate;
 import java.time.MonthDay;
 import java.util.ArrayList;
 import java.util.List;
@@ -21,7 +21,6 @@ import com.nwpengdep.hrms.dto.EmployeeSpouseRequest;
 import com.nwpengdep.hrms.dto.EmployeeUpdateRequest;
 import com.nwpengdep.hrms.entity.ChildRelationship;
 import com.nwpengdep.hrms.entity.Designation;
-import com.nwpengdep.hrms.entity.District;
 import com.nwpengdep.hrms.entity.Employee;
 import com.nwpengdep.hrms.entity.EmployeeAction;
 import com.nwpengdep.hrms.entity.EmployeeActionType;
@@ -732,7 +731,7 @@ public class EmployeeService {
                     event.getToOffice(),
                     event.getToDistrict()
             );
-            District district = DepartmentConstants.isNwpEngineering(toDepartment)
+            String district = DepartmentConstants.isNwpEngineering(toDepartment)
                     ? event.getToDistrict()
                     : null;
             return ActionWorkplaceFields.builder()
@@ -850,8 +849,9 @@ public class EmployeeService {
         }
 
         String department = DepartmentConstants.normalize(event.getDepartment());
-        District effectiveDistrict = event.getDistrict();
-        if (DepartmentConstants.isNwpEngineering(department) && effectiveDistrict == null) {
+        String effectiveDistrict = event.getDistrict();
+        if (DepartmentConstants.isNwpEngineering(department)
+                && (effectiveDistrict == null || effectiveDistrict.isBlank())) {
             effectiveDistrict = officeService
                     .findDistrictByOfficeName(event.getOffice())
                     .orElse(null);
@@ -861,7 +861,7 @@ public class EmployeeService {
                 event.getOffice(),
                 effectiveDistrict
         );
-        District district = DepartmentConstants.isNwpEngineering(department)
+        String district = DepartmentConstants.isNwpEngineering(department)
                 ? effectiveDistrict
                 : null;
 
@@ -2690,54 +2690,67 @@ public class EmployeeService {
             Boolean ebGrade2Passed,
             Boolean otherGrade2RequirementCompleted
     ) {
-        setRequirementStatus(
+        setNamedRequirementStatus(
                 employee,
-                RequirementType.EB_GRADE_3,
-                ebGrade3Passed,
-                null
+                RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                "EB Grade III Passed",
+                ebGrade3Passed
         );
-        setRequirementStatus(
+        setNamedRequirementStatus(
                 employee,
-                RequirementType.GOVERNMENT_LANGUAGE_QUALIFICATION,
-                languageQualificationPassed,
-                null
+                RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                "Government Language Qualification Passed",
+                languageQualificationPassed
         );
-        setRequirementStatus(
+        setNamedRequirementStatus(
                 employee,
-                RequirementType.MEDICAL_REPORT,
-                medicalReportCompleted,
-                null
+                RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                "Medical Report Completed",
+                medicalReportCompleted
         );
-        setRequirementStatus(
+        setNamedRequirementStatus(
                 employee,
-                RequirementType.OL_CERTIFICATE,
-                olApproved,
-                null
+                RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                "O/L Approved",
+                olApproved
         );
-        setRequirementStatus(
+        setNamedRequirementStatus(
                 employee,
-                RequirementType.AL_CERTIFICATE,
-                alApproved,
-                null
+                RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                "A/L Approved",
+                alApproved
         );
-        setRequirementStatus(
+        setNamedRequirementStatus(
                 employee,
-                RequirementType.DEGREE_CERTIFICATE,
-                degreeApproved,
-                null
+                RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                "Degree Approved",
+                degreeApproved
         );
-        setRequirementStatus(
+        setNamedRequirementStatus(
                 employee,
-                RequirementType.BIRTH_CERTIFICATE,
-                birthCertificateApproved,
-                null
+                RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                "Birth Certificate Approved",
+                birthCertificateApproved
         );
-        setRequirementStatus(
+        setNamedRequirementStatus(
                 employee,
-                RequirementType.EB_GRADE_2,
-                ebGrade2Passed,
-                null
+                RequirementType.CUSTOM_GRADE_2_REQUIREMENT,
+                "EB Grade II Passed",
+                ebGrade2Passed
         );
+    }
+
+    private void setNamedRequirementStatus(
+            Employee employee,
+            RequirementType type,
+            String requirementName,
+            Boolean completed
+    ) {
+        if (completed == null) {
+            return;
+        }
+
+        setRequirementStatus(employee, type, completed, requirementName);
     }
 
     private void applyRequirementRequests(
@@ -2952,34 +2965,23 @@ public class EmployeeService {
     }
 
     private boolean isPermanentRequirementType(RequirementType type) {
-        return type == RequirementType.EB_GRADE_3
-                || type == RequirementType.GOVERNMENT_LANGUAGE_QUALIFICATION
-                || type == RequirementType.MEDICAL_REPORT
-                || type == RequirementType.OL_CERTIFICATE
-                || type == RequirementType.AL_CERTIFICATE
-                || type == RequirementType.DEGREE_CERTIFICATE
-                || type == RequirementType.BIRTH_CERTIFICATE
-                || type == RequirementType.CUSTOM_PERMANENT_REQUIREMENT;
+        return type == RequirementType.CUSTOM_PERMANENT_REQUIREMENT;
     }
 
     private boolean isGrade2RequirementType(RequirementType type) {
-        return type == RequirementType.EB_GRADE_2
-                || type == RequirementType.CUSTOM_GRADE_2_REQUIREMENT;
+        return type == RequirementType.CUSTOM_GRADE_2_REQUIREMENT;
     }
 
     private boolean isGrade1RequirementType(RequirementType type) {
-        return type == RequirementType.EB_GRADE_1
-                || type == RequirementType.CUSTOM_GRADE_1_REQUIREMENT;
+        return type == RequirementType.CUSTOM_GRADE_1_REQUIREMENT;
     }
 
     private boolean isSupraRequirementType(RequirementType type) {
-        return type == RequirementType.SUPRA_REQUIREMENT
-                || type == RequirementType.CUSTOM_SUPRA_REQUIREMENT;
+        return type == RequirementType.CUSTOM_SUPRA_REQUIREMENT;
     }
 
     private boolean isSpecialRequirementType(RequirementType type) {
-        return type == RequirementType.MASTERS_DEGREE
-                || type == RequirementType.CUSTOM_SPECIAL_REQUIREMENT;
+        return type == RequirementType.CUSTOM_SPECIAL_REQUIREMENT;
     }
 
     private void applyIncremantDate(Employee employee, String incremantDate) {

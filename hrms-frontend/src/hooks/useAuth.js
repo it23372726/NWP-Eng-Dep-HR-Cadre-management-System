@@ -1,3 +1,5 @@
+import { canEditEmployees, canViewEmployees, hasPermission as userHasPermission } from "../constants/permissions";
+
 const AUTH_USER_KEY = "user";
 
 export function getStoredUser() {
@@ -20,6 +22,10 @@ export function useAuth() {
         user,
         username: user?.username ?? null,
         role: user?.role ?? null,
-        isSuperAdmin: user?.role === "SUPER_ADMIN"
+        permissions: user?.permissions ?? [],
+        isSuperAdmin: user?.role === "SUPER_ADMIN",
+        hasPermission: (permission) => userHasPermission(user, permission),
+        canViewEmployees: () => canViewEmployees(user),
+        canEditEmployees: () => canEditEmployees(user)
     };
 }

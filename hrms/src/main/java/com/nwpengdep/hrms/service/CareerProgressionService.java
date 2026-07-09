@@ -172,12 +172,7 @@ public class CareerProgressionService {
             return false;
         }
 
-        return isRequirementCompleted(employee, RequirementType.EB_GRADE_3)
-                && isRequirementCompleted(employee, RequirementType.GOVERNMENT_LANGUAGE_QUALIFICATION)
-                && isRequirementCompleted(employee, RequirementType.MEDICAL_REPORT)
-                && educationRequirementsSatisfied(employee)
-                && isRequirementCompleted(employee, RequirementType.BIRTH_CERTIFICATE)
-                && customRequirementsCompleted(
+        return customRequirementsCompleted(
                         employee,
                         RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
                         resolveService(employee) != null
@@ -215,7 +210,6 @@ public class CareerProgressionService {
 
         LocalDate eligibilityDate = calculateGrade2EligibilityDate(employee);
         return employee != null
-                && isRequirementCompleted(employee, RequirementType.EB_GRADE_2)
                 && customRequirementsCompleted(
                         employee,
                         RequirementType.CUSTOM_GRADE_2_REQUIREMENT,
@@ -651,7 +645,6 @@ public class CareerProgressionService {
     private boolean isQualifiedForGrade2(Employee employee, LocalDate eligibilityDate) {
         return employee != null
                 && employee.getGrade() == Grade.III
-                && isRequirementCompleted(employee, RequirementType.EB_GRADE_2)
                 && customRequirementsCompleted(
                         employee,
                         RequirementType.CUSTOM_GRADE_2_REQUIREMENT,
@@ -703,25 +696,13 @@ public class CareerProgressionService {
         return employee.getAppointmentDateToPresentClassGrade();
     }
 
-    private boolean educationRequirementsSatisfied(Employee employee) {
-        return isRequirementCompleted(employee, RequirementType.OL_CERTIFICATE)
-                && isRequirementCompleted(employee, RequirementType.AL_CERTIFICATE)
-                && isRequirementCompleted(employee, RequirementType.DEGREE_CERTIFICATE);
-    }
-
     private LocalDate calculatePermanentQualificationDate(Employee employee) {
         LocalDate serviceDate = getThreeYearRequirementDate(employee);
-        LocalDate latestRequirementDate = latestCompletedDate(
+        ServiceType service = resolveService(employee);
+        LocalDate latestRequirementDate = latestCompletedDateForConfiguredRequirements(
                 employee,
-                List.of(
-                        RequirementType.EB_GRADE_3,
-                        RequirementType.GOVERNMENT_LANGUAGE_QUALIFICATION,
-                        RequirementType.MEDICAL_REPORT,
-                        RequirementType.OL_CERTIFICATE,
-                        RequirementType.AL_CERTIFICATE,
-                        RequirementType.DEGREE_CERTIFICATE,
-                        RequirementType.BIRTH_CERTIFICATE
-                )
+                RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                service != null ? service.getPermanentRequirements() : List.of()
         );
 
         if (serviceDate == null) {
@@ -735,21 +716,36 @@ public class CareerProgressionService {
                 : latestRequirementDate;
     }
 
-    private LocalDate latestCompletedDate(
+    private LocalDate latestCompletedDateForConfiguredRequirements(
             Employee employee,
-            List<RequirementType> requirementTypes
+            RequirementType type,
+            java.util.Collection<?> definitions
     ) {
-        if (employee == null || employee.getRequirements() == null) {
+        if (employee == null
+                || employee.getRequirements() == null
+                || definitions == null
+                || definitions.isEmpty()) {
             return null;
         }
 
-        return employee.getRequirements()
-                .stream()
-                .filter(requirement ->
-                        requirementTypes.contains(requirement.getRequirementType())
-                                && requirement.getStatus() == RequirementStatus.COMPLETED
-                )
-                .map(EmployeeRequirement::getCompletedDate)
+        return definitions.stream()
+                .map(this::customRequirementName)
+                .filter(name -> name != null && !name.isBlank())
+                .map(name -> employee.getRequirements()
+                        .stream()
+                        .filter(requirement ->
+                                requirement.getRequirementType() == type
+                                        && requirement.getStatus() == RequirementStatus.COMPLETED
+                                        && name.equalsIgnoreCase(
+                                                requirement.getRequirementName() != null
+                                                        ? requirement.getRequirementName()
+                                                        : ""
+                                        )
+                        )
+                        .map(EmployeeRequirement::getCompletedDate)
+                        .filter(date -> date != null)
+                        .max(LocalDate::compareTo)
+                        .orElse(null))
                 .filter(date -> date != null)
                 .max(LocalDate::compareTo)
                 .orElse(null);
@@ -760,8 +756,7 @@ public class CareerProgressionService {
             return false;
         }
 
-        return isRequirementCompleted(employee, RequirementType.EB_GRADE_1)
-                && customRequirementsCompleted(
+        return customRequirementsCompleted(
                         employee,
                         RequirementType.CUSTOM_GRADE_1_REQUIREMENT,
                         resolveService(employee) != null
@@ -776,17 +771,11 @@ public class CareerProgressionService {
         }
 
         ServiceType service = resolveService(employee);
-        return isRequirementCompleted(employee, RequirementType.EB_GRADE_3)
-                && isRequirementCompleted(employee, RequirementType.GOVERNMENT_LANGUAGE_QUALIFICATION)
-                && isRequirementCompleted(employee, RequirementType.MEDICAL_REPORT)
-                && educationRequirementsSatisfied(employee)
-                && isRequirementCompleted(employee, RequirementType.BIRTH_CERTIFICATE)
-                && customRequirementsCompleted(
+        return customRequirementsCompleted(
                         employee,
                         RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
                         service != null ? service.getPermanentRequirements() : List.of()
                 )
-                && isRequirementCompleted(employee, RequirementType.EB_GRADE_2)
                 && customRequirementsCompleted(
                         employee,
                         RequirementType.CUSTOM_GRADE_2_REQUIREMENT,
@@ -801,8 +790,7 @@ public class CareerProgressionService {
         }
 
         ServiceType service = resolveService(employee);
-        return isRequirementCompleted(employee, RequirementType.SUPRA_REQUIREMENT)
-                && customRequirementsCompleted(
+        return customRequirementsCompleted(
                         employee,
                         RequirementType.CUSTOM_SUPRA_REQUIREMENT,
                         service != null ? service.getSupraRequirements() : List.of()
@@ -815,8 +803,7 @@ public class CareerProgressionService {
         }
 
         ServiceType service = resolveService(employee);
-        return isRequirementCompleted(employee, RequirementType.MASTERS_DEGREE)
-                && customRequirementsCompleted(
+        return customRequirementsCompleted(
                         employee,
                         RequirementType.CUSTOM_SPECIAL_REQUIREMENT,
                         service != null ? service.getSpecialRequirements() : List.of()

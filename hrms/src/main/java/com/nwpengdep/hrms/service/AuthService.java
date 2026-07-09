@@ -26,6 +26,7 @@ public class AuthService {
     private final AuditLogService auditLogService;
     private final CurrentUserService currentUserService;
     private final UserService userService;
+    private final PermissionService permissionService;
 
     public UserResponse register(RegisterRequest request) {
         UserCreateRequest createRequest = new UserCreateRequest();
@@ -73,7 +74,12 @@ public class AuthService {
                 .userRoleOverride(user.getRole().name())
                 .build());
 
-        return new AuthResponse(token, user.getUsername(), user.getRole().name());
+        return new AuthResponse(
+                token,
+                user.getUsername(),
+                user.getRole().name(),
+                permissionService.getPermissionNamesForUser(user)
+        );
     }
 
     public void logout() {

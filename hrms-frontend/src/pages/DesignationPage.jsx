@@ -14,7 +14,6 @@ import {
     Box,
     IconButton,
     Tooltip,
-    Chip,
     InputAdornment,
     Dialog,
     DialogTitle,
@@ -40,31 +39,12 @@ import {
     searchDesignations
 } from "../services/designationService";
 import DesignationForm from "../components/DesignationForm";
+import GradeChips from "../components/GradeChips";
+import MobileDataCard, {
+    DesktopTableWrapper,
+    MobileDataCardList
+} from "../components/MobileDataCard";
 import { getApiErrorMessage } from "../constants/hrms";
-
-function GradeChips({ grades }) {
-    if (!grades?.length) {
-        return (
-            <Typography variant="body2" color="text.secondary">
-                —
-            </Typography>
-        );
-    }
-
-    return (
-        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
-            {grades.map((grade) => (
-                <Chip
-                    key={grade}
-                    label={grade}
-                    size="small"
-                    variant="outlined"
-                    sx={{ fontSize: "0.75rem" }}
-                />
-            ))}
-        </Stack>
-    );
-}
 
 export default function DesignationPage() {
     const [designations, setDesignations] = useState([]);
@@ -250,6 +230,8 @@ export default function DesignationPage() {
                     )}
                 </Paper>
             ) : (
+                <>
+                <DesktopTableWrapper>
                 <TableContainer component={Paper} variant="outlined">
                     <Table>
                         <TableHead>
@@ -317,6 +299,53 @@ export default function DesignationPage() {
                         </TableBody>
                     </Table>
                 </TableContainer>
+                </DesktopTableWrapper>
+
+                <MobileDataCardList>
+                    {designations.map((designation) => (
+                        <MobileDataCard
+                            key={designation.id}
+                            title={designation.designationName}
+                            subtitle={designation.service?.serviceCode ?? "—"}
+                            fields={[
+                                {
+                                    label: "Service Level",
+                                    value: designation.serviceLevel?.levelName ?? "—"
+                                },
+                                {
+                                    label: "Eligible Grades",
+                                    value: <GradeChips grades={designation.allowedGrades} />
+                                },
+                                {
+                                    label: "Salary Code",
+                                    value: designation.salaryCode || "—"
+                                }
+                            ]}
+                            actions={
+                                <>
+                                    <Tooltip title="Edit designation">
+                                        <IconButton
+                                            size="small"
+                                            onClick={() => openEditDialog(designation)}
+                                        >
+                                            <EditIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
+                                    <Tooltip title="Delete designation">
+                                        <IconButton
+                                            size="small"
+                                            color="error"
+                                            onClick={() => handleDeleteClick(designation)}
+                                        >
+                                            <DeleteIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
+                                </>
+                            }
+                        />
+                    ))}
+                </MobileDataCardList>
+                </>
             )}
 
             <DesignationForm

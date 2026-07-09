@@ -43,12 +43,12 @@ export function createFormFieldProps(handleChange) {
         },
         sx: {
             width: "100%",
-            minWidth: 260,
+            minWidth: { xs: 0, md: 260 },
             "& .MuiOutlinedInput-root": {
                 width: "100%"
             },
             "& .MuiSelect-select": {
-                minWidth: 220
+                minWidth: { xs: 0, md: 220 }
             }
         }
     };

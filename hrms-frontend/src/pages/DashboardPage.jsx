@@ -14,6 +14,7 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import toast from "react-hot-toast";
 import { getComprehensiveDashboard } from "../services/dashboardService";
 import { getApiErrorMessage } from "../constants/hrms";
+import { useOrganizationSettings } from "../context/OrganizationSettingsContext";
 import AttentionRequiredPanel from "../components/AttentionRequiredPanel";
 import WorkforceSummaryCards from "../components/WorkforceSummaryCards";
 import ServiceDistributionChart from "../components/ServiceDistributionChart";
@@ -36,6 +37,7 @@ const DASHBOARD_TABS = {
 };
 
 export default function DashboardPage() {
+    const { primaryDepartmentName } = useOrganizationSettings();
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -95,7 +97,7 @@ export default function DashboardPage() {
                         HR Dashboard
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                        N.W.P. Engineering Department workforce overview
+                        {primaryDepartmentName} workforce overview
                     </Typography>
                     {lastUpdated && (
                         <Typography variant="caption" color="text.secondary">

@@ -1,6 +1,6 @@
 import { Grid, MenuItem, TextField } from "@mui/material";
 
-import { NWP_ENGINEERING_DEPARTMENT } from "../../constants/hrms";
+import { useOrganizationSettings } from "../../context/OrganizationSettingsContext";
 import DateInput from "../DateInput";
 import FormSection from "../FormSection";
 import MonthDayPicker from "../MonthDayPicker";
@@ -16,6 +16,7 @@ export default function EmployeeWorkplaceSection({
     onOfficeChange,
     onIncrementDateChange
 }) {
+    const { primaryDepartmentName } = useOrganizationSettings();
     const showFirstAppointment = variant === "nonPermanent" || variant === "training";
     const showPresentClassGrade = variant === "nonPermanent";
     const showIncrementDate = variant === "permanent" || variant === "training";
@@ -44,11 +45,11 @@ export default function EmployeeWorkplaceSection({
                             {...selectFieldProps}
                             label="Department"
                             name="currentDepartment"
-                            value={formData.currentDepartment || NWP_ENGINEERING_DEPARTMENT}
+                            value={formData.currentDepartment || primaryDepartmentName}
                             disabled
                         >
-                            <MenuItem value={NWP_ENGINEERING_DEPARTMENT}>
-                                {NWP_ENGINEERING_DEPARTMENT}
+                            <MenuItem value={primaryDepartmentName}>
+                                {primaryDepartmentName}
                             </MenuItem>
                         </TextField>
                     </Grid>
@@ -72,7 +73,7 @@ export default function EmployeeWorkplaceSection({
                             name="enteredDateToNWPCouncil"
                             value={formData.enteredDateToNWPCouncil || "—"}
                             disabled
-                            helperText="Date first joined N.W.P. Engineering Department (fixed)"
+                            helperText={`Date first joined ${primaryDepartmentName} (fixed)`}
                         />
                     ) : (
                         <DateInput

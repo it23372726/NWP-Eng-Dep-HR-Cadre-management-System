@@ -1,7 +1,5 @@
 package com.nwpengdep.hrms.dto;
 
-import com.nwpengdep.hrms.entity.District;
-
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -23,7 +21,7 @@ public class TrainingAppointmentRequest {
     @NotBlank(message = "Office is required")
     private String office;
 
-    private District district;
+    private String district;
 
     private String remarks;
 }

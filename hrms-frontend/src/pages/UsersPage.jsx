@@ -9,12 +9,16 @@ import {
     DialogTitle,
     FormControl,
     FormControlLabel,
+    IconButton,
+    InputAdornment,
     InputLabel,
     MenuItem,
     Paper,
     Select,
     Stack,
     Switch,
+    Tab,
+    Tabs,
     Table,
     TableBody,
     TableCell,
@@ -37,43 +41,35 @@ import toast from "react-hot-toast";
 import { getStoredUser } from "../hooks/useAuth";
 import { getApiErrorMessage } from "../constants/hrms";
 import {
+    DEFAULT_ASSIGNABLE_ROLE,
+    ROLE_COLORS,
+    ROLE_DESCRIPTIONS,
+    ROLES
+} from "../constants/roles";
+import ManageRolesTab from "../components/ManageRolesTab";
+import MobileDataCard, {
+    DesktopTableWrapper,
+    MobileDataCardList
+} from "../components/MobileDataCard";
+import {
     createUser,
     getUsers,
     resetUserPassword,
     updateUser
 } from "../services/userService";
 
-const ROLES = [
-    "SUPER_ADMIN",
-    "ADMIN",
-    "DATA_ENTRY",
-    "VIEW_ONLY"
-];
-
-const ROLE_DESCRIPTIONS = {
-    SUPER_ADMIN: "Full access, audit trail, and user management",
-    ADMIN: "Full HR operations",
-    DATA_ENTRY: "Create and edit employees and master data",
-    VIEW_ONLY: "Read-only access"
-};
-
-const ROLE_COLORS = {
-    SUPER_ADMIN: "error",
-    ADMIN: "warning",
-    DATA_ENTRY: "primary",
-    VIEW_ONLY: "default"
-};
-
 const emptyCreateForm = {
     username: "",
     password: "",
     confirmPassword: "",
-    role: "DATA_ENTRY"
+    role: DEFAULT_ASSIGNABLE_ROLE
 };
 
 export default function UsersPage() {
     const currentUser = getStoredUser();
+    const isSuperAdmin = currentUser?.role === "SUPER_ADMIN";
 
+    const [activeTab, setActiveTab] = useState(0);
     const [users, setUsers] = useState([]);
     const [searchKeyword, setSearchKeyword] = useState("");
     const [loading, setLoading] = useState(false);
@@ -84,7 +80,7 @@ export default function UsersPage() {
 
     const [editOpen, setEditOpen] = useState(false);
     const [editUser, setEditUser] = useState(null);
-    const [editForm, setEditForm] = useState({ role: "DATA_ENTRY", active: true });
+    const [editForm, setEditForm] = useState({ role: DEFAULT_ASSIGNABLE_ROLE, active: true });
     const [saving, setSaving] = useState(false);
 
     const [passwordOpen, setPasswordOpen] = useState(false);
@@ -203,28 +199,46 @@ export default function UsersPage() {
         <Box>
             <Stack
                 direction={{ xs: "column", sm: "row" }}
-                justifyContent="space-between"
-                alignItems={{ xs: "stretch", sm: "center" }}
                 spacing={2}
-                sx={{ mb: 2 }}
+                sx={{
+                    mb: 2,
+                    justifyContent: "space-between",
+                    alignItems: { xs: "stretch", sm: "center" }
+                }}
             >
                 <Box>
                     <Typography variant="h5" fontWeight={800}>
                         User Management
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                        Create and manage system login accounts. Only SUPER_ADMIN can access this page.
+                        Create and manage system login accounts and role permissions.
                     </Typography>
                 </Box>
-                <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={() => setCreateOpen(true)}
-                >
-                    Add User
-                </Button>
+                {activeTab === 0 && (
+                    <Button
+                        variant="contained"
+                        startIcon={<AddIcon />}
+                        onClick={() => setCreateOpen(true)}
+                    >
+                        Add User
+                    </Button>
+                )}
             </Stack>
 
+            <Paper sx={{ mb: 2 }}>
+                <Tabs
+                    value={activeTab}
+                    onChange={(_, value) => setActiveTab(value)}
+                >
+                    <Tab label="Users" />
+                    {isSuperAdmin && <Tab label="Manage Roles" />}
+                </Tabs>
+            </Paper>
+
+            {activeTab === 1 && isSuperAdmin ? (
+                <ManageRolesTab />
+            ) : (
+                <>
             <Paper sx={{ p: 2, mb: 2 }}>
                 <TextField
                     fullWidth
@@ -232,12 +246,19 @@ export default function UsersPage() {
                     label="Search users"
                     value={searchKeyword}
                     onChange={(e) => setSearchKeyword(e.target.value)}
-                    InputProps={{
-                        startAdornment: <SearchIcon sx={{ mr: 1, color: "text.secondary" }} />
+                    slotProps={{
+                        input: {
+                            startAdornment: (
+                                <InputAdornment position="start">
+                                    <SearchIcon sx={{ color: "text.secondary" }} />
+                                </InputAdornment>
+                            )
+                        }
                     }}
                 />
             </Paper>
 
+            <DesktopTableWrapper>
             <TableContainer component={Paper}>
                 <Table size="small">
                     <TableHead>
@@ -252,7 +273,11 @@ export default function UsersPage() {
                         {filteredUsers.map((user) => (
                             <TableRow key={user.id} hover>
                                 <TableCell>
-                                    <Stack direction="row" spacing={1} alignItems="center">
+                                    <Stack
+                                        direction="row"
+                                        spacing={1}
+                                        sx={{ alignItems: "center" }}
+                                    >
                                         <Typography variant="body2">{user.username}</Typography>
                                         {isSelf(user) && (
                                             <Chip label="You" size="small" color="info" />
@@ -274,7 +299,11 @@ export default function UsersPage() {
                                     />
                                 </TableCell>
                                 <TableCell align="right">
-                                    <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                                    <Stack
+                                        direction="row"
+                                        spacing={0.5}
+                                        sx={{ justifyContent: "flex-end" }}
+                                    >
                                         <Tooltip title="Edit user">
                                             <Button
                                                 size="small"
@@ -307,6 +336,70 @@ export default function UsersPage() {
                     </TableBody>
                 </Table>
             </TableContainer>
+            </DesktopTableWrapper>
+
+            <MobileDataCardList>
+                {filteredUsers.map((user) => (
+                    <MobileDataCard
+                        key={user.id}
+                        title={
+                            <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                                <span>{user.username}</span>
+                                {isSelf(user) && (
+                                    <Chip label="You" size="small" color="info" />
+                                )}
+                            </Stack>
+                        }
+                        fields={[
+                            {
+                                label: "Role",
+                                value: (
+                                    <Chip
+                                        label={user.role}
+                                        size="small"
+                                        color={ROLE_COLORS[user.role] || "default"}
+                                    />
+                                )
+                            },
+                            {
+                                label: "Status",
+                                value: (
+                                    <Chip
+                                        label={user.active ? "Active" : "Inactive"}
+                                        size="small"
+                                        color={user.active ? "success" : "default"}
+                                    />
+                                )
+                            }
+                        ]}
+                        actions={
+                            <>
+                                <Tooltip title="Edit user">
+                                    <IconButton
+                                        size="small"
+                                        onClick={() => openEditDialog(user)}
+                                    >
+                                        <EditIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Reset password">
+                                    <IconButton
+                                        size="small"
+                                        onClick={() => openPasswordDialog(user)}
+                                    >
+                                        <LockResetIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            </>
+                        }
+                    />
+                ))}
+                {!loading && filteredUsers.length === 0 && (
+                    <Paper variant="outlined" sx={{ p: 3, textAlign: "center" }}>
+                        <Typography color="text.secondary">No users found</Typography>
+                    </Paper>
+                )}
+            </MobileDataCardList>
 
             <Dialog open={createOpen} onClose={() => setCreateOpen(false)} maxWidth="sm" fullWidth>
                 <DialogTitle>Add User</DialogTitle>
@@ -481,6 +574,8 @@ export default function UsersPage() {
                     </Button>
                 </DialogActions>
             </Dialog>
+                </>
+            )}
         </Box>
     );
 }

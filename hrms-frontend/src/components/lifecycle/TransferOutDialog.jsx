@@ -18,7 +18,9 @@ import { getDesignationsByService } from "../../services/designationService";
 import { getServiceLevels } from "../../services/serviceLevelService";
 import { createFormFieldProps, dialogActionsSx } from "../../utils/formLayout";
 import DateInput from "../DateInput";
+import DesignationOptionContent from "../DesignationOptionContent";
 import { timelineMinDateHelperText } from "../../utils/timelineDates";
+import { renderDesignationSelectValue } from "../../utils/designationDisplay";
 import DepartmentOfficeFields, {
     DEPARTMENT_OPTIONS,
     ReadonlyWorkplaceFields,
@@ -345,16 +347,38 @@ export default function TransferOutDialog({
                             helperText={
                                 assignmentError || "Same service; grade stays unchanged"
                             }
+                            slotProps={{
+                                ...selectFieldProps.slotProps,
+                                select: {
+                                    ...selectFieldProps.slotProps?.select,
+                                    renderValue: (value) =>
+                                        renderDesignationSelectValue(
+                                            value,
+                                            designations,
+                                            {
+                                                suffixFn: (designation) =>
+                                                    designation.id
+                                                        === employee?.designation?.id
+                                                        ? " (current)"
+                                                        : ""
+                                            }
+                                        )
+                                }
+                            }}
                         >
                             {designations.map((designation) => (
                                 <MenuItem
                                     key={designation.id}
                                     value={designation.id}
                                 >
-                                    {designation.designationName}
-                                    {designation.id === employee?.designation?.id
-                                        ? " (current)"
-                                        : ""}
+                                    <DesignationOptionContent
+                                        designation={designation}
+                                        suffix={
+                                            designation.id === employee?.designation?.id
+                                                ? " (current)"
+                                                : ""
+                                        }
+                                    />
                                 </MenuItem>
                             ))}
                             <MenuItem value={OTHER_DESIGNATION_VALUE}>

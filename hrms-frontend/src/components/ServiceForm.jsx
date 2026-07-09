@@ -15,6 +15,13 @@ import FormSection from "./FormSection";
 import GradeSelector from "./GradeSelector";
 import QualificationRulesSection from "./QualificationRulesSection";
 import {
+    DEFAULT_GRADE1_REQUIREMENTS,
+    DEFAULT_GRADE2_REQUIREMENTS,
+    DEFAULT_PERMANENT_REQUIREMENTS,
+    DEFAULT_SPECIAL_REQUIREMENTS,
+    DEFAULT_SUPRA_REQUIREMENTS
+} from "../constants/hrms";
+import {
     createFormFieldProps,
     dialogActionsSx
 } from "../utils/formLayout";
@@ -27,11 +34,11 @@ const emptyForm = {
     grade1RequiredYears: "",
     supraRequiredYears: "",
     specialRequiredYears: "",
-    customPermanentRequirements: [],
-    customGrade2Requirements: [],
-    customGrade1Requirements: [],
-    customSupraRequirements: [],
-    customSpecialRequirements: []
+    customPermanentRequirements: [...DEFAULT_PERMANENT_REQUIREMENTS],
+    customGrade2Requirements: [...DEFAULT_GRADE2_REQUIREMENTS],
+    customGrade1Requirements: [...DEFAULT_GRADE1_REQUIREMENTS],
+    customSupraRequirements: [...DEFAULT_SUPRA_REQUIREMENTS],
+    customSpecialRequirements: [...DEFAULT_SPECIAL_REQUIREMENTS]
 };
 
 export default function ServiceForm({
@@ -108,7 +115,11 @@ export default function ServiceForm({
                 ...nextForm,
                 allowedGrades,
                 specialRequiredYears: "",
-                customSpecialRequirements: []
+                customSpecialRequirements: [],
+                customSupraRequirements:
+                    formData.customSupraRequirements.length > 0
+                        ? formData.customSupraRequirements
+                        : [...DEFAULT_SUPRA_REQUIREMENTS]
             };
         } else if (!exists && grade === "Special") {
             allowedGrades = allowedGrades.filter((g) => g !== "Supra");
@@ -116,7 +127,25 @@ export default function ServiceForm({
                 ...nextForm,
                 allowedGrades,
                 supraRequiredYears: "",
+                customSupraRequirements: [],
+                customSpecialRequirements:
+                    formData.customSpecialRequirements.length > 0
+                        ? formData.customSpecialRequirements
+                        : [...DEFAULT_SPECIAL_REQUIREMENTS]
+            };
+        } else if (exists && grade === "Supra") {
+            nextForm = {
+                ...nextForm,
+                allowedGrades,
+                supraRequiredYears: "",
                 customSupraRequirements: []
+            };
+        } else if (exists && grade === "Special") {
+            nextForm = {
+                ...nextForm,
+                allowedGrades,
+                specialRequiredYears: "",
+                customSpecialRequirements: []
             };
         } else {
             nextForm.allowedGrades = allowedGrades;
@@ -146,6 +175,13 @@ export default function ServiceForm({
         setFormData({
             ...formData,
             [field]: formData[field].filter((_, itemIndex) => itemIndex !== index)
+        });
+    };
+
+    const restoreDefaultRequirements = (field, defaults) => {
+        setFormData({
+            ...formData,
+            [field]: [...defaults]
         });
     };
 
@@ -197,12 +233,12 @@ export default function ServiceForm({
             customGrade1Requirements: cleanRequirements(
                 formData.customGrade1Requirements
             ),
-            customSupraRequirements: cleanRequirements(
-                formData.customSupraRequirements
-            ),
-            customSpecialRequirements: cleanRequirements(
-                formData.customSpecialRequirements
-            )
+            customSupraRequirements: formData.allowedGrades.includes("Supra")
+                ? cleanRequirements(formData.customSupraRequirements)
+                : [],
+            customSpecialRequirements: formData.allowedGrades.includes("Special")
+                ? cleanRequirements(formData.customSpecialRequirements)
+                : []
         });
     };
 
@@ -298,6 +334,7 @@ export default function ServiceForm({
                     onAddCustomRequirement={addCustomRequirement}
                     onUpdateCustomRequirement={updateCustomRequirement}
                     onRemoveCustomRequirement={removeCustomRequirement}
+                    onRestoreDefaults={restoreDefaultRequirements}
                 />
             </DialogContent>
 
