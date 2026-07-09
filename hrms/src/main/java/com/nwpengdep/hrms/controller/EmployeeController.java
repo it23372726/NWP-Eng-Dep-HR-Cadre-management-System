@@ -108,14 +108,14 @@ public class EmployeeController {
     public List<EmployeeActionResponse> getEmployeeActions(
             @PathVariable Long id
     ) {
-        employeeService.getEmployeeById(id);
+        employeeService.requireEmployeeExists(id);
         return employeeActionService.getEmployeeActionHistory(id);
     }
 
     @GetMapping("/{id}/export/summary-pdf")
     @PreAuthorize(EMPLOYEE_READ)
     public ResponseEntity<byte[]> exportSummaryPdf(@PathVariable Long id) {
-        employeeService.getEmployeeById(id);
+        employeeService.requireEmployeeExists(id);
         byte[] data = employeeSummaryReportExportService.exportPdf(id);
 
         String filename = "employee-summary-" + id + ".pdf";
@@ -132,7 +132,7 @@ public class EmployeeController {
     @GetMapping("/{id}/export/dependent-details-pdf")
     @PreAuthorize(EMPLOYEE_READ)
     public ResponseEntity<byte[]> exportDependentDetailsPdf(@PathVariable Long id) {
-        employeeService.getEmployeeById(id);
+        employeeService.requireEmployeeExists(id);
         byte[] data = employeeDependentDetailsReportExportService.exportPdf(id);
 
         String filename = "employee-dependent-details-" + id + ".pdf";

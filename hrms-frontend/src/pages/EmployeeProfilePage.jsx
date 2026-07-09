@@ -183,10 +183,10 @@ export default function EmployeeProfilePage() {
 
     const loadProfile = async () => {
         try {
-            const [selectedEmployee, actions] = await Promise.all([
-                getEmployeeById(id),
-                getEmployeeActions(id)
-            ]);
+            // Load employee first: GET /employees/{id} syncs/saves on the backend.
+            // Parallel /actions used to call the same write path and race → 400 on first open.
+            const selectedEmployee = await getEmployeeById(id);
+            const actions = await getEmployeeActions(id);
 
             setEmployee(selectedEmployee);
             setActionHistory(actions);

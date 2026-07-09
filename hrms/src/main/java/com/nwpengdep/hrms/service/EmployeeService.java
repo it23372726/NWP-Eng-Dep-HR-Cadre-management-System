@@ -1288,6 +1288,18 @@ public class EmployeeService {
         return getActiveEmployees();
     }
 
+    /**
+     * Lightweight existence check for endpoints that only need to verify the
+     * employee exists (e.g. action history). Avoids the write-on-read sync in
+     * {@link #getEmployeeById(Long)}, which races when called in parallel.
+     */
+    @Transactional(readOnly = true)
+    public void requireEmployeeExists(Long id) {
+        if (!employeeRepository.existsById(id)) {
+            throw new RuntimeException("Employee not found");
+        }
+    }
+
     @Transactional
     public Employee getEmployeeById(Long id) {
         Employee employee = employeeRepository.findById(id)
