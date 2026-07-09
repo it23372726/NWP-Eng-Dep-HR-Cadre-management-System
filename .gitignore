@@ -1,0 +1,15 @@
+# Environment / secrets — never commit
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Backend build
+target/
+
+# Frontend dependencies and build
+node_modules/
+dist/
+
+# OS / editor
+.DS_Store

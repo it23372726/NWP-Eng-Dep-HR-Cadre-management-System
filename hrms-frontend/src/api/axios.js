@@ -1,8 +1,10 @@
 import axios from "axios";
 import { isTokenExpired, clearAuthData, redirectToLogin, generateCorrelationId } from "../utils/tokenUtils";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+
 const api = axios.create({
-    baseURL: "http://localhost:8080/api"
+    baseURL: `${API_BASE_URL.replace(/\/$/, "")}/api`
 });
 
 // Public endpoints that should not have Authorization header
