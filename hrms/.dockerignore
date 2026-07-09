@@ -1,0 +1,16 @@
+target/
+.idea/
+.vscode/
+*.iml
+.env
+.env.*
+!.env.example
+uploads/
+HELP.md
+.DS_Store
+**/.DS_Store
+.git/
+.gitignore
+mvnw.cmd
+*.md
+!README.md

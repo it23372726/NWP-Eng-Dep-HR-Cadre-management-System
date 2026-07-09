@@ -55,19 +55,22 @@ You do **not** need to create tables manually. With `spring.jpa.hibernate.ddl-au
 
 ## 2. Deploy the backend to Render
 
+Render does **not** offer a native Java runtime. Deploy the Spring Boot API with **Docker** using `hrms/Dockerfile`.
+
 1. In Render, create a **New Web Service** and connect your GitHub repository.
 2. Configure:
 
 | Setting | Value |
 |---------|--------|
 | **Root Directory** | `hrms` |
-| **Runtime** | Java (or Docker-free native build) |
-| **Build Command** | `chmod +x mvnw && ./mvnw clean package -DskipTests` |
-| **Start Command** | `java -jar target/*.jar` |
+| **Runtime / Language** | **Docker** (not Node) |
+| **Dockerfile Path** | `Dockerfile` (default; lives in `hrms/`) |
+| **Build Command** | *(leave empty — Docker builds the image)* |
+| **Start Command** | *(leave empty — image `ENTRYPOINT` starts the JAR)* |
 
-3. Set the Java version to **21** if Render asks (this project uses Java 21 in `pom.xml`).
+3. If you previously created a **Node** service for this repo, delete it or create a **new** Web Service with Docker. You cannot switch an existing Node service to Docker from the dashboard Settings UI.
 4. Add environment variables (see table below). Leave `FRONTEND_URL` blank or temporary until Vercel is deployed; you will update it in step 4.
-5. Deploy and wait until the service is live.
+5. Deploy and wait until the service is live (first Docker build can take several minutes).
 6. Copy the public backend URL, e.g. `https://your-backend-name.onrender.com`.
 7. Smoke-check health (no auth required):
 
@@ -194,10 +197,21 @@ npm run dev
 ### Verify production-style builds locally
 
 ```bash
-# Backend JAR
+# Backend JAR (local Maven)
 cd hrms
 chmod +x mvnw && ./mvnw clean package -DskipTests
-java -jar target/*.jar   # needs MySQL; for prod profile, export env vars first
+java -jar target/hrms-0.0.1-SNAPSHOT.jar   # needs MySQL; for prod profile, export env vars first
+
+# Backend Docker image (same path Render uses)
+cd hrms
+docker build -t hrms-backend .
+docker run --rm -p 8080:8080 \
+  -e SPRING_PROFILES_ACTIVE=prod \
+  -e PORT=8080 \
+  -e DB_HOST=... -e DB_PORT=... -e DB_NAME=... \
+  -e DB_USERNAME=... -e DB_PASSWORD=... \
+  -e JWT_SECRET=... \
+  hrms-backend
 
 # Frontend
 cd hrms-frontend
