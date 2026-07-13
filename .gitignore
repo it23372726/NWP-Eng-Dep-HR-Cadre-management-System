@@ -59,3 +59,4 @@ Thumbs.db
 # Optional local tooling
 .cursor/
 .fleet/
+.tools/
