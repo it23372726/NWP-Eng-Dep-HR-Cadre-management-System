@@ -7,18 +7,6 @@ import java.util.Locale;
 
 public final class OrganizationSettingsDefaults {
 
-    public static final String PRIMARY_DEPARTMENT_NAME =
-            "N.W.P. Engineering Department";
-    public static final String PROVINCIAL_COUNCIL_NAME =
-            "North Western Provincial Council";
-    public static final String DEPARTMENT_SHORT_NAME = "NWP Engineering";
-    public static final String APPLICATION_NAME = "NWP HRMS";
-    public static final String COUNCIL_LABEL = "N.W.P. Council";
-    public static final List<String> DISTRICTS = List.of(
-            "Kurunegala",
-            "Puttalam"
-    );
-
     public static final String RENAME_MIGRATE = "MIGRATE_EXISTING";
     public static final String RENAME_KEEP = "KEEP_EXISTING";
 
@@ -54,20 +42,31 @@ public final class OrganizationSettingsDefaults {
             String provincialCouncilName,
             String departmentShortName
     ) {
-        return provincialCouncilName.trim()
-                + " — "
-                + departmentShortName.trim();
+        String council = provincialCouncilName != null ? provincialCouncilName.trim() : "";
+        String department = departmentShortName != null ? departmentShortName.trim() : "";
+        if (council.isEmpty() && department.isEmpty()) {
+            return "";
+        }
+        if (council.isEmpty()) {
+            return department;
+        }
+        if (department.isEmpty()) {
+            return council;
+        }
+        return council + " — " + department;
     }
 
     public static String reportHeaderUppercase(
             String provincialCouncilName,
             String primaryDepartmentName
     ) {
-        String combined = provincialCouncilName.trim()
-                + " "
-                + primaryDepartmentName.trim();
+        String council = provincialCouncilName != null ? provincialCouncilName.trim() : "";
+        String department = primaryDepartmentName != null ? primaryDepartmentName.trim() : "";
+        String combined = (council + " " + department).trim();
+        if (combined.isEmpty()) {
+            return "";
+        }
         return combined.toUpperCase(Locale.ROOT)
-                .replace("N.W.P.", "NORTH WESTERN PROVINCIAL")
                 .replaceAll("\\s+", " ")
                 .trim();
     }

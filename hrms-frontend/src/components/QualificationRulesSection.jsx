@@ -8,28 +8,18 @@ import {
 } from "@mui/material";
 import {
     Add as AddIcon,
-    Delete as DeleteIcon,
-    RestartAlt as RestartAltIcon
+    Delete as DeleteIcon
 } from "@mui/icons-material";
 
 import FormSection from "./FormSection";
-import {
-    DEFAULT_GRADE1_REQUIREMENTS,
-    DEFAULT_GRADE2_REQUIREMENTS,
-    DEFAULT_PERMANENT_REQUIREMENTS,
-    DEFAULT_SPECIAL_REQUIREMENTS,
-    DEFAULT_SUPRA_REQUIREMENTS
-} from "../constants/hrms";
 
 function RequirementsEditor({
     field,
     label,
     items,
-    defaults,
     onAdd,
     onUpdate,
     onRemove,
-    onRestoreDefaults,
     fieldProps
 }) {
     return (
@@ -73,16 +63,6 @@ function RequirementsEditor({
                 >
                     Add Requirement
                 </Button>
-                {defaults?.length > 0 && (
-                    <Button
-                        variant="text"
-                        size="small"
-                        startIcon={<RestartAltIcon />}
-                        onClick={() => onRestoreDefaults(field, defaults)}
-                    >
-                        Restore defaults
-                    </Button>
-                )}
             </Stack>
         </Stack>
     );
@@ -94,8 +74,7 @@ export default function QualificationRulesSection({
     fieldProps,
     onAddCustomRequirement,
     onUpdateCustomRequirement,
-    onRemoveCustomRequirement,
-    onRestoreDefaults
+    onRemoveCustomRequirement
 }) {
     const showSupraRules = allowedGrades.includes("Supra");
     const showSpecialRules = allowedGrades.includes("Special");
@@ -112,24 +91,22 @@ export default function QualificationRulesSection({
 
             <FormSection
                 title="Permanent Requirements"
-                description="Edit or remove defaults, or add service-specific requirements before an employee becomes permanent."
+                description="Add service-specific requirements before an employee becomes permanent."
             >
                 <RequirementsEditor
                     field="customPermanentRequirements"
                     label="Requirement"
                     items={formData.customPermanentRequirements}
-                    defaults={DEFAULT_PERMANENT_REQUIREMENTS}
                     onAdd={onAddCustomRequirement}
                     onUpdate={onUpdateCustomRequirement}
                     onRemove={onRemoveCustomRequirement}
-                    onRestoreDefaults={onRestoreDefaults}
                     fieldProps={fieldProps}
                 />
             </FormSection>
 
             <FormSection
                 title="Grade III → Grade II Promotion"
-                description="Edit or remove defaults, or add service-specific requirements before promotion to Grade II."
+                description="Add service-specific requirements before promotion to Grade II."
             >
                 <Grid container spacing={2} sx={{ mb: 2 }}>
                     <Grid size={{ xs: 12, sm: 6 }}>
@@ -149,18 +126,16 @@ export default function QualificationRulesSection({
                     field="customGrade2Requirements"
                     label="Requirement"
                     items={formData.customGrade2Requirements}
-                    defaults={DEFAULT_GRADE2_REQUIREMENTS}
                     onAdd={onAddCustomRequirement}
                     onUpdate={onUpdateCustomRequirement}
                     onRemove={onRemoveCustomRequirement}
-                    onRestoreDefaults={onRestoreDefaults}
                     fieldProps={fieldProps}
                 />
             </FormSection>
 
             <FormSection
                 title="Grade II → Grade I Promotion"
-                description="Edit or remove defaults, or add service-specific requirements before promotion to Grade I."
+                description="Add service-specific requirements before promotion to Grade I."
             >
                 <Grid container spacing={2} sx={{ mb: 2 }}>
                     <Grid size={{ xs: 12, sm: 6 }}>
@@ -180,11 +155,9 @@ export default function QualificationRulesSection({
                     field="customGrade1Requirements"
                     label="Requirement"
                     items={formData.customGrade1Requirements}
-                    defaults={DEFAULT_GRADE1_REQUIREMENTS}
                     onAdd={onAddCustomRequirement}
                     onUpdate={onUpdateCustomRequirement}
                     onRemove={onRemoveCustomRequirement}
-                    onRestoreDefaults={onRestoreDefaults}
                     fieldProps={fieldProps}
                 />
             </FormSection>
@@ -192,7 +165,7 @@ export default function QualificationRulesSection({
             {showSupraRules && (
                 <FormSection
                     title="Grade I → Supra Promotion"
-                    description="Edit or remove defaults, or add service-specific requirements before promotion to Supra grade."
+                    description="Add service-specific requirements before promotion to Supra grade."
                 >
                     <Grid container spacing={2} sx={{ mb: 2 }}>
                         <Grid size={{ xs: 12, sm: 6 }}>
@@ -212,11 +185,9 @@ export default function QualificationRulesSection({
                         field="customSupraRequirements"
                         label="Requirement"
                         items={formData.customSupraRequirements}
-                        defaults={DEFAULT_SUPRA_REQUIREMENTS}
                         onAdd={onAddCustomRequirement}
                         onUpdate={onUpdateCustomRequirement}
                         onRemove={onRemoveCustomRequirement}
-                        onRestoreDefaults={onRestoreDefaults}
                         fieldProps={fieldProps}
                     />
                 </FormSection>
@@ -225,7 +196,7 @@ export default function QualificationRulesSection({
             {showSpecialRules && (
                 <FormSection
                     title="Grade I → Special Promotion"
-                    description="Edit or remove defaults, or add service-specific requirements before promotion to Special grade."
+                    description="Add service-specific requirements before promotion to Special grade."
                 >
                     <Grid container spacing={2} sx={{ mb: 2 }}>
                         <Grid size={{ xs: 12, sm: 6 }}>
@@ -245,11 +216,9 @@ export default function QualificationRulesSection({
                         field="customSpecialRequirements"
                         label="Requirement"
                         items={formData.customSpecialRequirements}
-                        defaults={DEFAULT_SPECIAL_REQUIREMENTS}
                         onAdd={onAddCustomRequirement}
                         onUpdate={onUpdateCustomRequirement}
                         onRemove={onRemoveCustomRequirement}
-                        onRestoreDefaults={onRestoreDefaults}
                         fieldProps={fieldProps}
                     />
                 </FormSection>

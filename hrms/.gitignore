@@ -1,14 +1,19 @@
+# Environment / secrets — never commit
+.env
+.env.local
+.env.production
+.env.*.local
+application-local.properties
+application-local.yml
+
 HELP.md
 target/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
 
-# Environment / secrets — never commit
-.env
-.env.local
-.env.production
-.env.*.local
+# Runtime uploads
+uploads/
 
 ### STS ###
 .apt_generated

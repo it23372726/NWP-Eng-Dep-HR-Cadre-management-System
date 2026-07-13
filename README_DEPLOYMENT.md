@@ -20,6 +20,7 @@ Local development continues to work with the defaults in `hrms/src/main/resource
 - Real production data should later be moved to the **official NWP server** or other properly secured production hosting (HTTPS, backups, access control, and data-protection policies).
 - Never commit `.env` files or real database/JWT credentials to GitHub.
 - Employee photo uploads are stored on the Render filesystem (`./uploads/...`) and are **ephemeral** (lost on redeploy/restart). That is acceptable for testing only.
+- Change the bootstrap `superadmin` password immediately after first login.
 
 ---
 
@@ -30,6 +31,62 @@ Local development continues to work with the defaults in `hrms/src/main/resource
 - Local tools (optional, for verifying builds):
   - JDK **21**
   - Node.js 18+ and npm
+  - MySQL 8+
+
+---
+
+## Clone and local setup
+
+```bash
+git clone https://github.com/it23372726/NWP-Eng-Dep-HR-Cadre-management-System.git
+cd NWP-Eng-Dep-HR-Cadre-management-System
+```
+
+### Backend (local)
+
+1. Start MySQL and create an empty database (or let the default URL create `nwp_hrms_host`).
+2. Optionally export local overrides:
+
+```bash
+export DB_USERNAME=root
+export DB_PASSWORD=your_mysql_password
+export JWT_SECRET=your-long-local-secret
+```
+
+If unset, local defaults are username `root`, empty password, and a development-only JWT placeholder.
+
+3. Run:
+
+```bash
+cd hrms
+chmod +x mvnw
+./mvnw spring-boot:run
+```
+
+On first start against an **empty** database the app creates only:
+
+| Username | Password | Role |
+|----------|----------|------|
+| `superadmin` | `admin123` | `SUPER_ADMIN` |
+
+No employees, offices, services, designations, cadres, role permissions, or organization settings are seeded.
+
+### Frontend (local)
+
+```bash
+cd hrms-frontend
+cp .env.example .env   # optional; defaults already point to localhost:8080
+npm install
+npm run dev
+```
+
+### First-login configuration order
+
+1. Login as `superadmin` / `admin123` and **change the password**.
+2. Open **Organization Settings** and save council/department names plus at least one district.
+3. Create **Service Levels**, then **Services**, **Designations**, **Offices**, and **Cadre** records.
+4. Open **Users → Manage Roles** before creating non–super-admin users.
+5. Create employees manually.
 
 ---
 
@@ -93,7 +150,8 @@ Render does **not** offer a native Java runtime. Deploy the Spring Boot API with
 | `DB_USERNAME` | From Aiven |
 | `DB_PASSWORD` | From Aiven |
 | `FRONTEND_URL` | `https://your-frontend.vercel.app` (set after Vercel deploy; no trailing slash) |
-| `JWT_SECRET` | Long random string (at least 32+ characters). Generate a new secret; do not reuse the local default. |
+| `JWT_SECRET` | Long random string (at least 32+ characters). Generate a new secret; do not reuse any old default. |
+| `HRMS_BOOTSTRAP_SUPER_ADMIN_PASSWORD` | Required on first empty-DB start in production. Set a strong password. |
 
 Optional:
 
@@ -101,10 +159,12 @@ Optional:
 |----------|---------|--------|
 | `JWT_EXPIRATION` | `86400000` | Token lifetime in milliseconds (24h) |
 | `PORT` | Set by Render | App binds via `server.port=${PORT:8080}` |
+| `HRMS_BOOTSTRAP_SUPER_ADMIN_ENABLED` | `true` | Set `false` after the first bootstrap if desired |
+| `HRMS_BOOTSTRAP_SUPER_ADMIN_USERNAME` | `superadmin` | Bootstrap username when users table is empty |
 
 Reference file listing the same names: [`hrms/.env.example`](hrms/.env.example).
 
-**Bootstrap note:** On first start against an empty database, the app may create a default super-admin (`superadmin` / `admin123` from local defaults unless you override bootstrap properties). Change that password immediately after first login on the test environment.
+**Bootstrap note:** On first start against an empty database, the production profile creates `superadmin` **only when** `HRMS_BOOTSTRAP_SUPER_ADMIN_PASSWORD` is set. Local development defaults to password `admin123`. Change the password immediately after first login. No demo employees or organization catalogs are imported.
 
 ---
 
@@ -163,8 +223,8 @@ VITE_API_BASE_URL=https://your-backend-name.onrender.com
 
 1. **Backend health:** open `https://your-backend-name.onrender.com/api/health` → `{ "status": "UP" }`.
 2. **Frontend:** open the Vercel URL.
-3. **Login:** use the bootstrap super-admin (or a user you created). Change the default password after first login.
-4. **Employees:** create / edit / search (use **fictional** data only).
+3. **Login:** use the bootstrap super-admin created with `HRMS_BOOTSTRAP_SUPER_ADMIN_PASSWORD`. Change the password after first login.
+4. Configure Organization Settings, then create reference data and employees manually (use **fictional** data only).
 5. **Reports:** open available report pages if your role allows them.
 
 If the browser shows CORS errors, confirm `FRONTEND_URL` matches the Vercel origin exactly (including `https://`) and that the backend was redeployed after the change.
@@ -173,7 +233,7 @@ If login fails with network errors, confirm `VITE_API_BASE_URL` points at the Re
 
 ---
 
-## Local development (after these changes)
+## Local development builds
 
 ### Backend
 
@@ -211,6 +271,7 @@ docker run --rm -p 8080:8080 \
   -e DB_HOST=... -e DB_PORT=... -e DB_NAME=... \
   -e DB_USERNAME=... -e DB_PASSWORD=... \
   -e JWT_SECRET=... \
+  -e HRMS_BOOTSTRAP_SUPER_ADMIN_PASSWORD=... \
   hrms-backend
 
 # Frontend
@@ -234,6 +295,7 @@ DB_USERNAME=
 DB_PASSWORD=
 FRONTEND_URL=https://your-frontend.vercel.app
 JWT_SECRET=
+HRMS_BOOTSTRAP_SUPER_ADMIN_PASSWORD=
 ```
 
 ### Vercel (frontend)

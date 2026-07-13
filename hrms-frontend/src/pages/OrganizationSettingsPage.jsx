@@ -19,7 +19,6 @@ import {
 import {
     Add as AddIcon,
     Delete as DeleteIcon,
-    RestartAlt as RestartAltIcon,
     Save as SaveIcon
 } from "@mui/icons-material";
 import { useEffect, useState } from "react";
@@ -29,9 +28,6 @@ import FormSection from "../components/FormSection";
 import { getApiErrorMessage } from "../constants/hrms";
 import { useOrganizationSettings } from "../context/OrganizationSettingsContext";
 import { updateOrganizationSettings } from "../services/organizationSettingsService";
-import {
-    DEFAULT_ORGANIZATION_SETTINGS
-} from "../utils/organizationSettingsStore";
 import { createFormFieldProps } from "../utils/formLayout";
 
 const emptyForm = {
@@ -48,14 +44,13 @@ function DistrictsEditor({
     onAdd,
     onUpdate,
     onRemove,
-    onRestoreDefaults,
     fieldProps
 }) {
     return (
         <Stack spacing={1.5}>
             {items.length === 0 && (
                 <Typography variant="body2" color="text.secondary">
-                    No districts configured.
+                    No districts configured. Add at least one district before creating offices.
                 </Typography>
             )}
             {items.map((district, index) => (
@@ -92,14 +87,6 @@ function DistrictsEditor({
                     onClick={onAdd}
                 >
                     Add District
-                </Button>
-                <Button
-                    variant="text"
-                    size="small"
-                    startIcon={<RestartAltIcon />}
-                    onClick={onRestoreDefaults}
-                >
-                    Restore defaults
                 </Button>
             </Stack>
         </Stack>
@@ -153,13 +140,6 @@ export default function OrganizationSettingsPage() {
         setForm((current) => ({
             ...current,
             districts: current.districts.filter((_, itemIndex) => itemIndex !== index)
-        }));
-    };
-
-    const restoreDefaultDistricts = () => {
-        setForm((current) => ({
-            ...current,
-            districts: [...DEFAULT_ORGANIZATION_SETTINGS.districts]
         }));
     };
 
@@ -292,7 +272,6 @@ export default function OrganizationSettingsPage() {
                     onAdd={addDistrict}
                     onUpdate={updateDistrict}
                     onRemove={removeDistrict}
-                    onRestoreDefaults={restoreDefaultDistricts}
                     fieldProps={fieldProps}
                 />
             </FormSection>

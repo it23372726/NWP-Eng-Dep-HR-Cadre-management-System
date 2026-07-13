@@ -426,7 +426,7 @@ export function getQualificationUpdateContext(employee) {
             sections,
             editableSectionId: null,
             message:
-                "All qualification stages for this grade are complete. Requirements are shown for reference only."
+                "All qualification stages for this grade are complete. Requirements  are shown for reference only."
         };
     }
 

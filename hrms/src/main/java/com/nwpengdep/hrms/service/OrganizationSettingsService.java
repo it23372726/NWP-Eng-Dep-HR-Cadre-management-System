@@ -11,6 +11,8 @@ import com.nwpengdep.hrms.repository.OrganizationSettingsRepository;
 import com.nwpengdep.hrms.util.OrganizationSettingsDefaults;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +22,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 @Slf4j
@@ -33,12 +36,14 @@ public class OrganizationSettingsService {
 
     @Transactional(readOnly = true)
     public OrganizationSettingsResponse getSettings() {
-        return toResponse(ensureSettings());
+        return findSettings()
+                .map(this::toResponse)
+                .orElseGet(this::emptyResponse);
     }
 
     @Transactional(readOnly = true)
-    public OrganizationSettings getEntity() {
-        return ensureSettings();
+    public Optional<OrganizationSettings> getEntity() {
+        return findSettings();
     }
 
     public String getPrimaryDepartmentName() {
@@ -50,7 +55,9 @@ public class OrganizationSettingsService {
     }
 
     public List<String> getDistricts() {
-        return parseDistricts(ensureSettings().getDistrictsJson());
+        return findSettings()
+                .map(settings -> parseDistricts(settings.getDistrictsJson()))
+                .orElseGet(List::of);
     }
 
     public void requireConfiguredDistrict(String district) {
@@ -58,7 +65,14 @@ public class OrganizationSettingsService {
         if (normalized == null) {
             throw new RuntimeException("District is required");
         }
-        boolean allowed = getDistricts().stream()
+        List<String> districts = getDistricts();
+        if (districts.isEmpty()) {
+            throw new RuntimeException(
+                    "Organization districts are not configured. "
+                            + "Save Organization Settings before creating offices or employees."
+            );
+        }
+        boolean allowed = districts.stream()
                 .anyMatch(item -> item.equalsIgnoreCase(normalized));
         if (!allowed) {
             throw new RuntimeException("Invalid district: " + district);
@@ -80,8 +94,12 @@ public class OrganizationSettingsService {
     public OrganizationSettingsResponse updateSettings(
             OrganizationSettingsUpdateRequest request
     ) {
-        OrganizationSettings settings = ensureSettings();
-        String oldPrimary = settings.getPrimaryDepartmentName();
+        OrganizationSettings settings = findSettings()
+                .orElseGet(this::newSettingsEntity);
+
+        String oldPrimary = settings.getPrimaryDepartmentName() == null
+                ? ""
+                : settings.getPrimaryDepartmentName();
         List<String> oldDistricts = parseDistricts(settings.getDistrictsJson());
 
         String newPrimary = requireText(
@@ -92,7 +110,8 @@ public class OrganizationSettingsService {
                 request.getDistricts()
         );
 
-        boolean primaryChanged = !oldPrimary.equalsIgnoreCase(newPrimary);
+        boolean primaryChanged = !oldPrimary.isBlank()
+                && !oldPrimary.equalsIgnoreCase(newPrimary);
         if (primaryChanged) {
             String mode = request.getDepartmentRenameMode() == null
                     ? ""
@@ -135,37 +154,48 @@ public class OrganizationSettingsService {
         return toResponse(saved);
     }
 
-    @Transactional
-    public OrganizationSettings ensureSettings() {
-        return settingsRepository.findById(OrganizationSettings.SINGLETON_ID)
-                .orElseGet(this::createDefaults);
-    }
-
     public void refreshRuntimeCache() {
-        OrganizationSettings settings = ensureSettings();
-        DepartmentConstants.setPrimaryDepartmentName(settings.getPrimaryDepartmentName());
+        findSettings().ifPresentOrElse(
+                settings -> DepartmentConstants.setPrimaryDepartmentName(
+                        settings.getPrimaryDepartmentName()
+                ),
+                () -> DepartmentConstants.setPrimaryDepartmentName("")
+        );
     }
 
-    private OrganizationSettings createDefaults() {
-        OrganizationSettings settings = OrganizationSettings.builder()
+    @EventListener(ApplicationReadyEvent.class)
+    public void loadRuntimeCacheOnStartup() {
+        refreshRuntimeCache();
+    }
+
+    private Optional<OrganizationSettings> findSettings() {
+        return settingsRepository.findById(OrganizationSettings.SINGLETON_ID);
+    }
+
+    private OrganizationSettings newSettingsEntity() {
+        return OrganizationSettings.builder()
                 .id(OrganizationSettings.SINGLETON_ID)
-                .primaryDepartmentName(
-                        OrganizationSettingsDefaults.PRIMARY_DEPARTMENT_NAME
-                )
-                .provincialCouncilName(
-                        OrganizationSettingsDefaults.PROVINCIAL_COUNCIL_NAME
-                )
-                .departmentShortName(
-                        OrganizationSettingsDefaults.DEPARTMENT_SHORT_NAME
-                )
-                .applicationName(OrganizationSettingsDefaults.APPLICATION_NAME)
-                .councilLabel(OrganizationSettingsDefaults.COUNCIL_LABEL)
-                .districtsJson(writeDistricts(OrganizationSettingsDefaults.DISTRICTS))
+                .primaryDepartmentName("")
+                .provincialCouncilName("")
+                .departmentShortName("")
+                .applicationName("")
+                .councilLabel("")
+                .districtsJson("[]")
                 .build();
-        OrganizationSettings saved = settingsRepository.save(settings);
-        DepartmentConstants.setPrimaryDepartmentName(saved.getPrimaryDepartmentName());
-        log.info("Created default organization settings");
-        return saved;
+    }
+
+    private OrganizationSettingsResponse emptyResponse() {
+        return OrganizationSettingsResponse.builder()
+                .primaryDepartmentName("")
+                .provincialCouncilName("")
+                .departmentShortName("")
+                .applicationName("")
+                .councilLabel("")
+                .districts(List.of())
+                .reportHeaderSubtitle("")
+                .reportHeaderUppercase("")
+                .updatedAt(null)
+                .build();
     }
 
     private void migratePrimaryDepartment(String oldName, String newName) {
@@ -223,8 +253,8 @@ public class OrganizationSettingsService {
     ) {
         Set<String> renamedFromLower = new HashSet<>();
 
-        // Same-index edits are treated as renames (e.g. "Kurunagala" -> "Kurunegala")
-        // so offices/employees/actions are migrated. True removals stay blocked when in use.
+        // Same-index edits are treated as renames so offices/employees/actions are migrated.
+        // True removals stay blocked when in use.
         int shared = Math.min(oldDistricts.size(), newDistricts.size());
         for (int index = 0; index < shared; index++) {
             String oldLabel = oldDistricts.get(index);
@@ -368,11 +398,11 @@ public class OrganizationSettingsService {
     private OrganizationSettingsResponse toResponse(OrganizationSettings settings) {
         List<String> districts = parseDistricts(settings.getDistrictsJson());
         return OrganizationSettingsResponse.builder()
-                .primaryDepartmentName(settings.getPrimaryDepartmentName())
-                .provincialCouncilName(settings.getProvincialCouncilName())
-                .departmentShortName(settings.getDepartmentShortName())
-                .applicationName(settings.getApplicationName())
-                .councilLabel(settings.getCouncilLabel())
+                .primaryDepartmentName(nullToEmpty(settings.getPrimaryDepartmentName()))
+                .provincialCouncilName(nullToEmpty(settings.getProvincialCouncilName()))
+                .departmentShortName(nullToEmpty(settings.getDepartmentShortName()))
+                .applicationName(nullToEmpty(settings.getApplicationName()))
+                .councilLabel(nullToEmpty(settings.getCouncilLabel()))
                 .districts(districts)
                 .reportHeaderSubtitle(OrganizationSettingsDefaults.reportHeaderSubtitle(
                         settings.getProvincialCouncilName(),
@@ -388,7 +418,7 @@ public class OrganizationSettingsService {
 
     private List<String> parseDistricts(String json) {
         if (json == null || json.isBlank()) {
-            return new ArrayList<>(OrganizationSettingsDefaults.DISTRICTS);
+            return new ArrayList<>();
         }
         try {
             List<String> parsed = objectMapper.readValue(
@@ -396,10 +426,13 @@ public class OrganizationSettingsService {
                     new TypeReference<List<String>>() {
                     }
             );
+            if (parsed == null || parsed.isEmpty()) {
+                return new ArrayList<>();
+            }
             return OrganizationSettingsDefaults.normalizeDistricts(parsed);
-        } catch (JsonProcessingException exception) {
-            log.warn("Failed to parse districts_json, using defaults: {}", exception.getMessage());
-            return new ArrayList<>(OrganizationSettingsDefaults.DISTRICTS);
+        } catch (RuntimeException | JsonProcessingException exception) {
+            log.warn("Failed to parse districts_json, using empty list: {}", exception.getMessage());
+            return new ArrayList<>();
         }
     }
 
@@ -416,6 +449,10 @@ public class OrganizationSettingsService {
             throw new RuntimeException(fieldName + " is required");
         }
         return value.trim();
+    }
+
+    private String nullToEmpty(String value) {
+        return value == null ? "" : value;
     }
 
     private boolean columnExists(String tableName, String columnName) {

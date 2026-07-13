@@ -1,7 +1,5 @@
 package com.nwpengdep.hrms.constants;
 
-import com.nwpengdep.hrms.util.OrganizationSettingsDefaults;
-
 /**
  * Runtime-backed primary department identity.
  * Updated by {@link com.nwpengdep.hrms.service.OrganizationSettingsService}.
@@ -12,11 +10,9 @@ public final class DepartmentConstants {
      * @deprecated Use {@link #getPrimaryDepartmentName()} — kept for compile compatibility.
      */
     @Deprecated
-    public static final String NWP_ENGINEERING =
-            OrganizationSettingsDefaults.PRIMARY_DEPARTMENT_NAME;
+    public static final String NWP_ENGINEERING = "";
 
-    private static volatile String primaryDepartmentName =
-            OrganizationSettingsDefaults.PRIMARY_DEPARTMENT_NAME;
+    private static volatile String primaryDepartmentName = "";
 
     private DepartmentConstants() {
     }
@@ -24,6 +20,8 @@ public final class DepartmentConstants {
     public static void setPrimaryDepartmentName(String name) {
         if (name != null && !name.isBlank()) {
             primaryDepartmentName = name.trim();
+        } else {
+            primaryDepartmentName = "";
         }
     }
 
@@ -33,6 +31,7 @@ public final class DepartmentConstants {
 
     public static boolean isPrimaryDepartment(String department) {
         return department != null
+                && !primaryDepartmentName.isBlank()
                 && primaryDepartmentName.equalsIgnoreCase(department.trim());
     }
 

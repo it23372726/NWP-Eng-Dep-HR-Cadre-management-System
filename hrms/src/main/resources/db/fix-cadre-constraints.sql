@@ -7,10 +7,3 @@ ALTER TABLE cadre_positions
 
 -- Employee: service is derived from designation
 ALTER TABLE employees DROP COLUMN service_id;
-
--- Seed service levels if missing
-INSERT IGNORE INTO service_levels (level_name) VALUES
-    ('Senior'),
-    ('Tertiary'),
-    ('Secondary'),
-    ('Primary');

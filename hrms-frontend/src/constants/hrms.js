@@ -296,51 +296,6 @@ export const REQUIREMENT_TYPE_LABELS = {
     CUSTOM_SPECIAL_REQUIREMENT: "Custom Special Requirement"
 };
 
-export const DEFAULT_PERMANENT_REQUIREMENTS = [
-    "EB Grade III Passed",
-    "Government Language Qualification Passed",
-    "Medical Report Completed",
-    "O/L Approved",
-    "A/L Approved",
-    "Degree Approved",
-    "Birth Certificate Approved"
-];
-
-export const DEFAULT_GRADE2_REQUIREMENTS = ["EB Grade II Passed"];
-
-export const DEFAULT_GRADE1_REQUIREMENTS = ["EB Grade I Passed"];
-
-export const DEFAULT_SUPRA_REQUIREMENTS = [
-    "Supra Grade Examination Passed"
-];
-
-export const DEFAULT_SPECIAL_REQUIREMENTS = ["Masters Degree Completed"];
-
-/** @deprecated Use DEFAULT_* string templates for service configuration */
-export const FIXED_PERMANENT_REQUIREMENTS = DEFAULT_PERMANENT_REQUIREMENTS.map(
-    (label) => ({ requirementType: "CUSTOM_PERMANENT_REQUIREMENT", label })
-);
-
-/** @deprecated Use DEFAULT_* string templates for service configuration */
-export const FIXED_GRADE2_REQUIREMENTS = DEFAULT_GRADE2_REQUIREMENTS.map(
-    (label) => ({ requirementType: "CUSTOM_GRADE_2_REQUIREMENT", label })
-);
-
-/** @deprecated Use DEFAULT_* string templates for service configuration */
-export const FIXED_GRADE1_REQUIREMENTS = DEFAULT_GRADE1_REQUIREMENTS.map(
-    (label) => ({ requirementType: "CUSTOM_GRADE_1_REQUIREMENT", label })
-);
-
-/** @deprecated Use DEFAULT_* string templates for service configuration */
-export const FIXED_SUPRA_REQUIREMENTS = DEFAULT_SUPRA_REQUIREMENTS.map(
-    (label) => ({ requirementType: "CUSTOM_SUPRA_REQUIREMENT", label })
-);
-
-/** @deprecated Use DEFAULT_* string templates for service configuration */
-export const FIXED_SPECIAL_REQUIREMENTS = DEFAULT_SPECIAL_REQUIREMENTS.map(
-    (label) => ({ requirementType: "CUSTOM_SPECIAL_REQUIREMENT", label })
-);
-
 export function serviceAllowsSupra(service) {
     return (service?.allowedGrades || []).includes("Supra");
 }
