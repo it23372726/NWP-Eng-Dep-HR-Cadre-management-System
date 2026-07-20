@@ -89,11 +89,11 @@ const PipelineStage = ({
         >
             <Stack
                 direction={{ xs: "column", sm: "row" }}
-                alignItems={{ xs: "flex-start", sm: "center" }}
-                justifyContent="space-between"
+
+
                 spacing={1.5}
-            >
-                <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ flex: 1 }}>
+             sx={{ alignItems: { xs: "flex-start", sm: "center" }, justifyContent: "space-between" }}>
+                <Stack direction="row" spacing={1.5} sx={{alignItems: "flex-start",  flex: 1 }}>
                     <Box
                         sx={{
                             p: 1,
@@ -119,9 +119,9 @@ const PipelineStage = ({
 
                 <Stack
                     direction="row"
-                    alignItems="center"
+
                     spacing={1.5}
-                    sx={{ flexShrink: 0, alignSelf: { xs: "flex-end", sm: "center" } }}
+                    sx={{alignItems: "center",  flexShrink: 0, alignSelf: { xs: "flex-end", sm: "center" } }}
                 >
                     {loading ? (
                         <Skeleton variant="text" width={48} height={36} />
@@ -296,7 +296,7 @@ export default function PromotionPipelinePanel({ summary, loading }) {
 
             <Grid container spacing={1.5}>
                 {activityStats.map((stat) => (
-                    <Grid item xs={12} sm={4} key={stat.label}>
+                    <Grid size={{ xs: 12, sm: 4 }} key={stat.label}>
                         <ActivityStat {...stat} loading={loading} />
                     </Grid>
                 ))}

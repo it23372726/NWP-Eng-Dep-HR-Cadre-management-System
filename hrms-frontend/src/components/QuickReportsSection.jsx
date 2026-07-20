@@ -1,5 +1,4 @@
-import React from "react";
-import { Paper, Box, Typography, Button, Grid } from "@mui/material";
+import { Paper, Typography, Button, Grid } from "@mui/material";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import { useNavigate } from "react-router-dom";
 
@@ -20,7 +19,7 @@ export default function QuickReportsSection() {
             </Typography>
             <Grid container spacing={2}>
                 {reports.map((report, index) => (
-                    <Grid item xs={12} sm={6} md={3} key={index}>
+                    <Grid size={{ xs: 12, sm: 6, md: 3 }} key={index}>
                         <Button
                             fullWidth
                             variant="outlined"

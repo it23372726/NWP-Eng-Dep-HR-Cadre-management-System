@@ -23,7 +23,7 @@ export function isTokenExpired(token) {
         const currentTime = Date.now();
 
         return expirationTime < currentTime;
-    } catch (error) {
+    } catch {
         // If token is malformed, consider it expired
         return true;
     }

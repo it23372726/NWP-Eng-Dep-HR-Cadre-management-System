@@ -18,7 +18,6 @@ import {
     buildTrainingUpdatePayload,
     mapActionsToCareerHistory,
     mapEmployeeToForm,
-    prepareCareerHistoryForSave,
     validateCareerHistoryTimeline,
     validateContractFields,
     validatePrivateVehicleFields,

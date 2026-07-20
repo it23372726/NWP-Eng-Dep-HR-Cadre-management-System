@@ -49,7 +49,7 @@ function NavIcon({ icon: Icon, active, sx = {} }) {
             sx={{
                 minWidth: 0,
                 mr: 1.5,
-                color: active ? "primary.main" : "text.secondary",
+                color: active ? "primary.main" : "grey.500",
                 display: "flex",
                 justifyContent: "center",
                 ...sx
@@ -62,20 +62,23 @@ function NavIcon({ icon: Icon, active, sx = {} }) {
 
 function navItemSx({ active, collapsed, nested = false }) {
     return {
-        borderRadius: 2,
-        mb: 0.35,
-        pl: nested ? 3.5 : collapsed ? 1.5 : 2,
-        pr: collapsed ? 1.5 : 2,
-        py: nested ? 0.65 : 0.85,
-        borderLeft: active ? "3px solid" : "3px solid transparent",
-        borderColor: active ? "primary.main" : "transparent",
-        bgcolor: active ? "action.selected" : "transparent",
+        minHeight: nested ? 39 : 44,
+        borderRadius: 2.25,
+        mb: 0.4,
+        pl: nested ? 3.75 : collapsed ? 1.5 : 1.75,
+        pr: collapsed ? 1.5 : 1.75,
+        py: nested ? 0.7 : 0.8,
+        justifyContent: collapsed ? "center" : "flex-start",
+        border: "1px solid",
+        borderColor: active ? "primary.100" : "transparent",
+        bgcolor: active ? "primary.50" : "transparent",
+        color: active ? "primary.dark" : "text.primary",
         "&:hover": {
-            bgcolor: active ? "action.selected" : "action.hover"
+            bgcolor: active ? "primary.50" : "action.hover"
         },
         "&.Mui-selected": {
-            bgcolor: "action.selected",
-            "&:hover": { bgcolor: "action.selected" }
+            bgcolor: "primary.50",
+            "&:hover": { bgcolor: "primary.50" }
         }
     };
 }
@@ -90,7 +93,7 @@ function NavLeafButton({
     const Icon = item.icon;
 
     return (
-        <ListItem disablePadding sx={{ px: 1 }}>
+        <ListItem disablePadding sx={{ px: collapsed ? 1.25 : 1.5 }}>
             <Tooltip title={collapsed ? item.label : ""} placement="right">
                 <ListItemButton
                     onClick={() => onNavigate(item.path)}
@@ -110,7 +113,7 @@ function NavLeafButton({
                             slotProps={{
                                 primary: {
                                     sx: {
-                                        fontWeight: active ? 750 : 600,
+                                        fontWeight: active ? 750 : 620,
                                         fontSize: nested ? "0.875rem" : "0.92rem"
                                     }
                                 }
@@ -144,19 +147,20 @@ function CollapsedSectionFlyout({ section, location, onNavigate }) {
 
     return (
         <>
-            <ListItem disablePadding sx={{ px: 1 }}>
+            <ListItem disablePadding sx={{ px: 1.25 }}>
                 <Tooltip title={section.label} placement="right">
                     <ListItemButton
                         onClick={handleOpen}
                         sx={{
-                            borderRadius: 2,
+                            minHeight: 44,
+                            borderRadius: 2.25,
                             mb: 0.35,
                             px: 1.5,
                             py: 0.85,
                             justifyContent: "center",
-                            borderLeft: sectionActive ? "3px solid" : "3px solid transparent",
-                            borderColor: sectionActive ? "primary.main" : "transparent",
-                            bgcolor: open || sectionActive ? "action.selected" : "transparent",
+                            border: "1px solid",
+                            borderColor: sectionActive ? "primary.100" : "transparent",
+                            bgcolor: open || sectionActive ? "primary.50" : "transparent",
                             "&:hover": {
                                 bgcolor: "action.hover"
                             }
@@ -167,7 +171,7 @@ function CollapsedSectionFlyout({ section, location, onNavigate }) {
                                 minWidth: 0,
                                 color: sectionActive
                                     ? "primary.main"
-                                    : "text.secondary",
+                                    : "grey.500",
                                 display: "flex",
                                 justifyContent: "center"
                             }}
@@ -186,7 +190,14 @@ function CollapsedSectionFlyout({ section, location, onNavigate }) {
                 transformOrigin={{ vertical: "top", horizontal: "left" }}
                 slotProps={{
                     paper: {
-                        sx: { minWidth: 220, py: 0.5 }
+                        sx: {
+                            minWidth: 232,
+                            py: 0.75,
+                            ml: 1,
+                            border: "1px solid",
+                            borderColor: "divider",
+                            boxShadow: 3
+                        }
                     }
                 }}
             >
@@ -249,14 +260,15 @@ function ExpandedSection({ section, expanded, onToggle, location, onNavigate }) 
 
     return (
         <>
-            <ListItem disablePadding sx={{ px: 1 }}>
+            <ListItem disablePadding sx={{ px: 1.5 }}>
                 <ListItemButton
                     onClick={onToggle}
                     sx={{
-                        borderRadius: 2,
-                        mb: 0.25,
-                        px: 2,
-                        py: 0.85,
+                        minHeight: 44,
+                        borderRadius: 2.25,
+                        mb: 0.35,
+                        px: 1.75,
+                        py: 0.8,
                         bgcolor: expanded ? "action.hover" : "transparent",
                         "&:hover": {
                             bgcolor: "action.hover"
@@ -269,7 +281,7 @@ function ExpandedSection({ section, expanded, onToggle, location, onNavigate }) 
                         slotProps={{
                             primary: {
                                 sx: {
-                                    fontWeight: sectionActive ? 700 : 600,
+                                    fontWeight: sectionActive ? 750 : 650,
                                     fontSize: "0.92rem",
                                     color: sectionActive
                                         ? "primary.main"
@@ -349,13 +361,13 @@ export default function SidebarNav({ collapsed, onNavigate }) {
     };
 
     return (
-        <List dense sx={{ py: 1, px: 0, pb: 2 }}>
+        <List dense sx={{ py: 0.75, px: 0, pb: 1.5 }}>
             {standaloneItems.map((item) => {
                 const active = location.pathname === item.path;
                 const Icon = item.icon;
 
                 return (
-                    <ListItem key={item.path} disablePadding sx={{ px: 1 }}>
+                    <ListItem key={item.path} disablePadding sx={{ px: 1.5 }}>
                         <Tooltip
                             title={collapsed ? item.label : ""}
                             placement="right"
@@ -371,7 +383,7 @@ export default function SidebarNav({ collapsed, onNavigate }) {
                                         mr: collapsed ? 0 : 1.5,
                                         color: active
                                             ? "primary.main"
-                                            : "text.secondary",
+                                            : "grey.500",
                                         display: "flex",
                                         justifyContent: "center"
                                     }}
@@ -384,7 +396,7 @@ export default function SidebarNav({ collapsed, onNavigate }) {
                                         slotProps={{
                                             primary: {
                                                 sx: {
-                                                    fontWeight: active ? 750 : 600,
+                                                    fontWeight: active ? 750 : 620,
                                                     fontSize: "0.92rem"
                                                 }
                                             }
@@ -399,7 +411,7 @@ export default function SidebarNav({ collapsed, onNavigate }) {
 
             {sections.map((section) => (
                 <React.Fragment key={section.id}>
-                    <Divider sx={{ my: 0.75, mx: 1.5, opacity: 0.8 }} />
+                    <Divider sx={{ my: 1, mx: 2, opacity: 0.65 }} />
                     {collapsed ? (
                         <CollapsedSectionFlyout
                             section={section}

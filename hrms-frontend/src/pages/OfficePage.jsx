@@ -134,7 +134,7 @@ export default function OfficePage() {
                 sx={{ mb: 3, alignItems: { sm: "center" }, justifyContent: "space-between" }}
             >
                 <Box>
-                    <Typography variant="h4" fontWeight={700}>
+                    <Typography variant="h4" sx={{ fontWeight: 700 }}>
                         Offices
                     </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>

@@ -201,7 +201,7 @@ export default function ServiceLevelPage() {
                                     sx={{ "&:last-child td": { borderBottom: 0 } }}
                                 >
                                     <TableCell>
-                                        <Typography variant="body2" fontWeight={500}>
+                                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
                                             {level.levelName}
                                         </Typography>
                                     </TableCell>

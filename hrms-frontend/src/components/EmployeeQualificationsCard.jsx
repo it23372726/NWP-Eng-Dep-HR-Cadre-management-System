@@ -16,6 +16,15 @@ import {
     Typography
 } from "@mui/material";
 import {
+    AssignmentTurnedInOutlined as RequirementsIcon,
+    SchoolOutlined as SchoolIcon
+} from "@mui/icons-material";
+import MobileDataCard, {
+    DesktopTableWrapper,
+    MobileDataCardList
+} from "./MobileDataCard";
+import { EmployeeProfileEmptyState } from "./EmployeeProfileSection";
+import {
     FIXED_TRAINING_GRADUATION_REQUIREMENTS,
     getEmployeeServiceRules,
     getTrainingGraduationBlockReason,
@@ -182,41 +191,50 @@ function RequirementSection({
         <Paper
             variant="outlined"
             sx={{
-                borderRadius: 2,
+                borderRadius: 3,
                 overflow: "hidden",
-                bgcolor: "background.paper"
+                bgcolor: "background.paper",
+                boxShadow: 1
             }}
         >
-            <Box sx={{ px: 2.5, py: 2, bgcolor: "grey.50" }}>
+            <Box sx={{ px: { xs: 2, sm: 2.5 }, py: 2, bgcolor: "grey.50" }}>
                 <Stack
                     direction={{ xs: "column", sm: "row" }}
                     spacing={1.5}
                     sx={{ justifyContent: "space-between", alignItems: "flex-start" }}
                 >
-                    <Box>
-                        <Typography variant="subtitle1" fontWeight={600}>
-                            {title}
-                        </Typography>
-                        {description && (
-                            <Typography
-                                variant="body2"
-                                color="text.secondary"
-                                sx={{ mt: 0.5 }}
-                            >
-                                {description}
+                    <Stack direction="row" spacing={1.25} sx={{ alignItems: "flex-start" }}>
+                        <Box
+                            sx={{
+                                width: 38,
+                                height: 38,
+                                borderRadius: 2.5,
+                                display: "grid",
+                                placeItems: "center",
+                                bgcolor: "primary.50",
+                                color: "primary.main",
+                                flexShrink: 0
+                            }}
+                        >
+                            <RequirementsIcon fontSize="small" />
+                        </Box>
+                        <Box>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                                {title}
                             </Typography>
-                        )}
-                        {meta && (
-                            <Typography
-                                variant="caption"
-                                color="text.secondary"
-                                sx={{ mt: 0.75, display: "block" }}
-                            >
-                                {meta}
-                            </Typography>
-                        )}
-                    </Box>
-                    <Stack spacing={0.75} alignItems={{ xs: "flex-start", sm: "flex-end" }}>
+                            {description && (
+                                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                                    {description}
+                                </Typography>
+                            )}
+                            {meta && (
+                                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: "block" }}>
+                                    {meta}
+                                </Typography>
+                            )}
+                        </Box>
+                    </Stack>
+                    <Stack spacing={0.75} sx={{ alignItems: { xs: "flex-start", sm: "flex-end" } }}>
                         <Chip
                             size="small"
                             variant="outlined"
@@ -250,61 +268,75 @@ function RequirementSection({
                 )}
             </Box>
 
-            <TableContainer>
-                <Table size="small">
-                    <TableHead>
-                        <TableRow sx={{ bgcolor: "grey.100" }}>
-                            <TableCell sx={{ fontWeight: 600, width: "45%" }}>
-                                Requirement
-                            </TableCell>
-                            <TableCell sx={{ fontWeight: 600, width: "20%" }}>
-                                Status
-                            </TableCell>
-                            <TableCell sx={{ fontWeight: 600, width: "20%" }}>
-                                Completed On
-                            </TableCell>
-                            <TableCell sx={{ fontWeight: 600, width: "15%" }}>
-                                Remarks
-                            </TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {rows.map((row) => {
-                            const metaItem = statusMeta(row.status);
-                            return (
-                                <TableRow key={row.key} hover>
-                                    <TableCell>
-                                        <Typography variant="body2">
-                                            {row.label}
-                                        </Typography>
-                                    </TableCell>
-                                    <TableCell>
+            <DesktopTableWrapper>
+                <TableContainer sx={{ border: 0, borderRadius: 0, boxShadow: "none" }}>
+                    <Table size="small">
+                        <TableHead>
+                            <TableRow sx={{ bgcolor: "grey.100" }}>
+                                <TableCell sx={{ width: "45%" }}>Requirement</TableCell>
+                                <TableCell sx={{ width: "20%" }}>Status</TableCell>
+                                <TableCell sx={{ width: "20%" }}>Completed On</TableCell>
+                                <TableCell sx={{ width: "15%" }}>Remarks</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {rows.map((row) => {
+                                const metaItem = statusMeta(row.status);
+                                return (
+                                    <TableRow key={row.key} hover>
+                                        <TableCell>
+                                            <Typography variant="body2" sx={{ fontWeight: 650 }}>
+                                                {row.label}
+                                            </Typography>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Chip size="small" label={metaItem.label} color={metaItem.color} variant="outlined" />
+                                        </TableCell>
+                                        <TableCell>
+                                            <Typography variant="body2">{formatDate(row.completedDate)}</Typography>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Typography variant="body2" color="text.secondary">
+                                                {row.remarks || "—"}
+                                            </Typography>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
+                        </TableBody>
+                    </Table>
+                </TableContainer>
+            </DesktopTableWrapper>
+
+            <MobileDataCardList sx={{ p: 1.5, bgcolor: "background.paper" }}>
+                {rows.map((row) => {
+                    const metaItem = statusMeta(row.status);
+                    return (
+                        <MobileDataCard
+                            key={row.key}
+                            title={row.label}
+                            subtitle={row.remarks || "No remarks recorded"}
+                            fields={[
+                                {
+                                    label: "Status",
+                                    value: (
                                         <Chip
                                             size="small"
                                             label={metaItem.label}
                                             color={metaItem.color}
                                             variant="outlined"
                                         />
-                                    </TableCell>
-                                    <TableCell>
-                                        <Typography variant="body2">
-                                            {formatDate(row.completedDate)}
-                                        </Typography>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Typography
-                                            variant="body2"
-                                            color="text.secondary"
-                                        >
-                                            {row.remarks || "—"}
-                                        </Typography>
-                                    </TableCell>
-                                </TableRow>
-                            );
-                        })}
-                    </TableBody>
-                </Table>
-            </TableContainer>
+                                    )
+                                },
+                                {
+                                    label: "Completed on",
+                                    value: formatDate(row.completedDate)
+                                }
+                            ]}
+                        />
+                    );
+                })}
+            </MobileDataCardList>
         </Paper>
     );
 }
@@ -327,10 +359,13 @@ function QualificationsSummary({
         <Paper
             variant="outlined"
             sx={{
-                p: 2.5,
+                p: { xs: 2, sm: 2.5 },
                 mb: 2.5,
-                borderRadius: 2,
-                bgcolor: "grey.50"
+                borderRadius: 3,
+                overflow: "hidden",
+                boxShadow: 1,
+                background: (theme) =>
+                    `linear-gradient(135deg, ${theme.palette.background.paper}, ${theme.palette.primary[50]})`
             }}
         >
             <Stack
@@ -342,29 +377,38 @@ function QualificationsSummary({
                 }}
             >
                 <Box sx={{ minWidth: 0, flex: 1 }}>
-                    <Typography
-                        variant="overline"
-                        color="text.secondary"
-                        sx={{ lineHeight: 1.2 }}
-                    >
-                        Service requirements
-                    </Typography>
-                    <Typography variant="h6" fontWeight={600} sx={{ mt: 0.25 }}>
-                        {designationName}
-                    </Typography>
-                    <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{ mt: 0.75 }}
-                    >
-                        Tracks permanent confirmation, Grade II promotion, and Grade I
-                        promotion requirements for this employee.
-                    </Typography>
+                    <Stack direction="row" spacing={1.5} sx={{ alignItems: "flex-start" }}>
+                        <Box
+                            sx={{
+                                width: 46,
+                                height: 46,
+                                borderRadius: 3,
+                                display: "grid",
+                                placeItems: "center",
+                                bgcolor: "primary.main",
+                                color: "primary.contrastText",
+                                flexShrink: 0
+                            }}
+                        >
+                            <SchoolIcon />
+                        </Box>
+                        <Box sx={{ minWidth: 0 }}>
+                            <Typography variant="overline" color="text.secondary" sx={{ lineHeight: 1.2 }}>
+                                Service requirements
+                            </Typography>
+                            <Typography variant="h6" sx={{ mt: 0.25 }}>
+                                {designationName}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                                Track confirmation and promotion readiness against service requirements.
+                            </Typography>
+                        </Box>
+                    </Stack>
                     <Stack
                         direction="row"
                         spacing={1}
-                        flexWrap="wrap"
-                        sx={{ mt: 1.25, gap: 1, alignItems: "center" }}
+                        useFlexGap
+                        sx={{ flexWrap: "wrap", mt: 1.5, alignItems: "center" }}
                     >
                         {employee.grade && (
                             <Chip
@@ -401,14 +445,14 @@ function QualificationsSummary({
                         minWidth: { xs: "100%", md: 200 },
                         maxWidth: { md: 220 },
                         bgcolor: "background.paper",
-                        borderRadius: 2,
+                        borderRadius: 2.5,
                         flexShrink: 0
                     }}
                 >
                     <Typography variant="caption" color="text.secondary">
                         Overall completion
                     </Typography>
-                    <Typography variant="h5" fontWeight={700}>
+                    <Typography variant="h5" sx={{ fontWeight: 700 }}>
                         {overall.percent}%
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
@@ -660,17 +704,21 @@ export default function EmployeeQualificationsCard({
 
     if (!isPermanent && !isTrainingEmployee(employee)) {
         return renderContent(
-            <Typography color="text.secondary">
-                Qualification tracking applies to permanent government employees only.
-            </Typography>
+            <EmployeeProfileEmptyState
+                icon={<SchoolIcon />}
+                title="Qualification tracking is not applicable"
+                description="Promotion requirement tracking applies to permanent government and training employees."
+            />
         );
     }
 
     if (!visibleSections.length) {
         return renderContent(
-            <Typography color="text.secondary">
-                No qualification requirements are configured for this employee.
-            </Typography>
+            <EmployeeProfileEmptyState
+                icon={<SchoolIcon />}
+                title="No requirements configured"
+                description="There are no qualification requirements configured for this employee's current service and grade."
+            />
         );
     }
 

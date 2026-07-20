@@ -45,15 +45,21 @@ cd NWP-Eng-Dep-HR-Cadre-management-System
 ### Backend (local)
 
 1. Start MySQL and create an empty database (or let the default URL create `nwp_hrms_host`).
-2. Optionally export local overrides:
+2. Create a gitignored local password file (required for IntelliJ / local runs):
+
+```bash
+# hrms/src/main/resources/application-local.properties
+spring.datasource.username=root
+spring.datasource.password=your_mysql_password
+```
+
+The default profile is `local`, which loads that file. Alternatively set env vars:
 
 ```bash
 export DB_USERNAME=root
 export DB_PASSWORD=your_mysql_password
 export JWT_SECRET=your-long-local-secret
 ```
-
-If unset, local defaults are username `root`, empty password, and a development-only JWT placeholder.
 
 3. Run:
 

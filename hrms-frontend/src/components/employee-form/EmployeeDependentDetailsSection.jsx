@@ -41,7 +41,7 @@ function ChildEntry({
                 spacing={1}
                 sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}
             >
-                <Typography variant="subtitle2" fontWeight={600}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                     Child {index + 1}
                 </Typography>
                 {canRemove && (

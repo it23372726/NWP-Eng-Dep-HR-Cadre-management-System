@@ -2,7 +2,6 @@ import { deriveTimelineState } from "../components/CareerHistoryBuilder";
 import {
     ACTION_TYPE_LABELS,
     getServiceRules,
-    isRequirementCompleted,
     NWP_ENGINEERING_DEPARTMENT,
     REQUIREMENT_STATUS,
     getPrimaryDepartmentName,
@@ -23,7 +22,6 @@ import { validateCareerHistoryChronology, validateTimelineDate } from "./timelin
 import { parseLegacyMonthDay } from "./monthDayDate";
 import {
     buildDependentPayloadFields,
-    emptyChildForm,
     emptySpouseForm,
     mapChildrenToForm,
     mapSpouseToForm

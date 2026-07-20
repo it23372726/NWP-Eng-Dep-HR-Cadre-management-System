@@ -21,9 +21,9 @@ export default function GradeChips({ grades, compact = false }) {
         <Stack
             direction="row"
             spacing={0.5}
-            flexWrap="wrap"
+
             useFlexGap
-            sx={{ flexShrink: 0 }}
+            sx={{flexWrap: "wrap",  flexShrink: 0 }}
         >
             {sortedGrades.map((grade) => (
                 <Chip

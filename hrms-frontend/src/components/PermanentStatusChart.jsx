@@ -92,7 +92,11 @@ export default function PermanentStatusChart({ data, loading }) {
                 Workforce by Employment Type
             </Typography>
             <Box sx={{ width: "100%", height: CHART_HEIGHT }}>
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer
+                    width="100%"
+                    height="100%"
+                    initialDimension={{ width: 500, height: CHART_HEIGHT }}
+                >
                     <PieChart>
                         <Pie
                             data={chartData}

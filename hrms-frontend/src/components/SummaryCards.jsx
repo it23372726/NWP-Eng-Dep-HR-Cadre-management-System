@@ -8,7 +8,7 @@ const SummaryCard = ({ icon: Icon, title, value, subtitle, color, loading }) => 
     return (
         <Paper
             sx={{
-                p: 3,
+                p: { xs: 2, sm: 2.5 },
                 display: "flex",
                 alignItems: "center",
                 gap: 2,
@@ -93,7 +93,7 @@ export default function SummaryCards({ summary, loading }) {
     return (
         <Grid container spacing={2} sx={{ mb: 4 }}>
             {cards.map((card, index) => (
-                <Grid item xs={12} sm={6} md={4} lg={3} key={index}>
+                <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={index}>
                     <SummaryCard
                         icon={card.icon}
                         title={card.title}

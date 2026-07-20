@@ -310,8 +310,8 @@ export default function EmployeeQualificationsForm({
                         <Stack
                             direction="row"
                             spacing={1}
-                            flexWrap="wrap"
-                            sx={{ mb: 2, gap: 1 }}
+
+                            sx={{flexWrap: "wrap",  mb: 2, gap: 1 }}
                         >
                             <Chip
                                 size="small"

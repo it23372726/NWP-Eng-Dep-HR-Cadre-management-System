@@ -47,15 +47,15 @@ function ChangePreview({ label, fromValue, toValue }) {
                 bgcolor: changed ? "primary.50" : "grey.50"
             }}
         >
-            <Typography variant="caption" color="text.secondary" display="block">
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                 {label}
             </Typography>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
+            <Stack direction="row" spacing={1} sx={{alignItems: "center",  mt: 0.5 }}>
                 <Typography variant="body2">{fromValue || "—"}</Typography>
                 {changed && (
                     <>
                         <ArrowForwardIcon sx={{ fontSize: 16, color: "text.secondary" }} />
-                        <Typography variant="body2" fontWeight={600}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {toValue || "—"}
                         </Typography>
                     </>
@@ -437,7 +437,7 @@ export default function TransferOutDialog({
                     </Grid>
                     {employee?.grade && (
                         <Grid size={{ xs: 12, sm: 6 }}>
-                            <Typography variant="caption" color="text.secondary" display="block">
+                            <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                                 Grade / Class (unchanged)
                             </Typography>
                             <Typography variant="body2">{employee.grade}</Typography>

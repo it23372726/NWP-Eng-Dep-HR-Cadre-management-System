@@ -1,5 +1,4 @@
-import React from "react";
-import { Paper, Alert, Box, Typography, Skeleton, Grid, Card, CardContent } from "@mui/material";
+import { Paper, Alert, Box, Typography, Skeleton, Grid } from "@mui/material";
 import WarningIcon from "@mui/icons-material/Warning";
 import ErrorIcon from "@mui/icons-material/Error";
 import InfoIcon from "@mui/icons-material/Info";
@@ -42,7 +41,7 @@ export default function DashboardAlerts({ alerts, loading }) {
                 {alerts.map((alert, index) => {
                     const Icon = getSeverityConfig(alert.severity).icon;
                     return (
-                        <Grid item xs={12} sm={6} md={4} key={index}>
+                        <Grid size={{ xs: 12, sm: 6, md: 4 }} key={index}>
                             <Alert 
                                 severity={getSeverityConfig(alert.severity).variant}
                                 icon={<Icon />}

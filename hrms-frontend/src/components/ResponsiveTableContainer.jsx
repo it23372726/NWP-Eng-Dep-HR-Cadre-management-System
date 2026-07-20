@@ -15,9 +15,13 @@ export default function ResponsiveTableContainer({
                     variant="caption"
                     color="text.secondary"
                     sx={{
-                        display: { xs: "block", md: "none" },
+                        display: { xs: "inline-flex", md: "none" },
                         mb: 1,
-                        fontStyle: "italic"
+                        alignItems: "center",
+                        px: 1,
+                        py: 0.5,
+                        borderRadius: 1,
+                        bgcolor: "grey.100"
                     }}
                 >
                     Swipe to see more columns

@@ -8,7 +8,18 @@ import {
     Stack,
     Typography
 } from "@mui/material";
+import {
+    BadgeOutlined as BadgeIcon,
+    FamilyRestroomOutlined as FamilyIcon,
+    HomeWorkOutlined as WorkIcon,
+    TrendingUpRounded as ProgressIcon
+} from "@mui/icons-material";
 import PermanentStatusChip from "./PermanentStatusChip";
+import {
+    EmployeeProfileInfoItem,
+    EmployeeProfileSection as ProfileSection,
+    EmployeeProfileSubsection
+} from "./EmployeeProfileSection";
 import {
     getEmploymentTypeLabel,
     formatTrainingPeriodYears,
@@ -43,51 +54,20 @@ import {
 const formatDate = (date) =>
     date ? new Date(date).toLocaleDateString("en-GB") : "—";
 
-function ProfileSection({ title, action, children }) {
-    return (
-        <Paper sx={{ p: 3 }}>
-            <Stack
-                direction={{ xs: "column", sm: "row" }}
-                spacing={1.5}
-                sx={{ justifyContent: "space-between", alignItems: { sm: "center" } }}
-            >
-                <Typography variant="h6">{title}</Typography>
-                {action}
-            </Stack>
-            <Divider sx={{ my: 2 }} />
-            {children}
-        </Paper>
-    );
-}
-
 function ProfileSubsection({ title, children }) {
     return (
-        <Box>
-            <Typography
-                variant="overline"
-                color="text.secondary"
-                sx={{ fontWeight: 700, letterSpacing: 0.8, display: "block" }}
-            >
-                {title}
-            </Typography>
-            <Grid container spacing={2.5} sx={{ mt: 0.5 }}>
+        <EmployeeProfileSubsection title={title}>
+            <Grid container spacing={1.25}>
                 {children}
             </Grid>
-        </Box>
+        </EmployeeProfileSubsection>
     );
 }
 
 function InfoField({ label, value, size = { xs: 12, sm: 6, md: 4 } }) {
     return (
         <Grid size={size}>
-            <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ display: "block", mb: 0.5, fontWeight: 600 }}
-            >
-                {label}
-            </Typography>
-            <Typography variant="body1">{value ?? "—"}</Typography>
+            <EmployeeProfileInfoItem label={label} value={value} sx={{ height: "100%" }} />
         </Grid>
     );
 }
@@ -104,8 +84,8 @@ function MilestoneDetail({ label, value }) {
             </Typography>
             <Typography
                 variant="body2"
-                fontWeight={500}
-                sx={{ lineHeight: 1.5, wordBreak: "break-word" }}
+
+                sx={{fontWeight: 500,  lineHeight: 1.5, wordBreak: "break-word" }}
             >
                 {value}
             </Typography>
@@ -153,7 +133,7 @@ function CareerMilestoneCard({
                         {step}
                     </Box>
                     <Box sx={{ minWidth: 0, flex: 1 }}>
-                        <Typography variant="subtitle1" fontWeight={600} sx={{ lineHeight: 1.3 }}>
+                        <Typography variant="subtitle1" sx={{fontWeight: 600,  lineHeight: 1.3 }}>
                             {title}
                         </Typography>
                         <Typography
@@ -491,31 +471,46 @@ export default function EmployeeProfilePersonalTab({
     });
     return (
         <Stack spacing={3}>
-            <ProfileSection title="Personal Details">
-                <Grid container spacing={2.5}>
-                    <InfoField label="NIC" value={employee.nic} />
-                    <InfoField label="TIN" value={employee.tin || "—"} />
-                    <InfoField label="Date of Birth" value={formatDate(employee.dateOfBirth)} />
-                    <InfoField
-                        label="Expected Retirement Date"
-                        value={formatEmployeeDate(calculateRetirementDate(employee.dateOfBirth))}
-                    />
-                    <InfoField label="Gender" value={employee.gender} />
-                    <InfoField label="Marital Status" value={employee.maritalStatus} />
-                    <InfoField label="Contact Number" value={employee.contactNo} />
-                    <InfoField label="Email Address" value={employee.emailAddress || "—"} />
-                    <InfoField label="Resident District" value={employee.residentDistrict} />
-                    <InfoField
-                        label="Permanent Address"
-                        value={employee.permanentAddress}
-                        size={{ xs: 12 }}
-                    />
-                </Grid>
+            <ProfileSection
+                icon={<BadgeIcon fontSize="small" />}
+                title="Personal & contact details"
+                description="Identity, communication, and residence information for this employee."
+            >
+                <Stack spacing={2.5}>
+                    <ProfileSubsection title="Identity information">
+                        <InfoField label="NIC" value={employee.nic} />
+                        <InfoField label="TIN" value={employee.tin || "—"} />
+                        <InfoField label="Date of Birth" value={formatDate(employee.dateOfBirth)} />
+                        <InfoField
+                            label="Expected Retirement Date"
+                            value={formatEmployeeDate(calculateRetirementDate(employee.dateOfBirth))}
+                        />
+                        <InfoField label="Gender" value={employee.gender} />
+                        <InfoField label="Marital Status" value={employee.maritalStatus} />
+                    </ProfileSubsection>
+
+                    <Divider />
+
+                    <ProfileSubsection title="Contact & residence">
+                        <InfoField label="Contact Number" value={employee.contactNo} />
+                        <InfoField label="Email Address" value={employee.emailAddress || "—"} />
+                        <InfoField label="Resident District" value={employee.residentDistrict} />
+                        <InfoField
+                            label="Permanent Address"
+                            value={employee.permanentAddress}
+                            size={{ xs: 12 }}
+                        />
+                    </ProfileSubsection>
+                </Stack>
             </ProfileSection>
 
             {canShowDependentDetails(employee)
                 && isMarriedStatus(employee.maritalStatus) && (
-                <ProfileSection title="Dependent Details">
+                <ProfileSection
+                    icon={<FamilyIcon fontSize="small" />}
+                    title="Family & dependent details"
+                    description="Recorded spouse and child information used for dependent administration."
+                >
                     <Stack spacing={3}>
                         <ProfileSubsection title="Spouse">
                             <InfoField label="NIC" value={employee.spouse?.nic} />
@@ -546,8 +541,8 @@ export default function EmployeeProfilePersonalTab({
                                         >
                                             <Typography
                                                 variant="subtitle2"
-                                                fontWeight={600}
-                                                sx={{ mb: 1.5 }}
+
+                                                sx={{fontWeight: 600,  mb: 1.5 }}
                                             >
                                                 Child {index + 1}
                                             </Typography>
@@ -591,9 +586,13 @@ export default function EmployeeProfilePersonalTab({
             )}
 
             {!isSystemPending && (
-            <ProfileSection title="Employment & Assignment">
+            <ProfileSection
+                icon={<WorkIcon fontSize="small" />}
+                title="Employment & assignment"
+                description="Current position, workplace, service classification, and appointment dates."
+            >
                 <Stack spacing={3}>
-                    <ProfileSubsection title="Employee's Details">
+                    <ProfileSubsection title="Role & workplace">
                         <InfoField
                             label="Designation"
                             value={resolveEmployeeDesignationName(employee)}
@@ -637,7 +636,7 @@ export default function EmployeeProfilePersonalTab({
                         <>
                             <Divider />
 
-                            <ProfileSubsection title="Current Assignment">
+                            <ProfileSubsection title="Service classification">
                                 <InfoField label="Current Grade" value={employee.grade} />
                                 <InfoField
                                     label="Service Level"
@@ -651,7 +650,7 @@ export default function EmployeeProfilePersonalTab({
                     {isTraining && (
                         <>
                             <Divider />
-                            <ProfileSubsection title="Current Assignment">
+                            <ProfileSubsection title="Training assignment">
                                 <InfoField
                                     label="Service Level"
                                     value={employee.serviceLevel?.levelName || "Training"}
@@ -668,7 +667,7 @@ export default function EmployeeProfilePersonalTab({
 
                     <Divider />
 
-                    <ProfileSubsection title="Service Timeline">
+                    <ProfileSubsection title="Key employment dates">
                         {isContract ? (
                             <>
                                 <InfoField
@@ -724,7 +723,11 @@ export default function EmployeeProfilePersonalTab({
             )}
 
             {!isSystemPending && !isSimplifiedAssignment && (
-            <ProfileSection title="Career Progression">
+            <ProfileSection
+                icon={<ProgressIcon fontSize="small" />}
+                title="Career progression"
+                description="Completed and upcoming permanent-service milestones for this employee."
+            >
                 {!isPermanentEmployee ? (
                     <Typography color="text.secondary">
                         Career progression milestones apply to permanent government employees.

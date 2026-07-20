@@ -13,7 +13,7 @@ import { useEffect, useState } from "react";
 import { createFormFieldProps, dialogActionsSx } from "../../utils/formLayout";
 import DateInput from "../DateInput";
 import { timelineMinDateHelperText } from "../../utils/timelineDates";
-import DepartmentOfficeFields, {
+import {
     DEPARTMENT_OPTIONS,
     parseDepartmentValue,
     ReadonlyWorkplaceFields

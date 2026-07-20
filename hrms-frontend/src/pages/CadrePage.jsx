@@ -143,7 +143,7 @@ function SortableCadreRow({
                 </Box>
             </TableCell>
             <TableCell component="div" sx={{ display: "table-cell", verticalAlign: "middle" }}>
-                <Typography variant="body2" fontWeight={500}>
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
                     {cadre.designation?.designationName ?? "—"}
                 </Typography>
             </TableCell>
@@ -155,8 +155,8 @@ function SortableCadreRow({
                     <Typography
                         variant="caption"
                         color="text.secondary"
-                        display="block"
-                    >
+
+                     sx={{ display: "block" }}>
                         {cadre.designation.service.description}
                     </Typography>
                 )}

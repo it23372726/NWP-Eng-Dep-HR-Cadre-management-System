@@ -15,7 +15,7 @@ const SummaryCard = ({ icon: Icon, title, value, subtitle, color, loading, onCli
         <Paper
             onClick={onClick}
             sx={{
-                p: 3,
+                p: { xs: 2, sm: 2.5 },
                 display: "flex",
                 alignItems: "center",
                 gap: 2,
@@ -23,11 +23,12 @@ const SummaryCard = ({ icon: Icon, title, value, subtitle, color, loading, onCli
                 borderColor: "divider",
                 borderRadius: 2,
                 cursor: onClick ? "pointer" : "default",
-                transition: "all 0.3s ease",
+                transition: "transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease",
                 height: "100%",
                 "&:hover": onClick ? {
                     boxShadow: 3,
-                    borderColor: color
+                    borderColor: color,
+                    transform: "translateY(-2px)"
                 } : {}
             }}
         >
@@ -131,7 +132,7 @@ export default function WorkforceSummaryCards({ summary, loading }) {
     return (
         <Grid container spacing={2} sx={{ mb: 4 }}>
             {cards.map((card, index) => (
-                <Grid item xs={12} sm={6} md={4} lg={2} key={index}>
+                <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2 }} key={index}>
                     <SummaryCard
                         icon={card.icon}
                         title={card.title}

@@ -245,9 +245,9 @@ export default function ChangesReportPage() {
                     <Stack
                         direction="row"
                         spacing={1}
-                        flexWrap="wrap"
+
                         useFlexGap
-                        sx={{ width: { xs: "100%", sm: "auto" } }}
+                        sx={{flexWrap: "wrap",  width: { xs: "100%", sm: "auto" } }}
                     >
                         <Button
                             variant="contained"
@@ -303,7 +303,7 @@ export default function ChangesReportPage() {
                         <Typography variant="body2" align="center">
                             Total Changes: {report.totalCount ?? report.rows?.length ?? 0}
                         </Typography>
-                        <Typography variant="caption" align="center" display="block">
+                        <Typography variant="caption" align="center" sx={{ display: "block" }}>
                             Generated:{" "}
                             {new Date(report.generatedAt).toLocaleString()}
                         </Typography>

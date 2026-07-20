@@ -204,7 +204,6 @@ export default function EmployeePage() {
             const data = await getActiveEmployees(departmentScope);
             setAllEmployees(Array.isArray(data) ? data : []);
         } catch (error) {
-            console.error(error);
             setAllEmployees([]);
             setLoadError(getApiErrorMessage(error));
             toast.error(getApiErrorMessage(error));
@@ -230,7 +229,6 @@ export default function EmployeePage() {
             setOpen(false);
             loadEmployees();
         } catch (error) {
-            console.error(error);
             toast.error(getApiErrorMessage(error));
         } finally {
             setCreatingEmployee(false);

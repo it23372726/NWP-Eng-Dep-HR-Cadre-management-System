@@ -1,13 +1,21 @@
 import {
-    Box,
     Button,
     Chip,
-    Divider,
     Grid,
-    Paper,
     Stack,
     Typography
 } from "@mui/material";
+import {
+    DirectionsCarOutlined as VehicleIcon,
+    EventAvailableOutlined as IncrementIcon,
+    LocalActivityOutlined as PermitIcon,
+    RedeemOutlined as BenefitsIcon
+} from "@mui/icons-material";
+import {
+    EmployeeProfileEmptyState,
+    EmployeeProfileInfoItem,
+    EmployeeProfileSection as ProfileSection
+} from "./EmployeeProfileSection";
 import {
     getPrivateVehicleExpireStatusColor,
     getPrivateVehicleExpireStatusLabel,
@@ -30,34 +38,10 @@ import { isPermanentEmployee, isTrainingEmployee } from "../constants/hrms";
 const formatDate = (date) =>
     date ? new Date(date).toLocaleDateString("en-GB") : "—";
 
-function ProfileSection({ title, action, children }) {
-    return (
-        <Paper sx={{ p: 3 }}>
-            <Stack
-                direction={{ xs: "column", sm: "row" }}
-                spacing={1.5}
-                sx={{ justifyContent: "space-between", alignItems: { sm: "center" } }}
-            >
-                <Typography variant="h6">{title}</Typography>
-                {action}
-            </Stack>
-            <Divider sx={{ my: 2 }} />
-            {children}
-        </Paper>
-    );
-}
-
 function InfoField({ label, value, size = { xs: 12, sm: 6, md: 4 } }) {
     return (
         <Grid size={size}>
-            <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ display: "block", mb: 0.5, fontWeight: 600 }}
-            >
-                {label}
-            </Typography>
-            <Typography variant="body1">{value ?? "—"}</Typography>
+            <EmployeeProfileInfoItem label={label} value={value} sx={{ height: "100%" }} />
         </Grid>
     );
 }
@@ -95,11 +79,11 @@ export default function EmployeeProfileBenefitsTab({
     if (!showPrivateVehicleSection && !showVehiclePermitSection
         && !showSalaryIncrementSection && !showTrainingIncrementInfo) {
         return (
-            <Paper sx={{ p: 3 }}>
-                <Typography color="text.secondary">
-                    No benefits or allowances apply to this employee at this time.
-                </Typography>
-            </Paper>
+            <EmployeeProfileEmptyState
+                icon={<BenefitsIcon />}
+                title="No active benefits or allowances"
+                description="There are no vehicle, permit, or salary-increment benefits to show for this employee at this time."
+            />
         );
     }
 
@@ -107,7 +91,9 @@ export default function EmployeeProfileBenefitsTab({
         <Stack spacing={3}>
             {showPrivateVehicleSection && (
                 <ProfileSection
-                    title="Private Vehicle — Government Work"
+                    icon={<VehicleIcon fontSize="small" />}
+                    title="Private vehicle for government work"
+                    description="Vehicle identification, insurance, rental, and permission details."
                     action={
                         onRevokePrivateVehicle && (
                             <Button
@@ -121,9 +107,9 @@ export default function EmployeeProfileBenefitsTab({
                         )
                     }
                 >
-                    <Grid container spacing={2.5}>
+                    <Grid container spacing={1.25}>
                         <Grid size={{ xs: 12 }}>
-                            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
                                 <Chip
                                     size="small"
                                     color={getPrivateVehicleExpireStatusColor(
@@ -179,11 +165,13 @@ export default function EmployeeProfileBenefitsTab({
 
             {showVehiclePermitSection && (
                 <ProfileSection
+                    icon={<PermitIcon fontSize="small" />}
                     title="Vehicle Permit"
+                    description="Eligibility and collection schedule for the employee's vehicle permit."
                     action={
                         (vehiclePermitStatus?.canCollectNow && onRecordVehiclePermit)
                         || (hasVehiclePermitCollection && (onEditVehiclePermit || onUndoVehiclePermit)) ? (
-                            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
                                 {vehiclePermitStatus?.canCollectNow && onRecordVehiclePermit && (
                                     <Button
                                         variant="contained"
@@ -216,7 +204,7 @@ export default function EmployeeProfileBenefitsTab({
                         ) : null
                     }
                 >
-                    <Grid container spacing={2.5}>
+                    <Grid container spacing={1.25}>
                         <Grid size={{ xs: 12 }}>
                             <Chip
                                 size="small"
@@ -245,11 +233,13 @@ export default function EmployeeProfileBenefitsTab({
 
             {showSalaryIncrementSection && (
                 <ProfileSection
+                    icon={<IncrementIcon fontSize="small" />}
                     title="Salary Increment"
+                    description="Annual increment schedule and the employee's latest completed increment."
                     action={
                         (salaryIncrementStatus?.canRecordNow && onRecordSalaryIncrement)
                         || (hasSalaryIncrementRecord && (onEditSalaryIncrement || onUndoSalaryIncrement)) ? (
-                            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
                                 {salaryIncrementStatus?.canRecordNow && onRecordSalaryIncrement && (
                                     <Button
                                         variant="contained"
@@ -282,7 +272,7 @@ export default function EmployeeProfileBenefitsTab({
                         ) : null
                     }
                 >
-                    <Grid container spacing={2.5}>
+                    <Grid container spacing={1.25}>
                         <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                             <Chip
                                 color={getSalaryIncrementStatusColor(salaryIncrementStatus)}
@@ -316,8 +306,12 @@ export default function EmployeeProfileBenefitsTab({
                 </ProfileSection>
             )}
             {showTrainingIncrementInfo && (
-                <ProfileSection title="Salary Increment">
-                    <Grid container spacing={2.5}>
+                <ProfileSection
+                    icon={<IncrementIcon fontSize="small" />}
+                    title="Salary Increment"
+                    description="Annual increment information for this training employee."
+                >
+                    <Grid container spacing={1.25}>
                         <InfoField
                             label="Annual increment day"
                             value={formatIncrementDay(employee.incremantDate)}

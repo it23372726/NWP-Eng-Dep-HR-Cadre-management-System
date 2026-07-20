@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
     Box,
     Alert,
@@ -87,10 +87,10 @@ export default function DashboardPage() {
         <Box sx={{ mb: 4 }}>
             <Stack
                 direction={{ xs: "column", sm: "row" }}
-                justifyContent="space-between"
-                alignItems={{ xs: "flex-start", sm: "center" }}
+
+
                 spacing={2}
-                sx={{ mb: 3 }}
+                sx={{justifyContent: "space-between", alignItems: { xs: "flex-start", sm: "center" },  mb: 3 }}
             >
                 <Box>
                     <Typography variant="h4" sx={{ fontWeight: 700 }}>

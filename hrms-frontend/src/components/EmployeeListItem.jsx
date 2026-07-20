@@ -32,7 +32,7 @@ function MetaLine({ icon: Icon, children }) {
     }
 
     return (
-        <Stack direction="row" spacing={0.75} alignItems="center">
+        <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
             <Icon sx={{ fontSize: 15, color: "text.disabled", flexShrink: 0 }} />
             <Typography variant="body2" color="text.secondary" noWrap>
                 {children}
@@ -144,14 +144,14 @@ export default function EmployeeListItem({
                 <Stack
                     direction={{ xs: "column", sm: "row" }}
                     spacing={{ xs: 0.5, sm: 1 }}
-                    alignItems={{ sm: "center" }}
-                    sx={{ mb: 0.5 }}
+
+                    sx={{alignItems: { sm: "center" },  mb: 0.5 }}
                 >
                     <Typography
                         variant="subtitle1"
-                        fontWeight={600}
+
                         noWrap
-                        sx={{ flex: 1, minWidth: 0 }}
+                        sx={{fontWeight: 600,  flex: 1, minWidth: 0 }}
                     >
                         {employee.fullName || "Unnamed employee"}
                     </Typography>
@@ -159,9 +159,9 @@ export default function EmployeeListItem({
                     <Stack
                         direction="row"
                         spacing={0.75}
-                        flexWrap="wrap"
+
                         useFlexGap
-                        sx={{ flexShrink: 0 }}
+                        sx={{flexWrap: "wrap",  flexShrink: 0 }}
                     >
                         <GradeChip grade={employee.grade} />
                         {!isInactive && systemPending && (

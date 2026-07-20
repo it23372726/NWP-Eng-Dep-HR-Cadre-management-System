@@ -166,13 +166,13 @@ export default function AuditLogPage() {
         <Box>
             <Stack
                 direction={{ xs: "column", sm: "row" }}
-                justifyContent="space-between"
-                alignItems={{ xs: "stretch", sm: "flex-start" }}
+
+
                 spacing={2}
-                sx={{ mb: 2 }}
+                sx={{justifyContent: "space-between", alignItems: { xs: "stretch", sm: "flex-start" },  mb: 2 }}
             >
                 <Box>
-                    <Typography variant="h5" fontWeight={800}>
+                    <Typography variant="h5" sx={{ fontWeight: 800 }}>
                         Audit Trail
                     </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 720, mt: 0.5 }}>
@@ -180,7 +180,7 @@ export default function AuditLogPage() {
                         actor, event, resource, request context, outcome, and integrity metadata.
                     </Typography>
                 </Box>
-                <Stack direction="row" spacing={1} flexShrink={0}>
+                <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
                     <Tooltip title="Refresh">
                         <span>
                             <IconButton onClick={loadLogs} disabled={loading}>
@@ -419,7 +419,7 @@ export default function AuditLogPage() {
                                     </Typography>
                                 </TableCell>
                                 <TableCell>
-                                    <Typography variant="body2" fontWeight={600}>
+                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                         {formatActivitySummary(row) !== "—"
                                             ? formatActivitySummary(row)
                                             : formatAuditAction(row.action)}

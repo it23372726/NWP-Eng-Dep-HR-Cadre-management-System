@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import {
     Paper,
     Table,
@@ -10,8 +10,7 @@ import {
     Skeleton,
     Alert,
     Chip,
-    TextField,
-    Box
+    TextField
 } from "@mui/material";
 
 import ResponsiveTableContainer from "./ResponsiveTableContainer";

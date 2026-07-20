@@ -66,7 +66,7 @@ function SummaryCard({
                             {value}
                         </Typography>
                         {subtitle && (
-                            <Typography variant="caption" color="text.secondary" display="block">
+                            <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                                 {subtitle}
                             </Typography>
                         )}

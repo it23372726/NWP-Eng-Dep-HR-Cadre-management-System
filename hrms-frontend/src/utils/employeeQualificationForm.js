@@ -152,7 +152,7 @@ export function getEditableSectionId(employee) {
     return null;
 }
 
-export function isRequirementLocked(employee, type, name = null, sectionId = null) {
+export function isRequirementLocked(employee, type, _name = null, sectionId = null) {
     if (!employee) {
         return false;
     }

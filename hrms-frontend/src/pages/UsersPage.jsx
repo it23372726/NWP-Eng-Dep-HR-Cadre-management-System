@@ -1,8 +1,10 @@
 import {
     Alert,
+    Avatar,
     Box,
     Button,
     Chip,
+    CircularProgress,
     Dialog,
     DialogActions,
     DialogContent,
@@ -30,10 +32,16 @@ import {
     Typography
 } from "@mui/material";
 import {
-    Add as AddIcon,
-    Edit as EditIcon,
-    LockReset as LockResetIcon,
-    Search as SearchIcon
+    AddRounded as AddIcon,
+    AdminPanelSettingsRounded as AdminPanelIcon,
+    EditRounded as EditIcon,
+    KeyRounded as KeyIcon,
+    LockResetRounded as LockResetIcon,
+    ManageAccountsRounded as ManageAccountsIcon,
+    PeopleAltRounded as PeopleIcon,
+    PersonAddAlt1Rounded as PersonAddIcon,
+    SearchRounded as SearchIcon,
+    VerifiedUserRounded as VerifiedUserIcon
 } from "@mui/icons-material";
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
@@ -64,6 +72,72 @@ const emptyCreateForm = {
     confirmPassword: "",
     role: DEFAULT_ASSIGNABLE_ROLE
 };
+
+const formatRole = (role = "") =>
+    role
+        .toLowerCase()
+        .split("_")
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ");
+
+function UserAvatar({ username, active = true, size = 38 }) {
+    return (
+        <Avatar
+            sx={{
+                width: size,
+                height: size,
+                bgcolor: active ? "primary.50" : "grey.100",
+                color: active ? "primary.main" : "text.secondary",
+                fontSize: size <= 38 ? "0.82rem" : "1rem",
+                fontWeight: 800,
+                border: "1px solid",
+                borderColor: active ? "primary.100" : "divider"
+            }}
+        >
+            {(username || "?").charAt(0).toUpperCase()}
+        </Avatar>
+    );
+}
+
+function RoleOption({ role }) {
+    return (
+        <Stack spacing={0.15}>
+            <Typography variant="body2" sx={{ fontWeight: 650 }}>
+                {formatRole(role)}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+                {ROLE_DESCRIPTIONS[role]}
+            </Typography>
+        </Stack>
+    );
+}
+
+function DialogHeading({ icon, title, description }) {
+    return (
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
+            <Box
+                sx={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: 2.5,
+                    display: "grid",
+                    placeItems: "center",
+                    bgcolor: "primary.50",
+                    color: "primary.main",
+                    flexShrink: 0
+                }}
+            >
+                {icon}
+            </Box>
+            <Box>
+                <Typography variant="h6">{title}</Typography>
+                <Typography variant="body2" color="text.secondary">
+                    {description}
+                </Typography>
+            </Box>
+        </Stack>
+    );
+}
 
 export default function UsersPage() {
     const currentUser = getStoredUser();
@@ -115,6 +189,8 @@ export default function UsersPage() {
         );
     }, [users, searchKeyword]);
 
+    const activeUserCount = users.filter((user) => user.active).length;
+    const adminCount = users.filter((user) => user.role === "SUPER_ADMIN").length;
     const isSelf = (user) => user.username === currentUser?.username;
 
     const handleCreate = async () => {
@@ -197,41 +273,99 @@ export default function UsersPage() {
 
     return (
         <Box>
-            <Stack
-                direction={{ xs: "column", sm: "row" }}
-                spacing={2}
+            <Paper
+                variant="outlined"
                 sx={{
-                    mb: 2,
-                    justifyContent: "space-between",
-                    alignItems: { xs: "stretch", sm: "center" }
+                    p: { xs: 2.25, sm: 3 },
+                    mb: 2.5,
+                    overflow: "hidden",
+                    position: "relative",
+                    background: (theme) =>
+                        `linear-gradient(125deg, ${theme.palette.background.paper} 30%, ${theme.palette.primary[50]} 100%)`,
+                    "&::after": {
+                        content: '""',
+                        position: "absolute",
+                        width: 180,
+                        height: 180,
+                        borderRadius: "50%",
+                        right: -65,
+                        bottom: -115,
+                        bgcolor: "primary.100",
+                        opacity: 0.55
+                    }
                 }}
             >
-                <Box>
-                    <Typography variant="h5" fontWeight={800}>
-                        User Management
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                        Create and manage system login accounts and role permissions.
-                    </Typography>
-                </Box>
-                {activeTab === 0 && (
-                    <Button
-                        variant="contained"
-                        startIcon={<AddIcon />}
-                        onClick={() => setCreateOpen(true)}
-                    >
-                        Add User
-                    </Button>
-                )}
-            </Stack>
+                <Stack
+                    direction={{ xs: "column", md: "row" }}
+                    spacing={2.5}
+                    sx={{
+                        position: "relative",
+                        zIndex: 1,
+                        justifyContent: "space-between",
+                        alignItems: { xs: "stretch", md: "center" }
+                    }}
+                >
+                    <Stack direction="row" spacing={1.75} sx={{ alignItems: "center" }}>
+                        <Box
+                            sx={{
+                                width: { xs: 48, sm: 56 },
+                                height: { xs: 48, sm: 56 },
+                                borderRadius: 3,
+                                display: "grid",
+                                placeItems: "center",
+                                bgcolor: "primary.main",
+                                color: "primary.contrastText",
+                                boxShadow: 2,
+                                flexShrink: 0
+                            }}
+                        >
+                            <ManageAccountsIcon />
+                        </Box>
+                        <Box>
+                            <Typography variant="h5">User Management</Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                                Manage login accounts, access roles, and account security.
+                            </Typography>
+                        </Box>
+                    </Stack>
 
-            <Paper sx={{ mb: 2 }}>
+                    <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        spacing={1}
+                        sx={{ alignItems: { sm: "center" } }}
+                    >
+                        <Stack direction="row" spacing={1}>
+                            <Chip icon={<PeopleIcon />} label={`${users.length} total`} variant="outlined" />
+                            <Chip icon={<VerifiedUserIcon />} label={`${activeUserCount} active`} color="success" variant="outlined" />
+                        </Stack>
+                        {activeTab === 0 && (
+                            <Button
+                                variant="contained"
+                                startIcon={<AddIcon />}
+                                onClick={() => setCreateOpen(true)}
+                            >
+                                Add user
+                            </Button>
+                        )}
+                    </Stack>
+                </Stack>
+            </Paper>
+
+            <Paper variant="outlined" sx={{ mb: 2.5, px: { xs: 0.5, sm: 1 } }}>
                 <Tabs
                     value={activeTab}
                     onChange={(_, value) => setActiveTab(value)}
+                    variant="fullWidth"
+                    aria-label="User management sections"
                 >
-                    <Tab label="Users" />
-                    {isSuperAdmin && <Tab label="Manage Roles" />}
+                    <Tab icon={<PeopleIcon fontSize="small" />} iconPosition="start" label="User accounts" />
+                    {isSuperAdmin && (
+                        <Tab
+                            icon={<AdminPanelIcon fontSize="small" />}
+                            iconPosition="start"
+                            label="Role permissions"
+                        />
+                    )}
                 </Tabs>
             </Paper>
 
@@ -239,341 +373,496 @@ export default function UsersPage() {
                 <ManageRolesTab />
             ) : (
                 <>
-            <Paper sx={{ p: 2, mb: 2 }}>
-                <TextField
-                    fullWidth
-                    size="small"
-                    label="Search users"
-                    value={searchKeyword}
-                    onChange={(e) => setSearchKeyword(e.target.value)}
-                    slotProps={{
-                        input: {
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <SearchIcon sx={{ color: "text.secondary" }} />
-                                </InputAdornment>
-                            )
-                        }
-                    }}
-                />
-            </Paper>
-
-            <DesktopTableWrapper>
-            <TableContainer component={Paper}>
-                <Table size="small">
-                    <TableHead>
-                        <TableRow>
-                            <TableCell>Username</TableCell>
-                            <TableCell>Role</TableCell>
-                            <TableCell>Status</TableCell>
-                            <TableCell align="right">Actions</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {filteredUsers.map((user) => (
-                            <TableRow key={user.id} hover>
-                                <TableCell>
-                                    <Stack
-                                        direction="row"
-                                        spacing={1}
-                                        sx={{ alignItems: "center" }}
-                                    >
-                                        <Typography variant="body2">{user.username}</Typography>
-                                        {isSelf(user) && (
-                                            <Chip label="You" size="small" color="info" />
-                                        )}
-                                    </Stack>
-                                </TableCell>
-                                <TableCell>
-                                    <Chip
-                                        label={user.role}
-                                        size="small"
-                                        color={ROLE_COLORS[user.role] || "default"}
-                                    />
-                                </TableCell>
-                                <TableCell>
-                                    <Chip
-                                        label={user.active ? "Active" : "Inactive"}
-                                        size="small"
-                                        color={user.active ? "success" : "default"}
-                                    />
-                                </TableCell>
-                                <TableCell align="right">
-                                    <Stack
-                                        direction="row"
-                                        spacing={0.5}
-                                        sx={{ justifyContent: "flex-end" }}
-                                    >
-                                        <Tooltip title="Edit user">
-                                            <Button
-                                                size="small"
-                                                startIcon={<EditIcon />}
-                                                onClick={() => openEditDialog(user)}
-                                            >
-                                                Edit
-                                            </Button>
-                                        </Tooltip>
-                                        <Tooltip title="Reset password">
-                                            <Button
-                                                size="small"
-                                                startIcon={<LockResetIcon />}
-                                                onClick={() => openPasswordDialog(user)}
-                                            >
-                                                Password
-                                            </Button>
-                                        </Tooltip>
-                                    </Stack>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                        {!loading && filteredUsers.length === 0 && (
-                            <TableRow>
-                                <TableCell colSpan={4} align="center">
-                                    No users found
-                                </TableCell>
-                            </TableRow>
-                        )}
-                    </TableBody>
-                </Table>
-            </TableContainer>
-            </DesktopTableWrapper>
-
-            <MobileDataCardList>
-                {filteredUsers.map((user) => (
-                    <MobileDataCard
-                        key={user.id}
-                        title={
+                    <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2 }, mb: 2 }}>
+                        <Stack
+                            direction={{ xs: "column", sm: "row" }}
+                            spacing={1.5}
+                            sx={{
+                                alignItems: { xs: "stretch", sm: "center" },
+                                justifyContent: "space-between"
+                            }}
+                        >
+                            <TextField
+                                size="small"
+                                placeholder="Search by username or role"
+                                aria-label="Search users"
+                                value={searchKeyword}
+                                onChange={(event) => setSearchKeyword(event.target.value)}
+                                sx={{ width: { xs: "100%", sm: 380 } }}
+                                slotProps={{
+                                    input: {
+                                        startAdornment: (
+                                            <InputAdornment position="start">
+                                                <SearchIcon sx={{ color: "text.secondary" }} />
+                                            </InputAdornment>
+                                        )
+                                    }
+                                }}
+                            />
                             <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                                <span>{user.username}</span>
-                                {isSelf(user) && (
-                                    <Chip label="You" size="small" color="info" />
+                                <Typography variant="body2" color="text.secondary">
+                                    {filteredUsers.length} {filteredUsers.length === 1 ? "account" : "accounts"}
+                                </Typography>
+                                {adminCount > 0 && (
+                                    <Chip
+                                        size="small"
+                                        label={`${adminCount} super ${adminCount === 1 ? "admin" : "admins"}`}
+                                        color="error"
+                                        variant="outlined"
+                                    />
                                 )}
                             </Stack>
-                        }
-                        fields={[
-                            {
-                                label: "Role",
-                                value: (
-                                    <Chip
-                                        label={user.role}
-                                        size="small"
-                                        color={ROLE_COLORS[user.role] || "default"}
-                                    />
-                                )
-                            },
-                            {
-                                label: "Status",
-                                value: (
-                                    <Chip
-                                        label={user.active ? "Active" : "Inactive"}
-                                        size="small"
-                                        color={user.active ? "success" : "default"}
-                                    />
-                                )
-                            }
-                        ]}
-                        actions={
-                            <>
-                                <Tooltip title="Edit user">
-                                    <IconButton
-                                        size="small"
-                                        onClick={() => openEditDialog(user)}
-                                    >
-                                        <EditIcon fontSize="small" />
-                                    </IconButton>
-                                </Tooltip>
-                                <Tooltip title="Reset password">
-                                    <IconButton
-                                        size="small"
-                                        onClick={() => openPasswordDialog(user)}
-                                    >
-                                        <LockResetIcon fontSize="small" />
-                                    </IconButton>
-                                </Tooltip>
-                            </>
-                        }
-                    />
-                ))}
-                {!loading && filteredUsers.length === 0 && (
-                    <Paper variant="outlined" sx={{ p: 3, textAlign: "center" }}>
-                        <Typography color="text.secondary">No users found</Typography>
+                        </Stack>
                     </Paper>
-                )}
-            </MobileDataCardList>
 
-            <Dialog open={createOpen} onClose={() => setCreateOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>Add User</DialogTitle>
-                <DialogContent dividers>
-                    <Stack spacing={2} sx={{ pt: 1 }}>
-                        <TextField
-                            label="Username"
-                            value={createForm.username}
-                            onChange={(e) =>
-                                setCreateForm((prev) => ({ ...prev, username: e.target.value }))
-                            }
-                            required
-                            fullWidth
-                        />
-                        <TextField
-                            label="Password"
-                            type="password"
-                            value={createForm.password}
-                            onChange={(e) =>
-                                setCreateForm((prev) => ({ ...prev, password: e.target.value }))
-                            }
-                            required
-                            fullWidth
-                            helperText="Minimum 8 characters"
-                        />
-                        <TextField
-                            label="Confirm Password"
-                            type="password"
-                            value={createForm.confirmPassword}
-                            onChange={(e) =>
-                                setCreateForm((prev) => ({
-                                    ...prev,
-                                    confirmPassword: e.target.value
-                                }))
-                            }
-                            required
-                            fullWidth
-                        />
-                        <FormControl fullWidth>
-                            <InputLabel>Role</InputLabel>
-                            <Select
-                                label="Role"
-                                value={createForm.role}
-                                onChange={(e) =>
-                                    setCreateForm((prev) => ({ ...prev, role: e.target.value }))
-                                }
-                            >
-                                {ROLES.map((role) => (
-                                    <MenuItem key={role} value={role}>
-                                        {role}
-                                    </MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
-                        <Typography variant="caption" color="text.secondary">
-                            {ROLE_DESCRIPTIONS[createForm.role]}
-                        </Typography>
-                    </Stack>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setCreateOpen(false)}>Cancel</Button>
-                    <Button variant="contained" onClick={handleCreate} disabled={creating}>
-                        Create
-                    </Button>
-                </DialogActions>
-            </Dialog>
+                    {loading ? (
+                        <Paper
+                            variant="outlined"
+                            sx={{ py: 7, display: "grid", placeItems: "center" }}
+                        >
+                            <Stack spacing={1.5} sx={{ alignItems: "center" }}>
+                                <CircularProgress size={30} />
+                                <Typography variant="body2" color="text.secondary">
+                                    Loading user accounts…
+                                </Typography>
+                            </Stack>
+                        </Paper>
+                    ) : (
+                        <>
+                            <DesktopTableWrapper>
+                                <TableContainer component={Paper} variant="outlined">
+                                    <Table>
+                                        <TableHead>
+                                            <TableRow>
+                                                <TableCell>Account</TableCell>
+                                                <TableCell>Access role</TableCell>
+                                                <TableCell>Status</TableCell>
+                                                <TableCell align="right">Actions</TableCell>
+                                            </TableRow>
+                                        </TableHead>
+                                        <TableBody>
+                                            {filteredUsers.map((user) => (
+                                                <TableRow key={user.id} hover>
+                                                    <TableCell>
+                                                        <Stack direction="row" spacing={1.25} sx={{ alignItems: "center" }}>
+                                                            <UserAvatar username={user.username} active={user.active} />
+                                                            <Box>
+                                                                <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
+                                                                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                                                        {user.username}
+                                                                    </Typography>
+                                                                    {isSelf(user) && (
+                                                                        <Chip label="You" size="small" color="info" />
+                                                                    )}
+                                                                </Stack>
+                                                                <Typography variant="caption" color="text.secondary">
+                                                                    System login account
+                                                                </Typography>
+                                                            </Box>
+                                                        </Stack>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Stack spacing={0.35} sx={{ alignItems: "flex-start" }}>
+                                                            <Chip
+                                                                label={formatRole(user.role)}
+                                                                size="small"
+                                                                color={ROLE_COLORS[user.role] || "default"}
+                                                                variant="outlined"
+                                                            />
+                                                            <Typography variant="caption" color="text.secondary">
+                                                                {ROLE_DESCRIPTIONS[user.role]}
+                                                            </Typography>
+                                                        </Stack>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Chip
+                                                            label={user.active ? "Active" : "Inactive"}
+                                                            size="small"
+                                                            color={user.active ? "success" : "default"}
+                                                            variant={user.active ? "filled" : "outlined"}
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell align="right">
+                                                        <Stack direction="row" spacing={0.75} sx={{ justifyContent: "flex-end" }}>
+                                                            <Button
+                                                                size="small"
+                                                                variant="outlined"
+                                                                startIcon={<EditIcon />}
+                                                                onClick={() => openEditDialog(user)}
+                                                            >
+                                                                Edit
+                                                            </Button>
+                                                            <Tooltip title="Reset password">
+                                                                <IconButton
+                                                                    size="small"
+                                                                    onClick={() => openPasswordDialog(user)}
+                                                                    aria-label={`Reset password for ${user.username}`}
+                                                                    sx={{ border: "1px solid", borderColor: "divider" }}
+                                                                >
+                                                                    <LockResetIcon fontSize="small" />
+                                                                </IconButton>
+                                                            </Tooltip>
+                                                        </Stack>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                            {filteredUsers.length === 0 && (
+                                                <TableRow>
+                                                    <TableCell colSpan={4}>
+                                                        <Box sx={{ py: 5, textAlign: "center" }}>
+                                                            <PeopleIcon sx={{ color: "text.disabled", fontSize: 38 }} />
+                                                            <Typography variant="subtitle2" sx={{ mt: 1 }}>
+                                                                No users found
+                                                            </Typography>
+                                                            <Typography variant="body2" color="text.secondary">
+                                                                Try a different username or role.
+                                                            </Typography>
+                                                        </Box>
+                                                    </TableCell>
+                                                </TableRow>
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </TableContainer>
+                            </DesktopTableWrapper>
 
-            <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>Edit User</DialogTitle>
-                <DialogContent dividers>
-                    <Stack spacing={2} sx={{ pt: 1 }}>
-                        <TextField
-                            label="Username"
-                            value={editUser?.username || ""}
-                            disabled
-                            fullWidth
-                        />
-                        <FormControl fullWidth>
-                            <InputLabel>Role</InputLabel>
-                            <Select
-                                label="Role"
-                                value={editForm.role}
-                                onChange={(e) =>
-                                    setEditForm((prev) => ({ ...prev, role: e.target.value }))
-                                }
-                            >
-                                {ROLES.map((role) => (
-                                    <MenuItem key={role} value={role}>
-                                        {role}
-                                    </MenuItem>
+                            <MobileDataCardList>
+                                {filteredUsers.map((user) => (
+                                    <MobileDataCard
+                                        key={user.id}
+                                        title={
+                                            <Stack direction="row" spacing={1.25} sx={{ alignItems: "center" }}>
+                                                <UserAvatar username={user.username} active={user.active} size={42} />
+                                                <Box sx={{ minWidth: 0 }}>
+                                                    <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
+                                                        <Typography variant="subtitle2" noWrap>{user.username}</Typography>
+                                                        {isSelf(user) && <Chip label="You" size="small" color="info" />}
+                                                    </Stack>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        System login account
+                                                    </Typography>
+                                                </Box>
+                                            </Stack>
+                                        }
+                                        fields={[
+                                            {
+                                                label: "Access role",
+                                                value: (
+                                                    <Chip
+                                                        label={formatRole(user.role)}
+                                                        size="small"
+                                                        color={ROLE_COLORS[user.role] || "default"}
+                                                        variant="outlined"
+                                                    />
+                                                )
+                                            },
+                                            {
+                                                label: "Account status",
+                                                value: (
+                                                    <Chip
+                                                        label={user.active ? "Active" : "Inactive"}
+                                                        size="small"
+                                                        color={user.active ? "success" : "default"}
+                                                    />
+                                                )
+                                            }
+                                        ]}
+                                        actions={
+                                            <>
+                                                <Tooltip title="Edit user">
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={() => openEditDialog(user)}
+                                                        aria-label={`Edit ${user.username}`}
+                                                    >
+                                                        <EditIcon fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                                <Tooltip title="Reset password">
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={() => openPasswordDialog(user)}
+                                                        aria-label={`Reset password for ${user.username}`}
+                                                    >
+                                                        <LockResetIcon fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                            </>
+                                        }
+                                    />
                                 ))}
-                            </Select>
-                        </FormControl>
-                        <Typography variant="caption" color="text.secondary">
-                            {ROLE_DESCRIPTIONS[editForm.role]}
-                        </Typography>
-                        <FormControlLabel
-                            control={
-                                <Switch
-                                    checked={editForm.active}
-                                    onChange={(e) =>
-                                        setEditForm((prev) => ({
-                                            ...prev,
-                                            active: e.target.checked
-                                        }))
+                                {filteredUsers.length === 0 && (
+                                    <Paper variant="outlined" sx={{ p: 4, textAlign: "center" }}>
+                                        <PeopleIcon sx={{ color: "text.disabled", fontSize: 38 }} />
+                                        <Typography variant="subtitle2" sx={{ mt: 1 }}>No users found</Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            Try a different username or role.
+                                        </Typography>
+                                    </Paper>
+                                )}
+                            </MobileDataCardList>
+                        </>
+                    )}
+
+                    <Dialog
+                        open={createOpen}
+                        onClose={() => setCreateOpen(false)}
+                        maxWidth="sm"
+                        fullWidth
+                    >
+                        <DialogTitle sx={{ pb: 1.5 }}>
+                            <DialogHeading
+                                icon={<PersonAddIcon fontSize="small" />}
+                                title="Add user account"
+                                description="Create login details and assign an access role."
+                            />
+                        </DialogTitle>
+                        <DialogContent sx={{ pt: 1.5 }}>
+                            <Stack spacing={2}>
+                                <TextField
+                                    label="Username"
+                                    value={createForm.username}
+                                    onChange={(event) =>
+                                        setCreateForm((previous) => ({ ...previous, username: event.target.value }))
                                     }
-                                    disabled={editUser && isSelf(editUser)}
+                                    required
+                                    fullWidth
+                                    autoFocus
+                                    autoComplete="off"
+                                    placeholder="Enter a unique username"
                                 />
-                            }
-                            label={editForm.active ? "Active" : "Inactive"}
-                        />
-                        {editUser && isSelf(editUser) && (
-                            <Alert severity="info">
-                                You cannot deactivate your own account.
-                            </Alert>
-                        )}
-                        {editUser && !editForm.active && !isSelf(editUser) && (
-                            <Alert severity="warning">
-                                Deactivated users cannot log in until reactivated.
-                            </Alert>
-                        )}
-                    </Stack>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setEditOpen(false)}>Cancel</Button>
-                    <Button variant="contained" onClick={handleUpdate} disabled={saving}>
-                        Save
-                    </Button>
-                </DialogActions>
-            </Dialog>
+                                <Box
+                                    sx={{
+                                        display: "grid",
+                                        gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" },
+                                        gap: 2
+                                    }}
+                                >
+                                    <TextField
+                                        label="Password"
+                                        type="password"
+                                        value={createForm.password}
+                                        onChange={(event) =>
+                                            setCreateForm((previous) => ({ ...previous, password: event.target.value }))
+                                        }
+                                        required
+                                        fullWidth
+                                        autoComplete="new-password"
+                                        helperText="Minimum 8 characters"
+                                    />
+                                    <TextField
+                                        label="Confirm password"
+                                        type="password"
+                                        value={createForm.confirmPassword}
+                                        onChange={(event) =>
+                                            setCreateForm((previous) => ({
+                                                ...previous,
+                                                confirmPassword: event.target.value
+                                            }))
+                                        }
+                                        required
+                                        fullWidth
+                                        autoComplete="new-password"
+                                    />
+                                </Box>
+                                <FormControl fullWidth>
+                                    <InputLabel>Access role</InputLabel>
+                                    <Select
+                                        label="Access role"
+                                        value={createForm.role}
+                                        onChange={(event) =>
+                                            setCreateForm((previous) => ({ ...previous, role: event.target.value }))
+                                        }
+                                        renderValue={(selected) => formatRole(selected)}
+                                    >
+                                        {ROLES.map((role) => (
+                                            <MenuItem key={role} value={role} sx={{ py: 1 }}>
+                                                <RoleOption role={role} />
+                                            </MenuItem>
+                                        ))}
+                                    </Select>
+                                </FormControl>
+                                <Alert severity="info" icon={<AdminPanelIcon />}>
+                                    {ROLE_DESCRIPTIONS[createForm.role]}
+                                </Alert>
+                            </Stack>
+                        </DialogContent>
+                        <DialogActions sx={{ px: 3, py: 2 }}>
+                            <Button onClick={() => setCreateOpen(false)}>Cancel</Button>
+                            <Button
+                                variant="contained"
+                                startIcon={<PersonAddIcon />}
+                                onClick={handleCreate}
+                                disabled={creating}
+                            >
+                                {creating ? "Creating…" : "Create user"}
+                            </Button>
+                        </DialogActions>
+                    </Dialog>
 
-            <Dialog open={passwordOpen} onClose={() => setPasswordOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>Reset Password</DialogTitle>
-                <DialogContent dividers>
-                    <Stack spacing={2} sx={{ pt: 1 }}>
-                        <Typography variant="body2">
-                            Set a new password for <strong>{passwordUser?.username}</strong>.
-                        </Typography>
-                        <TextField
-                            label="New Password"
-                            type="password"
-                            value={passwordForm.newPassword}
-                            onChange={(e) =>
-                                setPasswordForm((prev) => ({
-                                    ...prev,
-                                    newPassword: e.target.value
-                                }))
-                            }
-                            required
-                            fullWidth
-                            helperText="Minimum 8 characters"
-                        />
-                        <TextField
-                            label="Confirm New Password"
-                            type="password"
-                            value={passwordForm.confirmPassword}
-                            onChange={(e) =>
-                                setPasswordForm((prev) => ({
-                                    ...prev,
-                                    confirmPassword: e.target.value
-                                }))
-                            }
-                            required
-                            fullWidth
-                        />
-                    </Stack>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setPasswordOpen(false)}>Cancel</Button>
-                    <Button variant="contained" onClick={handleResetPassword} disabled={resetting}>
-                        Reset Password
-                    </Button>
-                </DialogActions>
-            </Dialog>
+                    <Dialog
+                        open={editOpen}
+                        onClose={() => setEditOpen(false)}
+                        maxWidth="sm"
+                        fullWidth
+                    >
+                        <DialogTitle sx={{ pb: 1.5 }}>
+                            <DialogHeading
+                                icon={<EditIcon fontSize="small" />}
+                                title="Edit user account"
+                                description="Update the access role and account status."
+                            />
+                        </DialogTitle>
+                        <DialogContent sx={{ pt: 1.5 }}>
+                            <Stack spacing={2}>
+                                <Paper variant="outlined" sx={{ p: 1.5, bgcolor: "grey.50" }}>
+                                    <Stack direction="row" spacing={1.25} sx={{ alignItems: "center" }}>
+                                        <UserAvatar username={editUser?.username} active={editForm.active} size={42} />
+                                        <Box>
+                                            <Typography variant="subtitle2">{editUser?.username}</Typography>
+                                            <Typography variant="caption" color="text.secondary">
+                                                Username cannot be changed
+                                            </Typography>
+                                        </Box>
+                                    </Stack>
+                                </Paper>
+                                <FormControl fullWidth>
+                                    <InputLabel>Access role</InputLabel>
+                                    <Select
+                                        label="Access role"
+                                        value={editForm.role}
+                                        onChange={(event) =>
+                                            setEditForm((previous) => ({ ...previous, role: event.target.value }))
+                                        }
+                                        renderValue={(selected) => formatRole(selected)}
+                                    >
+                                        {ROLES.map((role) => (
+                                            <MenuItem key={role} value={role} sx={{ py: 1 }}>
+                                                <RoleOption role={role} />
+                                            </MenuItem>
+                                        ))}
+                                    </Select>
+                                </FormControl>
+                                <Alert severity="info" icon={<AdminPanelIcon />}>
+                                    {ROLE_DESCRIPTIONS[editForm.role]}
+                                </Alert>
+                                <Paper variant="outlined" sx={{ p: 1.5 }}>
+                                    <FormControlLabel
+                                        control={
+                                            <Switch
+                                                checked={editForm.active}
+                                                onChange={(event) =>
+                                                    setEditForm((previous) => ({
+                                                        ...previous,
+                                                        active: event.target.checked
+                                                    }))
+                                                }
+                                                disabled={editUser && isSelf(editUser)}
+                                            />
+                                        }
+                                        label={
+                                            <Box>
+                                                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                                    {editForm.active ? "Account active" : "Account inactive"}
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary">
+                                                    {editForm.active
+                                                        ? "This user can sign in to the system."
+                                                        : "This user is blocked from signing in."}
+                                                </Typography>
+                                            </Box>
+                                        }
+                                        sx={{ m: 0, alignItems: "center" }}
+                                    />
+                                </Paper>
+                                {editUser && isSelf(editUser) && (
+                                    <Alert severity="info">You cannot deactivate your own account.</Alert>
+                                )}
+                                {editUser && !editForm.active && !isSelf(editUser) && (
+                                    <Alert severity="warning">
+                                        Deactivated users cannot log in until reactivated.
+                                    </Alert>
+                                )}
+                            </Stack>
+                        </DialogContent>
+                        <DialogActions sx={{ px: 3, py: 2 }}>
+                            <Button onClick={() => setEditOpen(false)}>Cancel</Button>
+                            <Button variant="contained" onClick={handleUpdate} disabled={saving}>
+                                {saving ? "Saving…" : "Save changes"}
+                            </Button>
+                        </DialogActions>
+                    </Dialog>
+
+                    <Dialog
+                        open={passwordOpen}
+                        onClose={() => setPasswordOpen(false)}
+                        maxWidth="sm"
+                        fullWidth
+                    >
+                        <DialogTitle sx={{ pb: 1.5 }}>
+                            <DialogHeading
+                                icon={<KeyIcon fontSize="small" />}
+                                title="Reset password"
+                                description={`Set new login credentials for ${passwordUser?.username || "this user"}.`}
+                            />
+                        </DialogTitle>
+                        <DialogContent sx={{ pt: 1.5 }}>
+                            <Stack spacing={2}>
+                                <Alert severity="warning">
+                                    The current password will stop working as soon as this change is saved.
+                                </Alert>
+                                <Box
+                                    sx={{
+                                        display: "grid",
+                                        gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" },
+                                        gap: 2
+                                    }}
+                                >
+                                    <TextField
+                                        label="New password"
+                                        type="password"
+                                        value={passwordForm.newPassword}
+                                        onChange={(event) =>
+                                            setPasswordForm((previous) => ({
+                                                ...previous,
+                                                newPassword: event.target.value
+                                            }))
+                                        }
+                                        required
+                                        fullWidth
+                                        autoComplete="new-password"
+                                        helperText="Minimum 8 characters"
+                                        autoFocus
+                                    />
+                                    <TextField
+                                        label="Confirm new password"
+                                        type="password"
+                                        value={passwordForm.confirmPassword}
+                                        onChange={(event) =>
+                                            setPasswordForm((previous) => ({
+                                                ...previous,
+                                                confirmPassword: event.target.value
+                                            }))
+                                        }
+                                        required
+                                        fullWidth
+                                        autoComplete="new-password"
+                                    />
+                                </Box>
+                            </Stack>
+                        </DialogContent>
+                        <DialogActions sx={{ px: 3, py: 2 }}>
+                            <Button onClick={() => setPasswordOpen(false)}>Cancel</Button>
+                            <Button
+                                variant="contained"
+                                startIcon={<KeyIcon />}
+                                onClick={handleResetPassword}
+                                disabled={resetting}
+                            >
+                                {resetting ? "Resetting…" : "Reset password"}
+                            </Button>
+                        </DialogActions>
+                    </Dialog>
                 </>
             )}
         </Box>

@@ -33,15 +33,20 @@ export default function MobileDataCard({ title, subtitle, fields = [], actions }
             variant="outlined"
             sx={{
                 p: 2,
-                borderRadius: 2
+                borderRadius: 2.5,
+                boxShadow: 1,
+                "& .MuiIconButton-root": {
+                    width: 40,
+                    height: 40
+                }
             }}
         >
             <Stack
                 direction="row"
-                alignItems="flex-start"
-                justifyContent="space-between"
+
+
                 spacing={1}
-            >
+             sx={{ alignItems: "flex-start", justifyContent: "space-between" }}>
                 <Box sx={{ minWidth: 0, flex: 1 }}>
                     {title && (
                         typeof title === "string" || typeof title === "number" ? (
@@ -66,7 +71,17 @@ export default function MobileDataCard({ title, subtitle, fields = [], actions }
             </Stack>
 
             {fields.length > 0 && (
-                <Stack spacing={0.75} sx={{ mt: 1.5 }}>
+                <Box
+                    sx={{
+                        mt: 1.75,
+                        pt: 1.5,
+                        borderTop: "1px solid",
+                        borderColor: "divider",
+                        display: "grid",
+                        gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" },
+                        gap: 1.25
+                    }}
+                >
                     {fields.map((field) => (
                         <Box key={field.label}>
                             <Typography
@@ -86,7 +101,7 @@ export default function MobileDataCard({ title, subtitle, fields = [], actions }
                             </Box>
                         </Box>
                     ))}
-                </Stack>
+                </Box>
             )}
         </Paper>
     );

@@ -69,8 +69,8 @@ export default function DesignationPage() {
             try {
                 const data = await searchDesignations(searchKeyword);
                 setDesignations(data);
-            } catch (error) {
-                console.error(error);
+            } catch {
+                // Keep the current list when a background search is interrupted.
             }
         }, 300);
 
@@ -253,7 +253,7 @@ export default function DesignationPage() {
                                     sx={{ "&:last-child td": { borderBottom: 0 } }}
                                 >
                                     <TableCell>
-                                        <Typography variant="body2" fontWeight={500}>
+                                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
                                             {designation.designationName}
                                         </Typography>
                                     </TableCell>

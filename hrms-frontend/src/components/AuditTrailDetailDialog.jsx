@@ -27,7 +27,7 @@ import {
 function DetailField({ label, value, mono = false }) {
     return (
         <Box>
-            <Typography variant="caption" color="text.secondary" display="block">
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                 {label}
             </Typography>
             <Typography
@@ -76,19 +76,19 @@ export default function AuditTrailDetailDialog({ open, log, onClose }) {
             <DialogTitle sx={{ pb: 1 }}>
                 <Stack
                     direction={{ xs: "column", sm: "row" }}
-                    justifyContent="space-between"
-                    alignItems={{ xs: "flex-start", sm: "center" }}
+
+
                     spacing={1}
-                >
+                 sx={{ justifyContent: "space-between", alignItems: { xs: "flex-start", sm: "center" } }}>
                     <Box>
-                        <Typography variant="h6" fontWeight={700}>
+                        <Typography variant="h6" sx={{ fontWeight: 700 }}>
                             Audit Event #{log.id}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
                             {formatAuditTimestamp(log.occurredAt)}
                         </Typography>
                     </Box>
-                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                    <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
                         {activitySummary !== "—" && (
                             <Chip
                                 size="small"
@@ -230,7 +230,7 @@ export default function AuditTrailDetailDialog({ open, log, onClose }) {
 
                     {hasChanges && (
                         <Box sx={{ mt: 2 }}>
-                            <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600 }}>
                                 Activity Details
                             </Typography>
                             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>

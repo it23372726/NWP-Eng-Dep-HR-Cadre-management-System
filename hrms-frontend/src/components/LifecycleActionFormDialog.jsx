@@ -23,7 +23,6 @@ import { updateEmployeeAction } from "../services/employeeLifecycleService";
 import DesignationOptionContent from "./DesignationOptionContent";
 import { getServiceLevels } from "../services/serviceLevelService";
 import {
-    ACTION_TYPE_LABELS,
     GRADES,
     getActionTypeLabel,
     getApiErrorMessage,
@@ -604,8 +603,8 @@ export default function LifecycleActionFormDialog({
                     {isPromotionLike && designation && (
                     <Stack
                         direction="row"
-                        gap={1}
-                        sx={{ mt: 2, flexWrap: "wrap" }}
+
+                        sx={{gap: 1,  mt: 2, flexWrap: "wrap" }}
                     >
                         <Chip
                             size="small"

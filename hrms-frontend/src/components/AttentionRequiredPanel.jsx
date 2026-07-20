@@ -1,4 +1,3 @@
-import React from "react";
 import {
     Box,
     Paper,
@@ -39,7 +38,7 @@ export default function AttentionRequiredPanel({ alerts, loading }) {
                     bgcolor: "#F0FDF4"
                 }}
             >
-                <Stack direction="row" spacing={1.5} alignItems="center">
+                <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
                     <CheckCircleIcon sx={{ color: "success.main" }} />
                     <Typography variant="body1" sx={{ fontWeight: 600 }}>
                         No items require immediate attention
@@ -68,7 +67,7 @@ export default function AttentionRequiredPanel({ alerts, loading }) {
                 bgcolor: "#FEF3F2"
             }}
         >
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+            <Stack direction="row" spacing={1} sx={{alignItems: "center",  mb: 2 }}>
                 <WarningAmberIcon sx={{ color: "#B42318" }} />
                 <Typography variant="h6" sx={{ fontWeight: 700, color: "#7F1D1D" }}>
                     Attention Required
@@ -96,7 +95,7 @@ export default function AttentionRequiredPanel({ alerts, loading }) {
                             } : {}
                         }}
                     >
-                        <Stack direction="row" spacing={1.5} alignItems="center">
+                        <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
                             <WarningAmberIcon
                                 sx={{
                                     color: alert.severity === "error" ? "#B42318" : "#B45309",

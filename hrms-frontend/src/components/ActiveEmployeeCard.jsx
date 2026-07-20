@@ -39,7 +39,7 @@ function DetailRow({ icon: Icon, label, value, highlight }) {
     }
 
     return (
-        <Stack direction="row" spacing={1} alignItems="flex-start">
+        <Stack direction="row" spacing={1} sx={{ alignItems: "flex-start" }}>
             <Icon
                 sx={{
                     fontSize: 16,
@@ -49,7 +49,7 @@ function DetailRow({ icon: Icon, label, value, highlight }) {
                 }}
             />
             <Box sx={{ minWidth: 0 }}>
-                <Typography variant="caption" color="text.secondary" display="block">
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                     {label}
                 </Typography>
                 <Typography
@@ -140,19 +140,18 @@ export default function ActiveEmployeeCard({ employee, onClick }) {
             />
 
             <Box sx={{ p: 2, pb: 1.5, flex: 1 }}>
-                <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ mb: 1.5 }}>
+                <Stack direction="row" spacing={1.5} sx={{alignItems: "flex-start",  mb: 1.5 }}>
                     <EmployeeAvatar employee={employee} size={56} />
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Stack
                             direction="row"
                             spacing={1}
-                            alignItems="flex-start"
-                            sx={{ mb: 0.5 }}
+                            sx={{ alignItems: "flex-start", mb: 0.5 }}
                         >
                             <Typography
                                 variant="subtitle1"
-                                fontWeight={700}
                                 sx={{
+                                    fontWeight: 700,
                                     flex: 1,
                                     minWidth: 0,
                                     lineHeight: 1.3,
@@ -183,7 +182,7 @@ export default function ActiveEmployeeCard({ employee, onClick }) {
                         <Typography
                             variant="caption"
                             color="text.secondary"
-                            display="block"
+
                             noWrap
                             title={
                                 [
@@ -191,7 +190,7 @@ export default function ActiveEmployeeCard({ employee, onClick }) {
                                     employee.nic || null
                                 ].filter(Boolean).join(" · ")
                             }
-                            sx={{ overflow: "hidden", textOverflow: "ellipsis" }}
+                            sx={{display: "block",  overflow: "hidden", textOverflow: "ellipsis" }}
                         >
                             S/N {employee.employeeNo ?? "—"}
                             {employee.nic ? ` · ${employee.nic}` : ""}
@@ -240,7 +239,7 @@ export default function ActiveEmployeeCard({ employee, onClick }) {
                     )}
                 </Stack>
 
-                <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+                <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: "wrap" }}>
                     {systemPending && (
                         <Chip
                             label="System Pending"

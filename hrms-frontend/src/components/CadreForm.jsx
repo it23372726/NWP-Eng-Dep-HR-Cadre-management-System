@@ -180,18 +180,18 @@ export default function CadreForm({
                                     <Typography
                                         variant="caption"
                                         color="text.secondary"
-                                        fontWeight={600}
-                                        display="block"
-                                        sx={{ mb: 1 }}
+
+
+                                        sx={{fontWeight: 600, display: "block",  mb: 1 }}
                                     >
                                         Selected designation details
                                     </Typography>
                                     <Stack
                                         direction="row"
                                         spacing={1}
-                                        flexWrap="wrap"
+
                                         useFlexGap
-                                    >
+                                     sx={{ flexWrap: "wrap" }}>
                                         <Chip
                                             size="small"
                                             label={

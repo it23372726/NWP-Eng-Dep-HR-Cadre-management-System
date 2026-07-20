@@ -331,9 +331,9 @@ export default function CadreReportPage() {
                     <Stack
                         direction="row"
                         spacing={1}
-                        flexWrap="wrap"
+
                         useFlexGap
-                        sx={{ width: { xs: "100%", sm: "auto" } }}
+                        sx={{flexWrap: "wrap",  width: { xs: "100%", sm: "auto" } }}
                     >
                         <Button
                             variant="contained"
@@ -387,7 +387,7 @@ export default function CadreReportPage() {
                             Period: {formatDisplayDate(periodStart)} to{" "}
                             {formatDisplayDate(periodEnd)}
                         </Typography>
-                        <Typography variant="caption" align="center" display="block">
+                        <Typography variant="caption" align="center" sx={{ display: "block" }}>
                             Generated:{" "}
                             {new Date(report.generatedAt).toLocaleString()}
                         </Typography>

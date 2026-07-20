@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
     Paper,
     Typography,
@@ -73,7 +73,7 @@ function DistrictCard({
                 }}
             >
                 <Stack spacing={2}>
-                    <Stack direction="row" spacing={1.5} alignItems="center">
+                    <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
                         <Box
                             sx={{
                                 p: 1,
@@ -113,10 +113,10 @@ function DistrictCard({
 
                     <Stack
                         direction="row"
-                        alignItems="baseline"
-                        justifyContent="space-between"
+
+
                         spacing={1}
-                    >
+                     sx={{ alignItems: "baseline", justifyContent: "space-between" }}>
                         <Box>
                             <Typography variant="h4" sx={{ fontWeight: 700, color, lineHeight: 1 }}>
                                 {employeeCount}
@@ -140,8 +140,8 @@ function DistrictCard({
                     <Box>
                         <Stack
                             direction="row"
-                            justifyContent="space-between"
-                            sx={{ mb: 0.75 }}
+
+                            sx={{justifyContent: "space-between",  mb: 0.75 }}
                         >
                             <Typography variant="caption" color="text.secondary">
                                 Share of staff

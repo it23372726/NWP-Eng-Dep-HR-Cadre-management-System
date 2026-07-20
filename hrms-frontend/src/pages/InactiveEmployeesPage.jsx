@@ -52,7 +52,6 @@ export default function InactiveEmployeesPage() {
             const data = await getInactiveEmployees();
             setAllEmployees(Array.isArray(data) ? data : []);
         } catch (error) {
-            console.error(error);
             setAllEmployees([]);
             setLoadError(getApiErrorMessage(error));
             toast.error(getApiErrorMessage(error));
@@ -183,10 +182,10 @@ export default function InactiveEmployeesPage() {
                 <Stack
                     direction="row"
                     spacing={1}
-                    alignItems="center"
-                    flexWrap="wrap"
+
+
                     useFlexGap
-                >
+                 sx={{ alignItems: "center", flexWrap: "wrap" }}>
                     <Typography variant="body2" color="text.secondary">
                         {loading
                             ? "Loading employees..."

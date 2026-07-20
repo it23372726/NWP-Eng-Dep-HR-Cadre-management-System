@@ -179,7 +179,7 @@ export function EmployeeTrainingPositionSection({
             title="Position"
             description="Designation and training period for this trainee."
         >
-            <Grid container spacing={2} alignItems="stretch">
+            <Grid container spacing={2} sx={{ alignItems: "stretch" }}>
                 <Grid size={{ xs: 12, md: 6 }}>
                     <TextField
                         {...selectFieldProps}
@@ -299,8 +299,8 @@ export function EmployeeNonPermanentPositionSection({
             {selectedDesignation && (
                 <Stack
                     direction="row"
-                    gap={1}
-                    sx={{ mt: 2, flexWrap: "wrap" }}
+
+                    sx={{gap: 1,  mt: 2, flexWrap: "wrap" }}
                 >
                     {selectedDesignation.service && (
                         <Chip

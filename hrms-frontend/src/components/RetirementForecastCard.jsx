@@ -94,12 +94,12 @@ const ForecastHorizon = ({
             >
                 <Stack
                     direction={{ xs: "column", sm: "row" }}
-                    alignItems={{ xs: "flex-start", sm: "center" }}
-                    justifyContent="space-between"
+
+
                     spacing={1.5}
-                    sx={{ mb: 1.5 }}
+                    sx={{alignItems: { xs: "flex-start", sm: "center" }, justifyContent: "space-between",  mb: 1.5 }}
                 >
-                    <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ flex: 1 }}>
+                    <Stack direction="row" spacing={1.5} sx={{alignItems: "flex-start",  flex: 1 }}>
                         <Box
                             sx={{
                                 p: 1,
@@ -114,7 +114,7 @@ const ForecastHorizon = ({
                             <Icon sx={{ color, fontSize: 22 }} />
                         </Box>
                         <Box>
-                            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                            <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
                                 <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                                     {title}
                                 </Typography>
@@ -139,9 +139,9 @@ const ForecastHorizon = ({
 
                     <Stack
                         direction="row"
-                        alignItems="center"
+
                         spacing={1.5}
-                        sx={{ flexShrink: 0, alignSelf: { xs: "flex-end", sm: "center" } }}
+                        sx={{alignItems: "center",  flexShrink: 0, alignSelf: { xs: "flex-end", sm: "center" } }}
                     >
                         {loading ? (
                             <Skeleton variant="text" width={48} height={36} />

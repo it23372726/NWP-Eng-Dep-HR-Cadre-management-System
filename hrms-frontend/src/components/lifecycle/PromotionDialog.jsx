@@ -38,13 +38,10 @@ import {
     OTHER_DESIGNATION_VALUE,
     REQUIREMENT_STATUS,
     resolveEmployeeDesignationName,
-    serviceAllowsSpecial,
-    serviceAllowsSupra,
     validateCustomDesignationAssignment,
     validateDesignationAssignment
 } from "../../constants/hrms";
 import {
-    getGrade1AchievedDate,
     getGrade1EligibilityDate,
     getGrade2AchievedDate,
     getGrade2EligibilityDate,
@@ -129,15 +126,15 @@ function ChangePreview({ label, fromValue, toValue }) {
                 bgcolor: changed ? "primary.50" : "grey.50"
             }}
         >
-            <Typography variant="caption" color="text.secondary" display="block">
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                 {label}
             </Typography>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
+            <Stack direction="row" spacing={1} sx={{alignItems: "center",  mt: 0.5 }}>
                 <Typography variant="body2">{fromValue || "—"}</Typography>
                 {changed && (
                     <>
                         <ArrowForwardIcon sx={{ fontSize: 16, color: "text.secondary" }} />
-                        <Typography variant="body2" fontWeight={600}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {toValue || "—"}
                         </Typography>
                     </>
@@ -147,7 +144,7 @@ function ChangePreview({ label, fromValue, toValue }) {
     );
 }
 
-function RequirementChecklist({ items, form, employee, handleChange, editable }) {
+function RequirementChecklist({ items, form, handleChange, editable }) {
     return (
         <Stack spacing={1}>
             {items.map((item) => {
@@ -173,9 +170,9 @@ function RequirementChecklist({ items, form, employee, handleChange, editable })
                         key={item.key}
                         direction="row"
                         spacing={1}
-                        alignItems="center"
-                        justifyContent="space-between"
                         sx={{
+                            alignItems: "center",
+                            justifyContent: "space-between",
                             px: 1.5,
                             py: 1,
                             borderRadius: 1,
@@ -1389,8 +1386,8 @@ export default function PromotionDialog({
                         <Stack
                             direction="row"
                             spacing={1}
-                            flexWrap="wrap"
-                            sx={{ mt: 2, gap: 1 }}
+
+                            sx={{flexWrap: "wrap",  mt: 2, gap: 1 }}
                         >
                             <Chip
                                 size="small"

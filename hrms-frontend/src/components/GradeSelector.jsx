@@ -14,7 +14,7 @@ export default function GradeSelector({
 
     return (
         <Box>
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
                 {grades.map((grade) => {
                     const selected = selectedGrades.includes(grade);
                     return (

@@ -1,4 +1,3 @@
-import React from "react";
 import {
     Box,
     Chip,
@@ -29,7 +28,7 @@ function IncrementList({ title, items, emptyMessage, icon, tone }) {
                 bgcolor: tone.bg
             }}
         >
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+            <Stack direction="row" spacing={1} sx={{alignItems: "center",  mb: 2 }}>
                 {icon}
                 <Typography variant="h6" sx={{ fontWeight: 700, color: tone.title }}>
                     {title}
@@ -66,11 +65,11 @@ function IncrementList({ title, items, emptyMessage, icon, tone }) {
                                     <Stack
                                         direction="row"
                                         spacing={1}
-                                        alignItems="center"
-                                        flexWrap="wrap"
+
+
                                         useFlexGap
-                                    >
-                                        <Typography variant="body2" fontWeight={600}>
+                                     sx={{ alignItems: "center", flexWrap: "wrap" }}>
+                                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                             {item.employeeName}
                                         </Typography>
                                         {item.overdueYears > 0 && (

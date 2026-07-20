@@ -61,8 +61,8 @@ export default function EmployeeListFilterPanel({
         >
             <Stack
                 direction="row"
-                alignItems="center"
                 sx={{
+                    alignItems: "center",
                     px: 2.5,
                     py: 1.5,
                     gap: 1.5,

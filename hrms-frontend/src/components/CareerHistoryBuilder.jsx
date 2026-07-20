@@ -166,8 +166,6 @@ export const deriveTimelineState = (events) => {
     let permanentConfirmationDate = null;
     let grade2AchievedDate = null;
     let grade1AchievedDate = null;
-    let supraAchievedDate = null;
-    let specialAchievedDate = null;
     let deathRecorded = false;
     let lastDate = null;
     let firstAppointmentDate = null;
@@ -225,12 +223,6 @@ export const deriveTimelineState = (events) => {
                     }
                     if (grade === "II" && event.grade === "I") {
                         grade1AchievedDate = event.actionDate;
-                    }
-                    if (grade === "I" && event.grade === "Supra") {
-                        supraAchievedDate = event.actionDate;
-                    }
-                    if (grade === "I" && event.grade === "Special") {
-                        specialAchievedDate = event.actionDate;
                     }
                     grade = event.grade;
                 }
@@ -1105,7 +1097,7 @@ export default function CareerHistoryBuilder({
                                 />
                             )}
                             <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                                <Typography variant="body2" fontWeight={600}>
+                                <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                     {formatDisplayDate(event.actionDate)}
                                 </Typography>
                                 <Typography
@@ -1138,7 +1130,7 @@ export default function CareerHistoryBuilder({
             {/* First appointment entry */}
             {!hasFirstAppointment && (
                 <Box>
-                    <Typography variant="body2" fontWeight={600} sx={{ mb: 1.5 }}>
+                    <Typography variant="body2" sx={{fontWeight: 600,  mb: 1.5 }}>
                         First Appointment
                     </Typography>
                     <Grid container spacing={2}>
@@ -1309,7 +1301,7 @@ export default function CareerHistoryBuilder({
             {hasFirstAppointment && availableActionTypes.length > 0 && (
                 <Box>
                     <Divider sx={{ mb: 2 }} />
-                    <Typography variant="body2" fontWeight={600} sx={{ mb: 1.5 }}>
+                    <Typography variant="body2" sx={{fontWeight: 600,  mb: 1.5 }}>
                         Add Career Event
                     </Typography>
                     <Grid container spacing={2}>
@@ -1658,7 +1650,7 @@ export default function CareerHistoryBuilder({
                     >
                         Current state after this history
                     </Typography>
-                    <Stack direction="row" gap={1} sx={{ flexWrap: "wrap" }}>
+                    <Stack direction="row" sx={{gap: 1,  flexWrap: "wrap" }}>
                         <Chip
                             size="small"
                             color="primary"

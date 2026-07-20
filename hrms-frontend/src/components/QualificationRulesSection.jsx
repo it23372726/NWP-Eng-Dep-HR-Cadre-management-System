@@ -34,8 +34,8 @@ function RequirementsEditor({
                     key={`${field}-${index}`}
                     direction="row"
                     spacing={1}
-                    alignItems="flex-start"
-                >
+
+                 sx={{ alignItems: "flex-start" }}>
                     <TextField
                         {...fieldProps}
                         label={`${label} ${index + 1}`}
@@ -54,7 +54,7 @@ function RequirementsEditor({
                     </IconButton>
                 </Stack>
             ))}
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
                 <Button
                     variant="outlined"
                     size="small"
@@ -83,8 +83,8 @@ export default function QualificationRulesSection({
         <>
             <Typography
                 variant="subtitle1"
-                fontWeight={600}
-                sx={{ mb: 2, px: 0.5 }}
+
+                sx={{fontWeight: 600,  mb: 2, px: 0.5 }}
             >
                 Qualification & Promotion Rules
             </Typography>

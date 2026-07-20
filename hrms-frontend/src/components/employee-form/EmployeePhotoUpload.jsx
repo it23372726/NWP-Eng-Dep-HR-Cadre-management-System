@@ -254,7 +254,7 @@ export default function EmployeePhotoUpload({
 
     return (
         <Box sx={{ mb: 2 }}>
-            <Stack direction="row" spacing={2} alignItems="flex-start">
+            <Stack direction="row" spacing={2} sx={{ alignItems: "flex-start" }}>
                 <Box sx={{ position: "relative", flexShrink: 0 }}>
                     {loadingExisting ? (
                         <Avatar sx={avatarSx}>
@@ -279,7 +279,7 @@ export default function EmployeePhotoUpload({
 
                 <Stack spacing={1} sx={{ flex: 1, minWidth: 0 }}>
                     <Typography variant="subtitle2">Profile photo</Typography>
-                    <Stack direction="row" spacing={1} flexWrap="wrap">
+                    <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
                         <Button
                             variant="outlined"
                             size="small"
@@ -339,7 +339,7 @@ export default function EmployeePhotoUpload({
                     </Box>
 
                     <Stack spacing={1.5} sx={{ mt: 2 }}>
-                        <Stack direction="row" spacing={2} alignItems="center">
+                        <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
                             <Typography variant="caption" color="text.secondary" sx={{ minWidth: 40 }}>
                                 Zoom
                             </Typography>

@@ -49,7 +49,11 @@ export default function GradeDistributionChart({ data, loading }) {
                 Grade Distribution
             </Typography>
             <Box sx={{ width: "100%", height: CHART_HEIGHT }}>
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer
+                    width="100%"
+                    height="100%"
+                    initialDimension={{ width: 500, height: CHART_HEIGHT }}
+                >
                     <BarChart
                         data={data}
                         margin={{ top: 20, right: 30, left: 20, bottom: 80 }}

@@ -12,12 +12,34 @@ import {
     Tab,
     CircularProgress,
     Alert,
-    Chip
+    Chip,
+    Paper
 } from "@mui/material";
-import FileDownloadIcon from "@mui/icons-material/FileDownload";
+import {
+    ArrowBackRounded as ArrowBackIcon,
+    BadgeOutlined as BadgeIcon,
+    CheckCircleOutlineRounded as ConfirmIcon,
+    DeleteForeverOutlined as DeleteIcon,
+    EditOutlined as EditIcon,
+    ElderlyOutlined as RetireIcon,
+    EventAvailableOutlined as BenefitsIcon,
+    ExpandMoreRounded as ExpandMoreIcon,
+    FileDownloadOutlined as FileDownloadIcon,
+    HistoryRounded as HistoryIcon,
+    HomeWorkOutlined as WorkplaceIcon,
+    LogoutRounded as TransferIcon,
+    ManageAccountsOutlined as ActionsIcon,
+    PersonOffOutlined as PersonOffIcon,
+    ReplayRounded as RevertIcon,
+    SchoolOutlined as QualificationsIcon,
+    SwapHorizRounded as OfficeChangeIcon,
+    TimelineOutlined as TimelineIcon,
+    TrendingUpRounded as PromoteIcon,
+    WorkOutlineRounded as EmploymentIcon
+} from "@mui/icons-material";
 
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import { getEmployeeById, saveEmployeePhoto, updateEmployee, getVehiclePermitStatus, recordVehiclePermitCollection, updateVehiclePermitCollection, undoVehiclePermitCollection, downloadEmployeeSummaryPdf, downloadEmployeeDependentDetailsPdf } from "../services/employeeService";
@@ -69,6 +91,7 @@ import {
     isTrainingEmployee,
     isTrainingGraduationEligible,
     getTrainingGraduationBlockReason,
+    getEmploymentTypeLabel,
     resolveEmployeeDesignationName,
     resolveEmployeeService,
     isSystemPendingEmployee
@@ -126,8 +149,41 @@ const meetsGradeThreePermanentRequirements = (employee) => {
         && hasCompletedThreeYears(employee.dateOfFirstAppointment);
 };
 
+function ProfileQuickFact({ icon, label, value }) {
+    return (
+        <Stack direction="row" spacing={1.1} sx={{ minWidth: 0, alignItems: "center" }}>
+            <Box
+                sx={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 2.25,
+                    display: "grid",
+                    placeItems: "center",
+                    bgcolor: "background.paper",
+                    color: "primary.main",
+                    border: "1px solid",
+                    borderColor: "divider",
+                    flexShrink: 0,
+                    "& svg": { fontSize: 18 }
+                }}
+            >
+                {icon}
+            </Box>
+            <Box sx={{ minWidth: 0 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                    {label}
+                </Typography>
+                <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>
+                    {value || "—"}
+                </Typography>
+            </Box>
+        </Stack>
+    );
+}
+
 export default function EmployeeProfilePage() {
     const { id } = useParams();
+    const navigate = useNavigate();
     const canEdit = canEditEmployees(getStoredUser());
 
     const [employee, setEmployee] = useState(null);
@@ -437,7 +493,19 @@ export default function EmployeeProfilePage() {
     };
 
     if (!employee) {
-        return <Typography>Loading...</Typography>;
+        return (
+            <Paper
+                variant="outlined"
+                sx={{ minHeight: 320, display: "grid", placeItems: "center" }}
+            >
+                <Stack spacing={1.5} sx={{ alignItems: "center" }}>
+                    <CircularProgress size={34} />
+                    <Typography variant="body2" color="text.secondary">
+                        Loading employee profile…
+                    </Typography>
+                </Stack>
+            </Paper>
+        );
     }
 
     const employeeService = resolveEmployeeService(employee);
@@ -466,38 +534,83 @@ export default function EmployeeProfilePage() {
 
     return (
         <Box>
+            <Button
+                size="small"
+                startIcon={<ArrowBackIcon />}
+                onClick={() => navigate("/employees")}
+                sx={{ mb: 1.25, color: "text.secondary" }}
+            >
+                Back to employees
+            </Button>
+            <Paper
+                variant="outlined"
+                sx={{
+                    p: { xs: 2, sm: 2.5 },
+                    mb: 2.5,
+                    overflow: "hidden",
+                    position: "relative",
+                    background: (theme) =>
+                        `linear-gradient(125deg, ${theme.palette.background.paper} 35%, ${theme.palette.primary[50]} 100%)`,
+                    "&::after": {
+                        content: '""',
+                        position: "absolute",
+                        width: 220,
+                        height: 220,
+                        borderRadius: "50%",
+                        right: -100,
+                        top: -145,
+                        bgcolor: "primary.100",
+                        opacity: 0.45
+                    }
+                }}
+            >
             <Stack
                 direction={{ xs: "column", sm: "row" }}
                 sx={{
-                    mb: 3,
+                    position: "relative",
+                    zIndex: 1,
                     justifyContent: "space-between",
-                    alignItems: { xs: "stretch", sm: "flex-start" },
+                    alignItems: { xs: "stretch", sm: "center" },
                     flexWrap: "wrap",
                     gap: 2
                 }}
             >
                 <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
-                    <EmployeeAvatar employee={employee} />
-                    <Box>
+                    <Box
+                        sx={{
+                            p: 0.5,
+                            borderRadius: "50%",
+                            bgcolor: "background.paper",
+                            border: "1px solid",
+                            borderColor: "primary.100",
+                            boxShadow: 2,
+                            flexShrink: 0
+                        }}
+                    >
+                        <EmployeeAvatar employee={employee} size={76} />
+                    </Box>
+                    <Box sx={{ minWidth: 0 }}>
                         <Stack
-                            direction="row"
+                            direction={{ xs: "column", sm: "row" }}
                             spacing={1}
-                            sx={{ alignItems: "center" }}
+                            sx={{ alignItems: { xs: "flex-start", sm: "center" } }}
                         >
-                            <Typography variant="h4">
+                            <Typography variant="h4" sx={{ overflowWrap: "anywhere" }}>
                                 {employee.fullName}
                             </Typography>
-                            <EmployeeStatusChip status={employee.status} />
-                            {isSystemPending && (
-                                <Chip
-                                    label="System Pending"
-                                    size="small"
-                                    color="warning"
-                                    variant="outlined"
-                                />
-                            )}
+                            <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: "wrap" }}>
+                                <EmployeeStatusChip status={employee.status} />
+                                {isSystemPending && (
+                                    <Chip
+                                        label="System Pending"
+                                        size="small"
+                                        color="warning"
+                                        variant="outlined"
+                                    />
+                                )}
+                            </Stack>
                         </Stack>
-                        <Typography color="text.secondary">
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                             {isSystemPending
                                 ? `${employee.employeeNo} · Career history not recorded`
                                 : `${employee.employeeNo} · ${resolveEmployeeDesignationName(employee)}`}
@@ -550,6 +663,7 @@ export default function EmployeeProfilePage() {
                         <Button
                             variant="outlined"
                             size="small"
+                            startIcon={<EditIcon />}
                             onClick={() => setOpenEdit(true)}
                         >
                             Edit Details
@@ -558,6 +672,7 @@ export default function EmployeeProfilePage() {
                             <Button
                                 variant="outlined"
                                 size="small"
+                                startIcon={<QualificationsIcon />}
                                 onClick={() => {
                                     setActiveTab(isContract ? 1 : 2);
                                     setOpenQualifications(true);
@@ -570,9 +685,11 @@ export default function EmployeeProfilePage() {
                         <Button
                             variant="contained"
                             size="small"
+                            startIcon={<ActionsIcon />}
+                            endIcon={<ExpandMoreIcon />}
                             onClick={(e) => setAnchorEl(e.currentTarget)}
                         >
-                            Employee Actions ▼
+                            Employee Actions
                         </Button>
                         )}
                         {isSystemPending && (
@@ -580,6 +697,7 @@ export default function EmployeeProfilePage() {
                                 variant="outlined"
                                 size="small"
                                 color="error"
+                                startIcon={<DeleteIcon />}
                                 onClick={() => setOpenDelete(true)}
                             >
                                 Delete Permanently
@@ -590,8 +708,8 @@ export default function EmployeeProfilePage() {
                             anchorEl={anchorEl}
                             open={Boolean(anchorEl)}
                             onClose={() => setAnchorEl(null)}
-                            PaperProps={{
-                                sx: { minWidth: 240 }
+                            slotProps={{
+                                paper: { sx: { minWidth: 270, maxHeight: 520 } }
                             }}
                         >
                             {isTraining && (
@@ -616,7 +734,7 @@ export default function EmployeeProfilePage() {
                                 }}
                                 disabled={!canAppointTrainingAsPermanent}
                             >
-                                <ListItemIcon sx={{ color: "success.main" }}>✓</ListItemIcon>
+                                <ListItemIcon sx={{ color: "success.main" }}><ConfirmIcon fontSize="small" /></ListItemIcon>
                                 <ListItemText>Appoint as Permanent</ListItemText>
                             </MenuItem>
                             <Divider />
@@ -635,7 +753,7 @@ export default function EmployeeProfilePage() {
                                     setAnchorEl(null);
                                 }}
                             >
-                                <ListItemIcon sx={{ color: "warning.main" }}>↩</ListItemIcon>
+                                <ListItemIcon sx={{ color: "warning.main" }}><RevertIcon fontSize="small" /></ListItemIcon>
                                 <ListItemText>Revert to Training</ListItemText>
                             </MenuItem>
                             <Divider />
@@ -654,7 +772,7 @@ export default function EmployeeProfilePage() {
                                     setAnchorEl(null);
                                 }}
                             >
-                                <ListItemIcon sx={{ color: "success.main" }}>✓</ListItemIcon>
+                                <ListItemIcon sx={{ color: "success.main" }}><ConfirmIcon fontSize="small" /></ListItemIcon>
                                 <ListItemText>New Appointment</ListItemText>
                             </MenuItem>
                             <MenuItem
@@ -663,7 +781,7 @@ export default function EmployeeProfilePage() {
                                     setAnchorEl(null);
                                 }}
                             >
-                                <ListItemIcon sx={{ color: "warning.main" }}>←</ListItemIcon>
+                                <ListItemIcon sx={{ color: "warning.main" }}><TransferIcon fontSize="small" /></ListItemIcon>
                                 <ListItemText>Transfer Out</ListItemText>
                             </MenuItem>
                             <MenuItem
@@ -672,7 +790,7 @@ export default function EmployeeProfilePage() {
                                     setAnchorEl(null);
                                 }}
                             >
-                                <ListItemIcon sx={{ color: "info.main" }}>↔</ListItemIcon>
+                                <ListItemIcon sx={{ color: "info.main" }}><OfficeChangeIcon fontSize="small" /></ListItemIcon>
                                 <ListItemText>Office Change</ListItemText>
                             </MenuItem>
                             <MenuItem
@@ -681,7 +799,7 @@ export default function EmployeeProfilePage() {
                                     setAnchorEl(null);
                                 }}
                             >
-                                <ListItemIcon>○</ListItemIcon>
+                                <ListItemIcon><RetireIcon fontSize="small" /></ListItemIcon>
                                 <ListItemText>Retire / Resign</ListItemText>
                             </MenuItem>
                             <Divider />
@@ -696,7 +814,7 @@ export default function EmployeeProfilePage() {
                                     setAnchorEl(null);
                                 }}
                             >
-                                <ListItemIcon sx={{ color: "success.main" }}>↑</ListItemIcon>
+                                <ListItemIcon sx={{ color: "success.main" }}><PromoteIcon fontSize="small" /></ListItemIcon>
                                 <ListItemText>Promote / Update Assignment</ListItemText>
                             </MenuItem>
                             {canMakePermanent && (
@@ -706,7 +824,7 @@ export default function EmployeeProfilePage() {
                                         setAnchorEl(null);
                                     }}
                                 >
-                                    <ListItemIcon sx={{ color: "success.main" }}>✓</ListItemIcon>
+                                    <ListItemIcon sx={{ color: "success.main" }}><ConfirmIcon fontSize="small" /></ListItemIcon>
                                     <ListItemText>Make Permanent</ListItemText>
                                 </MenuItem>
                             )}
@@ -724,6 +842,7 @@ export default function EmployeeProfilePage() {
                                     setAnchorEl(null);
                                 }}
                             >
+                                <ListItemIcon><PersonOffIcon fontSize="small" /></ListItemIcon>
                                 <ListItemText>Mark Death</ListItemText>
                             </MenuItem>
                             <MenuItem
@@ -732,7 +851,7 @@ export default function EmployeeProfilePage() {
                                     setAnchorEl(null);
                                 }}
                             >
-                                <ListItemIcon sx={{ color: "error.main" }}>✕</ListItemIcon>
+                                <ListItemIcon sx={{ color: "error.main" }}><PersonOffIcon fontSize="small" /></ListItemIcon>
                                 <ListItemText>Dismiss</ListItemText>
                             </MenuItem>
                             <MenuItem
@@ -741,7 +860,7 @@ export default function EmployeeProfilePage() {
                                     setAnchorEl(null);
                                 }}
                             >
-                                <ListItemIcon sx={{ color: "error.main" }}>✕</ListItemIcon>
+                                <ListItemIcon sx={{ color: "error.main" }}><PersonOffIcon fontSize="small" /></ListItemIcon>
                                 <ListItemText>Vacation of Post</ListItemText>
                             </MenuItem>
                             <MenuItem
@@ -750,7 +869,7 @@ export default function EmployeeProfilePage() {
                                     setAnchorEl(null);
                                 }}
                             >
-                                <ListItemIcon sx={{ color: "error.main" }}>🗑</ListItemIcon>
+                                <ListItemIcon sx={{ color: "error.main" }}><DeleteIcon fontSize="small" /></ListItemIcon>
                                 <ListItemText sx={{ color: "error.main" }}>Delete Permanently</ListItemText>
                             </MenuItem>
                         </Menu>
@@ -759,6 +878,45 @@ export default function EmployeeProfilePage() {
                     )}
                 </Stack>
             </Stack>
+
+            <Box
+                sx={{
+                    position: "relative",
+                    zIndex: 1,
+                    mt: 2.5,
+                    pt: 2,
+                    borderTop: "1px solid",
+                    borderColor: "divider",
+                    display: "grid",
+                    gridTemplateColumns: {
+                        xs: "repeat(2, minmax(0, 1fr))",
+                        md: "repeat(4, minmax(0, 1fr))"
+                    },
+                    gap: 1.5
+                }}
+            >
+                <ProfileQuickFact
+                    icon={<EmploymentIcon />}
+                    label="Employment"
+                    value={getEmploymentTypeLabel(employee.employmentType, employee)}
+                />
+                <ProfileQuickFact
+                    icon={<BadgeIcon />}
+                    label="Current grade"
+                    value={isContract || isTraining ? "Not graded" : employee.grade}
+                />
+                <ProfileQuickFact
+                    icon={<WorkplaceIcon />}
+                    label="Current workplace"
+                    value={employee.currentOffice || employee.currentDepartment}
+                />
+                <ProfileQuickFact
+                    icon={<TimelineIcon />}
+                    label="Service level"
+                    value={employee.serviceLevel?.levelName || employeeService?.serviceCode}
+                />
+            </Box>
+            </Paper>
 
             {isSystemPending && canEdit && (
                 <Alert severity="info" sx={{ mb: 3 }}>
@@ -772,23 +930,53 @@ export default function EmployeeProfilePage() {
                 </Alert>
             )}
 
-            <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 3 }}>
+            <Paper
+                variant="outlined"
+                sx={{
+                    mb: 2.5,
+                    px: { xs: 0.5, sm: 1 },
+                    overflow: "hidden",
+                    position: { md: "sticky" },
+                    top: { md: 72 },
+                    zIndex: 4,
+                    bgcolor: (theme) => theme.palette.background.paper
+                }}
+            >
                 <Tabs
                     value={activeTab}
                     onChange={(_, value) => setActiveTab(value)}
                     variant="scrollable"
                     scrollButtons="auto"
+                    aria-label="Employee profile sections"
                 >
-                    <Tab label="Employee's Information" />
-                    {!isSystemPending && <Tab label="Benefits & Allowances" />}
+                    <Tab
+                        icon={<BadgeIcon fontSize="small" />}
+                        iconPosition="start"
+                        label="Profile overview"
+                    />
+                    {!isSystemPending && (
+                        <Tab
+                            icon={<BenefitsIcon fontSize="small" />}
+                            iconPosition="start"
+                            label="Benefits & allowances"
+                        />
+                    )}
                     {!isSystemPending && !isContract && (
-                        <Tab label="Qualifications & Requirements" />
+                        <Tab
+                            icon={<QualificationsIcon fontSize="small" />}
+                            iconPosition="start"
+                            label="Qualifications"
+                        />
                     )}
                     {showLifecycleHistoryTab && (
-                        <Tab label="Lifecycle Action History" />
+                        <Tab
+                            icon={<HistoryIcon fontSize="small" />}
+                            iconPosition="start"
+                            label="Lifecycle history"
+                        />
                     )}
                 </Tabs>
-            </Box>
+            </Paper>
 
             {activeTab === 0 && (
                 <EmployeeProfilePersonalTab

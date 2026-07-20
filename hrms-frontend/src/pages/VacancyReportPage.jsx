@@ -56,7 +56,7 @@ export default function VacancyReportPage() {
 
             setReport(data);
 
-        } catch (error) {
+        } catch {
 
             toast.error(
                 "Failed to load vacancy report"

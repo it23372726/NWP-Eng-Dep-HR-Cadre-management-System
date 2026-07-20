@@ -255,15 +255,15 @@ export default function AllEmployeeDetailsReportPage() {
                                 </li>
                             );
                         }}
-                        renderTags={(value, getTagProps) =>
+                        renderValue={(value, getItemProps) =>
                             value.map((option, index) => {
-                                const { key, ...tagProps } = getTagProps({ index });
+                                const { key, ...itemProps } = getItemProps({ index });
                                 return (
                                     <Chip
                                         key={key}
                                         label={formatDesignationOptionLabel(option)}
                                         size="small"
-                                        {...tagProps}
+                                        {...itemProps}
                                     />
                                 );
                             })
@@ -297,9 +297,9 @@ export default function AllEmployeeDetailsReportPage() {
                     <Stack
                         direction="row"
                         spacing={1}
-                        flexWrap="wrap"
+
                         useFlexGap
-                        sx={{ flexShrink: 0, ml: { lg: "auto" } }}
+                        sx={{flexWrap: "wrap",  flexShrink: 0, ml: { lg: "auto" } }}
                     >
                         <Button
                             variant="contained"

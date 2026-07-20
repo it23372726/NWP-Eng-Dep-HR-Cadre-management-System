@@ -62,7 +62,11 @@ function VerticalBarChart({
     const yAxisWidth = isPreview ? 104 : 200;
 
     return (
-        <ResponsiveContainer width="100%" height={chartHeight}>
+        <ResponsiveContainer
+            width="100%"
+            height={chartHeight}
+            initialDimension={{ width: 500, height: chartHeight }}
+        >
             <BarChart
                 data={data}
                 layout="vertical"
@@ -104,9 +108,9 @@ function VerticalBarChart({
                     cursor={onBarClick ? "pointer" : "default"}
                     onClick={onBarClick}
                 >
-                    {data.map((entry) => (
+                    {data.map((entry, index) => (
                         <Cell
-                            key={`${chartKey}-${entry.name}-${variant}`}
+                            key={`${chartKey}-${entry.name}-${variant}-${index}`}
                             fill={colorMap.get(entry.name)}
                         />
                     ))}

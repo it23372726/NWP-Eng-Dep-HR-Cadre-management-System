@@ -11,20 +11,24 @@ export default function FormSection({ title, description, children }) {
                 bgcolor: "background.paper"
             }}
         >
-            <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle1" fontWeight={600}>
-                    {title}
-                </Typography>
-                {description && (
-                    <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{ mt: 0.5 }}
-                    >
-                        {description}
-                    </Typography>
-                )}
-            </Box>
+            {(title || description) && (
+                <Box sx={{ mb: 2 }}>
+                    {title && (
+                        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                            {title}
+                        </Typography>
+                    )}
+                    {description && (
+                        <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mt: title ? 0.5 : 0 }}
+                        >
+                            {description}
+                        </Typography>
+                    )}
+                </Box>
+            )}
 
             {children}
         </Paper>

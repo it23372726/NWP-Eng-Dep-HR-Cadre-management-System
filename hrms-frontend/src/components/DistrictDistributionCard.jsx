@@ -1,4 +1,3 @@
-import React from "react";
 import { Paper, Typography, Grid, Card, CardContent, Skeleton, Alert, Box } from "@mui/material";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 
@@ -18,7 +17,7 @@ export default function DistrictDistributionCard({ data, loading }) {
                 <Skeleton variant="text" width="40%" height={32} />
                 <Grid container spacing={2} sx={{ mt: 1 }}>
                     {[1, 2].map(i => (
-                        <Grid item xs={12} sm={6} key={i}>
+                        <Grid size={{ xs: 12, sm: 6 }} key={i}>
                             <Skeleton variant="rectangular" height={80} />
                         </Grid>
                     ))}
@@ -45,7 +44,7 @@ export default function DistrictDistributionCard({ data, loading }) {
                 {data.map((district, index) => {
                     const color = getDistrictColor(district.district);
                     return (
-                        <Grid item xs={12} sm={6} key={index}>
+                        <Grid size={{ xs: 12, sm: 6 }} key={index}>
                             <Card 
                                 sx={{ 
                                     border: "1px solid",
