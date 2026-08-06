@@ -1,7 +1,8 @@
 import axios from "axios";
 import { isTokenExpired, clearAuthData, redirectToLogin, generateCorrelationId } from "../utils/tokenUtils";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+// const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+const API_BASE_URL = "https://hrms-backend-north-western-province-council-production-2.apps.red-k8s.akaza.lk";
 
 const api = axios.create({
     baseURL: `${API_BASE_URL.replace(/\/$/, "")}/api`
