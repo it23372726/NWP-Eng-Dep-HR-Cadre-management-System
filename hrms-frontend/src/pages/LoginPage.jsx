@@ -149,7 +149,7 @@ export default function LoginPage() {
                             {applicationName}
                         </Typography>
                         <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.68)" }}>
-                            Human Resources Managementttttttttttttt
+                            Human Resources Management
                         </Typography>
                     </Box>
                 </Stack>
