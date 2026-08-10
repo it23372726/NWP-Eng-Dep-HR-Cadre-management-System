@@ -1,0 +1,134 @@
+name: Deploy Frontend to OpenShift
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-frontend-openshift-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OPENSHIFT_NAMESPACE: north-western-province-council-production-2
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: hrms-frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: hrms-frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: hrms-frontend
+        env:
+          VITE_API_BASE_URL: https://hrms-backend-north-western-province-council-production-2.apps.red-k8s.akaza.lk
+        run: npm run build
+
+      - name: Verify frontend build output
+        run: test -f hrms-frontend/dist/index.html
+
+      - name: Prepare runtime-only binary build context
+        id: runtime-context
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          context_dir="$(mktemp -d "${RUNNER_TEMP}/hrms-frontend-static-context.XXXXXX")"
+          mkdir -p "${context_dir}/dist"
+
+          cp -R hrms-frontend/dist/. "${context_dir}/dist/"
+          cp hrms-frontend/nginx.conf "${context_dir}/nginx.conf"
+          cp hrms-frontend/Dockerfile.openshift-runtime "${context_dir}/Dockerfile"
+
+          test -f "${context_dir}/Dockerfile"
+          test -f "${context_dir}/nginx.conf"
+          test -f "${context_dir}/dist/index.html"
+
+          top_level_count="$(find "${context_dir}" -mindepth 1 -maxdepth 1 | wc -l)"
+          test "${top_level_count}" -eq 3
+
+          echo "path=${context_dir}" >> "${GITHUB_OUTPUT}"
+
+      - name: Install OpenShift CLI
+        uses: redhat-actions/openshift-tools-installer@v1
+        with:
+          oc: "4.22"
+
+      - name: Log in to OpenShift
+        uses: redhat-actions/oc-login@v2
+        with:
+          openshift_server_url: https://api.red-k8s.akaza.lk:6443
+          openshift_token: ${{ secrets.OPENSHIFT_TOKEN }}
+          insecure_skip_tls_verify: true
+
+      - name: Start and monitor OpenShift binary build
+        shell: bash
+        env:
+          RUNTIME_CONTEXT: ${{ steps.runtime-context.outputs.path }}
+        run: |
+          set -euo pipefail
+
+          build_resource="$(
+            oc start-build hrms-frontend-static \
+              --from-dir="${RUNTIME_CONTEXT}" \
+              --namespace="${OPENSHIFT_NAMESPACE}" \
+              --output=name
+          )"
+          build_name="${build_resource##*/}"
+
+          if [[ -z "${build_name}" ]]; then
+            echo "OpenShift did not return a build name." >&2
+            exit 1
+          fi
+
+          echo "Started OpenShift build: ${build_name}"
+
+          log_exit_code=0
+          oc logs --follow "build/${build_name}" \
+            --namespace="${OPENSHIFT_NAMESPACE}" || log_exit_code=$?
+
+          if [[ "${log_exit_code}" -ne 0 ]]; then
+            echo "Build log streaming exited with status ${log_exit_code}; checking the Build phase." >&2
+          fi
+
+          build_phase=""
+          for attempt in {1..60}; do
+            build_phase="$(
+              oc get "build/${build_name}" \
+                --namespace="${OPENSHIFT_NAMESPACE}" \
+                --output=jsonpath='{.status.phase}'
+            )"
+
+            case "${build_phase}" in
+              Complete|Failed|Error|Cancelled)
+                break
+                ;;
+            esac
+
+            sleep 5
+          done
+
+          echo "Final OpenShift build phase: ${build_phase}"
+
+          if [[ "${build_phase}" != "Complete" ]]; then
+            echo "OpenShift frontend build did not complete successfully." >&2
+            exit 1
+          fi
