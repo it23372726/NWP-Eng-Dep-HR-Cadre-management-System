@@ -13,6 +13,35 @@ Local development continues to work with the defaults in `hrms/src/main/resource
 
 ---
 
+## OpenShift Production Deployment
+
+The official production frontend flow is:
+
+`GitHub main` → `OpenShift Docker BuildConfig` → `ImageStream` → `Deployment` → `Service` → `Route`
+
+Configure the OpenShift Docker build with the following repository paths and container setting:
+
+| Setting | Value |
+|---------|-------|
+| Frontend context directory | `hrms-frontend` |
+| Dockerfile | `hrms-frontend/Dockerfile` (or `Dockerfile` relative to the context directory) |
+| Frontend container port | `8080` |
+| Build argument | `VITE_API_BASE_URL` |
+
+`VITE_API_BASE_URL` is public browser configuration, not a server-side secret. Pass the backend Route origin when OpenShift builds the image, conceptually:
+
+```text
+--build-arg VITE_API_BASE_URL=https://<backend-route>
+```
+
+Do not append `/api`; the frontend axios client adds it. Do not commit the production Route in an `.env` file or in source code. Other credentials and secrets must never be exposed through `VITE_*` variables because Vite embeds them in the browser bundle.
+
+The image serves the Vite SPA on port `8080` with React Router fallback to `index.html`. The existing Service must select Deployment pods labeled `app=hrms-frontend` and forward port `8080` to target port `8080`.
+
+An OpenShift GitHub webhook can trigger a new BuildConfig build whenever a commit is pushed to `main`, producing a new ImageStream image for the Deployment rollout. The BuildConfig, ImageStream, Deployment, Service, Route, and webhook are configured in OpenShift separately; this repository does not contain cluster credentials or cluster-specific secrets.
+
+---
+
 ## Security warnings (read first)
 
 - This free hosting setup is **only for testing**. It is not a substitute for official production hosting.
