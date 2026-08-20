@@ -7,20 +7,19 @@ const api = axios.create({
     baseURL: `${API_BASE_URL.replace(/\/$/, "")}/api`
 });
 
-// Public endpoints that should not have Authorization header
 const publicEndpoints = [
-    "/auth/login",
-    "/organization-settings/branding",
-    "/organization-settings/logo"
+    { method: "post", path: "/auth/login" },
+    { method: "get", path: "/organization-settings/branding" },
+    { method: "get", path: "/organization-settings/logo" }
 ];
 
 api.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem("token");
-
-        // Check if this is a public endpoint
-        const isPublicEndpoint = publicEndpoints.some(url =>
-            config.url?.includes(url)
+        const requestMethod = config.method?.toLowerCase();
+        const isPublicEndpoint = publicEndpoints.some(
+            ({ method, path }) =>
+                requestMethod === method && config.url?.includes(path)
         );
 
         // Only attach token if:
