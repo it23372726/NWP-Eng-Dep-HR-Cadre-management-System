@@ -5,11 +5,12 @@ export default function ResponsiveTableContainer({
     component = Paper,
     showScrollHint = true,
     tableMinWidth,
+    wrapperSx,
     sx,
     ...props
 }) {
     return (
-        <Box>
+        <Box sx={wrapperSx}>
             {showScrollHint && (
                 <Typography
                     variant="caption"
@@ -21,7 +22,10 @@ export default function ResponsiveTableContainer({
                         px: 1,
                         py: 0.5,
                         borderRadius: 1,
-                        bgcolor: "grey.100"
+                        bgcolor: "grey.100",
+                        "@media print": {
+                            display: "none"
+                        }
                     }}
                 >
                     Swipe to see more columns
@@ -36,10 +40,17 @@ export default function ResponsiveTableContainer({
                     ...(tableMinWidth
                         ? {
                               "& table": {
-                                  minWidth: tableMinWidth
+                                  minWidth: tableMinWidth,
+                                  "@media print": {
+                                      minWidth: 0
+                                  }
                               }
                           }
                         : {}),
+                    "@media print": {
+                        overflow: "visible",
+                        maxHeight: "none"
+                    },
                     ...sx
                 }}
                 {...props}

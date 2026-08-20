@@ -1,9 +1,11 @@
 import {
-    Autocomplete,
     Box,
     Button,
-    Chip,
+    CircularProgress,
     Container,
+    Dialog,
+    DialogContent,
+    IconButton,
     Paper,
     Stack,
     Table,
@@ -11,14 +13,12 @@ import {
     TableCell,
     TableHead,
     TableRow,
-    TextField,
+    Tooltip,
     Typography,
-    CircularProgress,
-    IconButton,
-    InputAdornment
 } from "@mui/material";
-import SearchIcon from "@mui/icons-material/Search";
-import ClearIcon from "@mui/icons-material/Clear";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
+import FullscreenRoundedIcon from "@mui/icons-material/FullscreenRounded";
+import PrintRoundedIcon from "@mui/icons-material/PrintRounded";
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 
@@ -26,15 +26,23 @@ import {
     getAllEmployeeDetailsReport,
     downloadAllEmployeeDetailsReportExcel,
     downloadAllEmployeeDetailsReportPdf,
+    printPdfBlob,
     triggerDownload
 } from "../services/allEmployeeDetailsReportService";
 import ResponsiveTableContainer from "../components/ResponsiveTableContainer";
-import { getDesignations } from "../services/designationService";
-import DesignationOptionContent from "../components/DesignationOptionContent";
+import EmployeeListFilterPanel, {
+    REPORT_FILTER_SECTIONS
+} from "../components/EmployeeListFilterPanel";
 import { getApiErrorMessage, getReportHeaderSubtitle } from "../constants/hrms";
-import { formatDesignationOptionLabel } from "../utils/designationDisplay";
 import { formatMonthDayDisplay } from "../utils/monthDayDate";
-import { sortDesignationsForReport } from "../utils/reportSortOrder";
+import {
+    buildAllEmployeeDetailsReportTitle,
+    deriveReportFilterOptions,
+    EMPTY_EMPLOYEE_FILTER_STATE,
+    filterAllEmployeeDetailsReportRows,
+    getActiveReportFilterLabels,
+    hasActiveReportFilters
+} from "../utils/employeeListFilters";
 
 const COLUMNS = [
     { key: "serialNo", label: "S/N", align: "center", width: 60 },
@@ -65,8 +73,8 @@ const headerCellSx = {
     fontWeight: 700,
     fontSize: "0.7rem",
     bgcolor: "grey.200",
-    border: "1px solid",
-    borderColor: "divider",
+    backgroundClip: "padding-box",
+    border: "0.5px solid #94A3B8",
     whiteSpace: "nowrap",
     verticalAlign: "middle",
     textAlign: "center"
@@ -85,42 +93,57 @@ const formatDate = (date) => {
     return d.toLocaleDateString("en-GB");
 };
 
-const matchesSearchTerm = (row, searchTerm) => {
-    if (!searchTerm) return true;
-
-    const term = searchTerm.toLowerCase();
-
+function EmployeeDetailsTable({ rows }) {
     return (
-        (row.serialNo && row.serialNo.toString().includes(term)) ||
-        (row.employeeName && row.employeeName.toLowerCase().includes(term)) ||
-        (row.nic && row.nic.toLowerCase().includes(term)) ||
-        (row.serviceCategory && row.serviceCategory.toLowerCase().includes(term)) ||
-        (row.service && row.service.toLowerCase().includes(term)) ||
-        (row.contactNo && row.contactNo.toLowerCase().includes(term)) ||
-        (row.currentWorkingPlace && row.currentWorkingPlace.toLowerCase().includes(term)) ||
-        (row.currentDistrictOfWorking && row.currentDistrictOfWorking.toLowerCase().includes(term))
+        <Table stickyHeader size="small">
+            <TableHead>
+                <TableRow>
+                    {COLUMNS.map((col) => (
+                        <TableCell
+                            key={col.key}
+                            align={col.align || "center"}
+                            sx={headerCellSx}
+                        >
+                            {col.label}
+                        </TableCell>
+                    ))}
+                </TableRow>
+            </TableHead>
+            <TableBody>
+                {rows.map((row, index) => (
+                    <TableRow
+                        key={row.serialNo || index}
+                        sx={{ "& td": cellSx }}
+                    >
+                        {COLUMNS.map((col) => (
+                            <TableCell
+                                key={col.key}
+                                align={col.align || "center"}
+                            >
+                                {col.key === "incremantDate"
+                                    ? formatMonthDayDisplay(row[col.key])
+                                    : col.key.includes("date")
+                                            || col.key.includes("Date")
+                                    ? formatDate(row[col.key])
+                                    : row[col.key] ?? "—"}
+                            </TableCell>
+                        ))}
+                    </TableRow>
+                ))}
+            </TableBody>
+        </Table>
     );
-};
-
-const matchesDesignationFilter = (row, selectedDesignations) => {
-    if (selectedDesignations.length === 0) return true;
-
-    const rowDesignation = (row.designation || "").toLowerCase();
-    return selectedDesignations.some(
-        (designation) => designation.designationName.toLowerCase() === rowDesignation
-    );
-};
+}
 
 export default function AllEmployeeDetailsReportPage() {
     const [report, setReport] = useState(null);
     const [loading, setLoading] = useState(false);
-    const [searchTerm, setSearchTerm] = useState("");
-    const [designations, setDesignations] = useState([]);
-    const [selectedDesignations, setSelectedDesignations] = useState([]);
+    const [printing, setPrinting] = useState(false);
+    const [fullScreenOpen, setFullScreenOpen] = useState(false);
+    const [filterState, setFilterState] = useState(EMPTY_EMPLOYEE_FILTER_STATE);
 
     useEffect(() => {
         loadReport();
-        loadDesignations();
     }, []);
 
     const loadReport = async () => {
@@ -135,50 +158,145 @@ export default function AllEmployeeDetailsReportPage() {
         }
     };
 
-    const loadDesignations = async () => {
-        try {
-            const data = await getDesignations();
-            setDesignations(sortDesignationsForReport(data));
-        } catch (error) {
-            toast.error(getApiErrorMessage(error));
+    const reportRows = useMemo(() => report?.rows || [], [report]);
+
+    const filterOptions = useMemo(
+        () => deriveReportFilterOptions(reportRows, {
+            districtFilter: filterState.districtFilter
+        }),
+        [reportRows, filterState.districtFilter]
+    );
+
+    const filtersActive = hasActiveReportFilters(filterState);
+
+    const filteredRows = useMemo(
+        () => filterAllEmployeeDetailsReportRows(reportRows, filterState),
+        [reportRows, filterState]
+    );
+
+    const resultSummary = loading
+        ? "Loading employees..."
+        : report
+            ? `Showing ${filteredRows.length} of ${report.totalCount} employee${report.totalCount !== 1 ? "s" : ""}`
+            : "Load the report to filter employees";
+
+    const handleFilterChange = (updates) => {
+        setFilterState((prev) => {
+            const next = { ...prev, ...updates };
+
+            if (Object.prototype.hasOwnProperty.call(updates, "districtFilter")
+                && updates.districtFilter !== prev.districtFilter
+                && !Object.prototype.hasOwnProperty.call(updates, "officeFilter")) {
+                const offices = deriveReportFilterOptions(reportRows, {
+                    districtFilter: updates.districtFilter || ""
+                }).officeOptions.map((option) => option.value.toLowerCase());
+                const currentOffice = (next.officeFilter || "").toLowerCase();
+                if (currentOffice && !offices.includes(currentOffice)) {
+                    next.officeFilter = "";
+                }
+            }
+
+            return next;
+        });
+    };
+
+    const handleClearFilters = () => {
+        setFilterState({ ...EMPTY_EMPLOYEE_FILTER_STATE });
+    };
+
+    const handleClearFilterKey = (key) => {
+        const updates = {
+            employmentType: { employmentTypeFilter: "" },
+            retiringWithin: { retiringWithinMonths: "" },
+            district: { districtFilter: "", officeFilter: "" },
+            office: { officeFilter: "" },
+            designation: { designationFilter: "" },
+            service: { serviceFilter: "" },
+            serviceLevel: { serviceLevelFilter: "" },
+            grade: { gradeFilter: "" },
+            search: { searchTerm: "" }
+        }[key];
+
+        if (updates) {
+            handleFilterChange(updates);
         }
     };
 
-    const hasActiveFilters =
-        Boolean(searchTerm.trim()) || selectedDesignations.length > 0;
-
-    const filteredRows = useMemo(() => {
-        if (!report?.rows) return [];
-
-        return report.rows.filter(
-            (row) =>
-                matchesSearchTerm(row, searchTerm.trim()) &&
-                matchesDesignationFilter(row, selectedDesignations)
-        );
-    }, [report, searchTerm, selectedDesignations]);
-
-    const handleClearFilters = () => {
-        setSearchTerm("");
-        setSelectedDesignations([]);
-    };
+    const buildExportPayload = () => ({
+        generatedAt: report.generatedAt,
+        totalCount: filteredRows.length,
+        reportTitle: buildAllEmployeeDetailsReportTitle(filterState),
+        rows: filteredRows
+    });
 
     const handleExportExcel = async () => {
+        if (!report) {
+            return;
+        }
+        if (filteredRows.length === 0) {
+            toast.error("No employees to export");
+            return;
+        }
         try {
-            const blob = await downloadAllEmployeeDetailsReportExcel();
+            const blob = await downloadAllEmployeeDetailsReportExcel(
+                buildExportPayload()
+            );
             triggerDownload(blob, "all-employee-details-report.xlsx");
-            toast.success("Excel downloaded");
+            toast.success(
+                filtersActive
+                    ? `Excel downloaded (${filteredRows.length} employees)`
+                    : "Excel downloaded"
+            );
         } catch (error) {
             toast.error(getApiErrorMessage(error));
         }
     };
 
     const handleExportPdf = async () => {
+        if (!report) {
+            return;
+        }
+        if (filteredRows.length === 0) {
+            toast.error("No employees to export");
+            return;
+        }
         try {
-            const blob = await downloadAllEmployeeDetailsReportPdf();
+            const blob = await downloadAllEmployeeDetailsReportPdf(
+                buildExportPayload()
+            );
             triggerDownload(blob, "all-employee-details-report.pdf");
-            toast.success("PDF downloaded");
+            toast.success(
+                filtersActive
+                    ? `PDF downloaded (${filteredRows.length} employees)`
+                    : "PDF downloaded"
+            );
         } catch (error) {
             toast.error(getApiErrorMessage(error));
+        }
+    };
+
+    const handlePrint = async () => {
+        if (!report) {
+            return;
+        }
+        if (filteredRows.length === 0) {
+            toast.error("No employees to print");
+            return;
+        }
+        setPrinting(true);
+        try {
+            const blob = await downloadAllEmployeeDetailsReportPdf(
+                buildExportPayload()
+            );
+            await printPdfBlob(blob);
+        } catch (error) {
+            if (error?.code === "POPUP_BLOCKED") {
+                toast.error("Allow pop-ups to print the PDF");
+            } else {
+                toast.error(getApiErrorMessage(error));
+            }
+        } finally {
+            setPrinting(false);
         }
     };
 
@@ -193,113 +311,22 @@ export default function AllEmployeeDetailsReportPage() {
                 </Typography>
             </Box>
 
-            <Paper sx={{ p: 2, mb: 3 }}>
-                <Stack
-                    direction={{ xs: "column", lg: "row" }}
-                    spacing={2}
-                    sx={{
-                        alignItems: { xs: "stretch", lg: "center" },
-                        flexWrap: "wrap",
-                        gap: 1
-                    }}
-                >
-                    <TextField
-                        label="Search Employees"
-                        placeholder="Name, S/N, NIC, service, district, contact..."
-                        size="small"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        sx={{ flex: "1 1 240px", minWidth: 220 }}
-                        slotProps={{
-                            input: {
-                                startAdornment: (
-                                    <InputAdornment position="start">
-                                        <SearchIcon sx={{ color: "text.secondary" }} />
-                                    </InputAdornment>
-                                ),
-                                endAdornment: searchTerm ? (
-                                    <InputAdornment position="end">
-                                        <IconButton
-                                            size="small"
-                                            onClick={() => setSearchTerm("")}
-                                            edge="end"
-                                            aria-label="Clear search"
-                                        >
-                                            <ClearIcon fontSize="small" />
-                                        </IconButton>
-                                    </InputAdornment>
-                                ) : null
-                            }
-                        }}
-                    />
-
-                    <Autocomplete
-                        multiple
-                        disableCloseOnSelect
-                        limitTags={2}
-                        options={designations}
-                        value={selectedDesignations}
-                        onChange={(_, newValue) => setSelectedDesignations(newValue)}
-                        getOptionLabel={(option) =>
-                            formatDesignationOptionLabel(option)
-                        }
-                        isOptionEqualToValue={(option, value) => option.id === value.id}
-                        sx={{ flex: "1 1 280px", minWidth: 240 }}
-                        renderOption={(props, option) => {
-                            const { key, ...optionProps } = props;
-                            return (
-                                <li key={key} {...optionProps}>
-                                    <DesignationOptionContent
-                                        designation={option}
-                                    />
-                                </li>
-                            );
-                        }}
-                        renderValue={(value, getItemProps) =>
-                            value.map((option, index) => {
-                                const { key, ...itemProps } = getItemProps({ index });
-                                return (
-                                    <Chip
-                                        key={key}
-                                        label={formatDesignationOptionLabel(option)}
-                                        size="small"
-                                        {...itemProps}
-                                    />
-                                );
-                            })
-                        }
-                        renderInput={(params) => (
-                            <TextField
-                                {...params}
-                                label="Filter by Designation"
-                                placeholder={
-                                    selectedDesignations.length === 0
-                                        ? "Select designations"
-                                        : ""
-                                }
-                                size="small"
-                            />
-                        )}
-                    />
-
-                    {hasActiveFilters && (
-                        <Button
-                            variant="text"
-                            size="small"
-                            onClick={handleClearFilters}
-                            startIcon={<ClearIcon fontSize="small" />}
-                            sx={{ flexShrink: 0, alignSelf: { xs: "flex-start", lg: "center" } }}
-                        >
-                            Clear filters
-                        </Button>
-                    )}
-
+            <EmployeeListFilterPanel
+                filterState={filterState}
+                filterOptions={filterOptions}
+                onFilterChange={handleFilterChange}
+                onClearFilters={handleClearFilters}
+                onClearFilterKey={handleClearFilterKey}
+                filtersActive={filtersActive}
+                resultSummary={resultSummary}
+                sections={REPORT_FILTER_SECTIONS}
+                resolveActiveFilterLabels={getActiveReportFilterLabels}
+                toolbarActions={(
                     <Stack
                         direction="row"
                         spacing={1}
-
                         useFlexGap
-                        sx={{flexWrap: "wrap",  flexShrink: 0, ml: { lg: "auto" } }}
+                        sx={{ flexWrap: "wrap" }}
                     >
                         <Button
                             variant="contained"
@@ -311,27 +338,27 @@ export default function AllEmployeeDetailsReportPage() {
                         <Button
                             variant="outlined"
                             onClick={handleExportExcel}
-                            disabled={!report || loading}
+                            disabled={!report || loading || printing || filteredRows.length === 0}
                         >
                             Export Excel
                         </Button>
                         <Button
                             variant="outlined"
                             onClick={handleExportPdf}
-                            disabled={!report || loading}
+                            disabled={!report || loading || printing || filteredRows.length === 0}
                         >
                             Export PDF
                         </Button>
                         <Button
                             variant="text"
-                            onClick={() => window.print()}
-                            disabled={!report}
+                            onClick={handlePrint}
+                            disabled={!report || loading || printing || filteredRows.length === 0}
                         >
-                            Print
+                            {printing ? "Preparing print…" : "Print"}
                         </Button>
                     </Stack>
-                </Stack>
-            </Paper>
+                )}
+            />
 
             {loading && (
                 <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
@@ -341,30 +368,55 @@ export default function AllEmployeeDetailsReportPage() {
 
             {report && !loading && (
                 <Paper sx={{ p: 2 }}>
-                    <Box sx={{ mb: 2 }}>
-                        <Stack direction={{ xs: "column", sm: "row" }} sx={{ mb: 2, justifyContent: "space-between" }}>
-                            <Box>
-                                <Typography variant="body2" color="text.secondary">
-                                    Total Employees: {report.totalCount}
-                                </Typography>
-                                <Typography variant="body2" color="primary" sx={{ fontWeight: 500 }}>
-                                    Showing {filteredRows.length}
-                                    {hasActiveFilters ? ` of ${report.totalCount}` : ""} employees
-                                </Typography>
-                            </Box>
+                    <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        spacing={1.5}
+                        sx={{
+                            mb: 2,
+                            alignItems: { xs: "stretch", sm: "center" },
+                            justifyContent: "space-between"
+                        }}
+                    >
+                        <Box>
+                            <Typography variant="body2" color="text.secondary">
+                                Total Employees: {report.totalCount}
+                            </Typography>
+                            <Typography
+                                variant="body2"
+                                color="primary"
+                                sx={{ fontWeight: 500 }}
+                            >
+                                Showing {filteredRows.length}
+                                {filtersActive ? ` of ${report.totalCount}` : ""}{" "}
+                                employees
+                            </Typography>
+                        </Box>
+                        <Stack
+                            direction={{ xs: "column", sm: "row" }}
+                            spacing={1.5}
+                            sx={{ alignItems: { xs: "flex-start", sm: "center" } }}
+                        >
                             <Typography variant="caption" color="text.secondary">
                                 Generated: {new Date(report.generatedAt).toLocaleString()}
                             </Typography>
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<FullscreenRoundedIcon />}
+                                onClick={() => setFullScreenOpen(true)}
+                            >
+                                Full screen
+                            </Button>
                         </Stack>
-                    </Box>
+                    </Stack>
 
-                    {filteredRows.length === 0 && hasActiveFilters ? (
+                    {filteredRows.length === 0 && filtersActive ? (
                         <Box sx={{ textAlign: "center", py: 4 }}>
                             <Typography color="text.secondary" gutterBottom>
                                 No employees found
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
-                                Try adjusting the search term or designation filters
+                                Try adjusting the search term or filters
                             </Typography>
                         </Box>
                     ) : (
@@ -376,44 +428,7 @@ export default function AllEmployeeDetailsReportPage() {
                                 borderColor: "divider"
                             }}
                         >
-                            <Table stickyHeader size="small">
-                                <TableHead>
-                                    <TableRow>
-                                        {COLUMNS.map((col) => (
-                                            <TableCell
-                                                key={col.key}
-                                                align={col.align || "center"}
-                                                sx={headerCellSx}
-                                            >
-                                                {col.label}
-                                            </TableCell>
-                                        ))}
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {filteredRows.map((row, index) => (
-                                        <TableRow
-                                            key={row.serialNo || index}
-                                            sx={{
-                                                "& td": cellSx
-                                            }}
-                                        >
-                                            {COLUMNS.map((col) => (
-                                                <TableCell
-                                                    key={col.key}
-                                                    align={col.align || "center"}
-                                                >
-                                                {col.key === "incremantDate"
-                                                    ? formatMonthDayDisplay(row[col.key])
-                                                    : col.key.includes("date") || col.key.includes("Date")
-                                                    ? formatDate(row[col.key])
-                                                    : row[col.key] ?? "—"}
-                                            </TableCell>
-                                        ))}
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
+                            <EmployeeDetailsTable rows={filteredRows} />
                         </ResponsiveTableContainer>
                     )}
                 </Paper>
@@ -426,6 +441,153 @@ export default function AllEmployeeDetailsReportPage() {
                     </Typography>
                 </Paper>
             )}
+
+            <Dialog
+                fullScreen
+                open={fullScreenOpen}
+                onClose={() => setFullScreenOpen(false)}
+                aria-labelledby="all-employees-full-screen-title"
+                slotProps={{
+                    paper: {
+                        sx: {
+                            bgcolor: "grey.50",
+                            backgroundImage: "none"
+                        }
+                    }
+                }}
+            >
+                <Box
+                    component="header"
+                    sx={{
+                        minHeight: 72,
+                        px: { xs: 1.5, sm: 2.5 },
+                        py: 1.25,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 2,
+                        bgcolor: "background.paper",
+                        borderBottom: "1px solid",
+                        borderColor: "divider",
+                        boxShadow: "0 1px 4px rgba(15, 23, 42, 0.08)",
+                        flexShrink: 0,
+                        zIndex: 1
+                    }}
+                >
+                    <Stack
+                        direction="row"
+                        spacing={1.5}
+                        sx={{ alignItems: "center", minWidth: 0 }}
+                    >
+                        <Box
+                            sx={{
+                                width: 40,
+                                height: 40,
+                                display: { xs: "none", sm: "grid" },
+                                placeItems: "center",
+                                borderRadius: 2,
+                                bgcolor: "primary.50",
+                                color: "primary.main",
+                                flexShrink: 0
+                            }}
+                        >
+                            <FullscreenRoundedIcon />
+                        </Box>
+                        <Box sx={{ minWidth: 0 }}>
+                            <Typography
+                                id="all-employees-full-screen-title"
+                                variant="h6"
+                                noWrap
+                                sx={{ fontWeight: 750, lineHeight: 1.25 }}
+                            >
+                                All Employee Details Report
+                            </Typography>
+                            <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                noWrap
+                                sx={{ display: "block" }}
+                            >
+                                Showing {filteredRows.length}
+                                {filtersActive ? ` of ${report?.totalCount ?? 0}` : ""}{" "}
+                                employees
+                            </Typography>
+                        </Box>
+                    </Stack>
+
+                    <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                        <Button
+                            variant="outlined"
+                            size="small"
+                            startIcon={<PrintRoundedIcon />}
+                            onClick={handlePrint}
+                            disabled={printing || filteredRows.length === 0}
+                            sx={{ display: { xs: "none", sm: "inline-flex" } }}
+                        >
+                            {printing ? "Preparing…" : "Print PDF"}
+                        </Button>
+                        <Tooltip title="Close full screen">
+                            <IconButton
+                                onClick={() => setFullScreenOpen(false)}
+                                aria-label="Close full-screen report"
+                                sx={{
+                                    bgcolor: "action.hover",
+                                    "&:hover": { bgcolor: "action.selected" }
+                                }}
+                            >
+                                <CloseRoundedIcon />
+                            </IconButton>
+                        </Tooltip>
+                    </Stack>
+                </Box>
+
+                <DialogContent
+                    sx={{
+                        p: { xs: 1, sm: 2 },
+                        minHeight: 0,
+                        overflow: "hidden",
+                        display: "flex",
+                        flexDirection: "column"
+                    }}
+                >
+                    {filteredRows.length === 0 ? (
+                        <Box
+                            sx={{
+                                flex: 1,
+                                display: "grid",
+                                placeItems: "center",
+                                textAlign: "center"
+                            }}
+                        >
+                            <Box>
+                                <Typography color="text.secondary" gutterBottom>
+                                    No employees found
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    Adjust the report filters and try again.
+                                </Typography>
+                            </Box>
+                        </Box>
+                    ) : (
+                        <ResponsiveTableContainer
+                            showScrollHint={false}
+                            tableMinWidth={2600}
+                            wrapperSx={{ flex: 1, minHeight: 0 }}
+                            sx={{
+                                height: "100%",
+                                maxHeight: "none",
+                                overflow: "auto",
+                                bgcolor: "background.paper",
+                                border: "1px solid",
+                                borderColor: "divider",
+                                borderRadius: 2
+                            }}
+                        >
+                            <EmployeeDetailsTable rows={filteredRows} />
+                        </ResponsiveTableContainer>
+                    )}
+                </DialogContent>
+            </Dialog>
         </Container>
     );
 }

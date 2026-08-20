@@ -26,8 +26,29 @@ public class AllEmployeeDetailsReportController {
 
     @GetMapping("/export/excel")
     public ResponseEntity<byte[]> exportExcel() {
-        byte[] data = allEmployeeDetailsReportExportService.exportExcel();
+        return excelResponse(allEmployeeDetailsReportExportService.exportExcel());
+    }
 
+    @PostMapping("/export/excel")
+    public ResponseEntity<byte[]> exportExcelFiltered(
+            @RequestBody AllEmployeeDetailsReportResponse report
+    ) {
+        return excelResponse(allEmployeeDetailsReportExportService.exportExcel(report));
+    }
+
+    @GetMapping("/export/pdf")
+    public ResponseEntity<byte[]> exportPdf() {
+        return pdfResponse(allEmployeeDetailsReportExportService.exportPdf());
+    }
+
+    @PostMapping("/export/pdf")
+    public ResponseEntity<byte[]> exportPdfFiltered(
+            @RequestBody AllEmployeeDetailsReportResponse report
+    ) {
+        return pdfResponse(allEmployeeDetailsReportExportService.exportPdf(report));
+    }
+
+    private ResponseEntity<byte[]> excelResponse(byte[] data) {
         return ResponseEntity.ok()
                 .header(
                         HttpHeaders.CONTENT_DISPOSITION,
@@ -39,10 +60,7 @@ public class AllEmployeeDetailsReportController {
                 .body(data);
     }
 
-    @GetMapping("/export/pdf")
-    public ResponseEntity<byte[]> exportPdf() {
-        byte[] data = allEmployeeDetailsReportExportService.exportPdf();
-
+    private ResponseEntity<byte[]> pdfResponse(byte[] data) {
         return ResponseEntity.ok()
                 .header(
                         HttpHeaders.CONTENT_DISPOSITION,

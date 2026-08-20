@@ -65,7 +65,10 @@ public interface EmployeeRepository
             FROM Employee e
             WHERE e.designation.id = :designationId
               AND e.status = :status
-              AND e.currentDepartment = :currentDepartment
+              AND e.currentDepartment IS NOT NULL
+              AND LOWER(TRIM(e.currentDepartment)) = LOWER(:currentDepartment)
+              AND (e.employmentType IS NULL
+                   OR e.employmentType <> com.nwpengdep.hrms.entity.EmploymentType.ACTING)
             """)
     long countCadreEligibleByDesignationIdAndStatusAndCurrentDepartment(
             @Param("designationId") Long designationId,

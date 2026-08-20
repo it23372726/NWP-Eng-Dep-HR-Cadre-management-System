@@ -26,11 +26,12 @@ import {
     triggerDownload
 } from "../services/changesReportService";
 import ResponsiveTableContainer from "../components/ResponsiveTableContainer";
-import { formatDisplayDate } from "./CadreReportPage";
+import ReportSignatureBlock from "../components/ReportSignatureBlock";
+import { formatCadreDate, formatDisplayDate } from "./CadreReportPage";
 import {
     getApiErrorMessage,
-    getPrimaryDepartmentName,
-    getReportHeaderSubtitle
+    getReportHeaderSubtitle,
+    getReportHeaderUppercase
 } from "../constants/hrms";
 
 const STORAGE_KEY = "hrms.changesReport.state.v1";
@@ -63,10 +64,10 @@ const COLUMNS = [
 const headerCellSx = {
     fontWeight: 700,
     fontSize: "0.75rem",
-    bgcolor: "grey.200",
-    border: "1px solid",
-    borderColor: "divider",
-    whiteSpace: "nowrap"
+    bgcolor: "#C0C0C0",
+    border: "1px solid #000",
+    color: "#000",
+    whiteSpace: "normal"
 };
 
 const YEAR_SELECT_MENU_PROPS = {
@@ -191,7 +192,7 @@ export default function ChangesReportPage() {
 
     return (
         <Container maxWidth={false} className="changes-report-page" sx={{ pb: 4 }}>
-            <Box className="changes-report-header" sx={{ mb: 3 }}>
+            <Box className="changes-report-header no-print" sx={{ mb: 3 }}>
                 <Typography variant="h4" gutterBottom>
                     Changes Report
                 </Typography>
@@ -289,35 +290,79 @@ export default function ChangesReportPage() {
 
             {report && !loading && (
                 <Paper
-                    sx={{ p: 2 }}
+                    sx={{
+                        p: 2,
+                        "@media print": {
+                            p: 0,
+                            boxShadow: "none",
+                            border: "none",
+                            bgcolor: "transparent"
+                        }
+                    }}
                     className="changes-report-print-area"
                     id="changes-report-print"
                 >
-                    <Box sx={{ mb: 2 }} className="print-only-meta">
-                        <Typography variant="h6" align="center">
-                            Changes Report — {getPrimaryDepartmentName()}
+                    <Box sx={{ mb: 2 }} className="changes-print-letterhead">
+                        <Typography
+                            align="center"
+                            sx={{
+                                fontWeight: 700,
+                                fontFamily: "Calibri, Carlito, Arial, sans-serif"
+                            }}
+                        >
+                            {getReportHeaderUppercase()}
                         </Typography>
-                        <Typography variant="body2" align="center">
+                        <Typography
+                            align="center"
+                            sx={{
+                                fontWeight: 700,
+                                fontFamily: "Calibri, Carlito, Arial, sans-serif"
+                            }}
+                        >
+                            CHANGES REPORT
+                        </Typography>
+                        <Typography
+                            align="center"
+                            sx={{
+                                fontWeight: 700,
+                                fontFamily: "Calibri, Carlito, Arial, sans-serif"
+                            }}
+                        >
                             Period: {periodLabel}
                         </Typography>
-                        <Typography variant="body2" align="center">
+                        <Typography
+                            align="center"
+                            sx={{
+                                fontWeight: 700,
+                                fontFamily: "Calibri, Carlito, Arial, sans-serif"
+                            }}
+                        >
                             Total Changes: {report.totalCount ?? report.rows?.length ?? 0}
                         </Typography>
-                        <Typography variant="caption" align="center" sx={{ display: "block" }}>
-                            Generated:{" "}
-                            {new Date(report.generatedAt).toLocaleString()}
+                        <Typography
+                            align="center"
+                            sx={{
+                                fontWeight: 700,
+                                fontFamily: "Calibri, Carlito, Arial, sans-serif"
+                            }}
+                        >
+                            Generated: {formatCadreDate(String(report.generatedAt || "").slice(0, 10))}
                         </Typography>
                     </Box>
 
                     <ResponsiveTableContainer
+                        showScrollHint={false}
                         tableMinWidth={1000}
                         sx={{
                             maxHeight: "70vh",
-                            border: "1px solid",
-                            borderColor: "divider"
+                            border: "none",
+                            "@media print": {
+                                maxHeight: "none",
+                                overflow: "visible"
+                            }
                         }}
                     >
-                        <Table stickyHeader size="small">
+                        <Table stickyHeader size="small" className="changes-print-table">
                             <TableHead>
                                 <TableRow>
                                     {COLUMNS.map((col) => (
@@ -341,8 +386,8 @@ export default function ChangesReportPage() {
                                                     align={col.align}
                                                     sx={{
                                                         fontSize: "0.75rem",
-                                                        border: "1px solid",
-                                                        borderColor: "divider",
+                                                        border: "1px solid #000",
+                                                        color: "#000",
                                                         whiteSpace: "nowrap"
                                                     }}
                                                 >
@@ -367,11 +412,12 @@ export default function ChangesReportPage() {
                             </TableBody>
                         </Table>
                     </ResponsiveTableContainer>
+                    <ReportSignatureBlock />
                 </Paper>
             )}
 
             {!report && !loading && (
-                <Paper sx={{ p: 4, textAlign: "center" }}>
+                <Paper sx={{ p: 4, textAlign: "center" }} className="no-print">
                     <Typography color="text.secondary">
                         Select a year and month, then click Generate Report.
                     </Typography>
@@ -380,17 +426,63 @@ export default function ChangesReportPage() {
 
             <style>{`
                 @media print {
-                    @page { size: A4 landscape; margin: 10mm; }
-                    body * { visibility: hidden; }
-                    .changes-report-print-area,
-                    .changes-report-print-area * { visibility: visible; }
-                    .changes-report-print-area {
-                        position: absolute;
-                        left: 0;
-                        top: 0;
-                        width: 100%;
+                    @page {
+                        size: A4 landscape;
+                        margin: 8mm;
                     }
-                    .no-print { display: none !important; }
+                    html, body, #root, #root > div {
+                        background: #fff !important;
+                        height: auto !important;
+                        min-height: 0 !important;
+                        overflow: visible !important;
+                    }
+                    .no-print,
+                    .MuiAppBar-root,
+                    .MuiDrawer-root,
+                    .MuiDrawer-docked,
+                    #_rht_toaster {
+                        display: none !important;
+                    }
+                    .changes-report-print-area {
+                        position: static !important;
+                        width: 100% !important;
+                        box-shadow: none !important;
+                        overflow: visible !important;
+                    }
+                    .changes-report-print-area .MuiTableContainer-root {
+                        overflow: visible !important;
+                        max-height: none !important;
+                    }
+                    .changes-print-letterhead .MuiTypography-root {
+                        font-family: Calibri, Carlito, Arial, sans-serif !important;
+                        color: #000 !important;
+                    }
+                    .changes-print-table {
+                        width: 100% !important;
+                        min-width: 0 !important;
+                        border-collapse: collapse !important;
+                        font-family: Calibri, Carlito, Arial, sans-serif !important;
+                        font-size: 10pt !important;
+                    }
+                    .changes-print-table thead {
+                        display: table-header-group !important;
+                    }
+                    .changes-print-table th {
+                        position: static !important;
+                        background: #C0C0C0 !important;
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
+                    .changes-print-table th,
+                    .changes-print-table td {
+                        border: 0.5pt solid #000 !important;
+                        color: #000 !important;
+                        padding: 2pt 4pt !important;
+                        white-space: normal !important;
+                    }
+                    .report-signature-block {
+                        page-break-inside: avoid !important;
+                    }
                 }
             `}</style>
         </Container>

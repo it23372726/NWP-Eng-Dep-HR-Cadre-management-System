@@ -24,27 +24,35 @@ import {
     BadgeRounded as BadgeIcon,
     DeleteOutlineRounded as DeleteIcon,
     DomainVerificationRounded as DomainVerificationIcon,
+    ImageOutlined as ImageIcon,
     InfoOutlined as InfoIcon,
     LocationOnRounded as LocationIcon,
     SaveRounded as SaveIcon
 } from "@mui/icons-material";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 
 import FormSection from "../components/FormSection";
-import { getApiErrorMessage } from "../constants/hrms";
+import OrganizationLogo from "../components/OrganizationLogo";
+import { deriveApplicationTitle, getApiErrorMessage } from "../constants/hrms";
 import { useOrganizationSettings } from "../context/OrganizationSettingsContext";
-import { updateOrganizationSettings } from "../services/organizationSettingsService";
+import {
+    deleteOrganizationLogo,
+    updateOrganizationSettings,
+    uploadOrganizationLogo
+} from "../services/organizationSettingsService";
 import { createFormFieldProps } from "../utils/formLayout";
 
 const emptyForm = {
     primaryDepartmentName: "",
     provincialCouncilName: "",
     departmentShortName: "",
-    applicationName: "",
     councilLabel: "",
     districts: []
 };
+
+const LOGO_ACCEPT = "image/jpeg,image/png";
+const LOGO_MAX_BYTES = 5 * 1024 * 1024;
 
 function SectionHeading({ icon, title, description, action }) {
     return (
@@ -176,13 +184,15 @@ export default function OrganizationSettingsPage() {
     const [saving, setSaving] = useState(false);
     const [renameDialogOpen, setRenameDialogOpen] = useState(false);
     const [renameMode, setRenameMode] = useState("MIGRATE_EXISTING");
+    const [logoBusy, setLogoBusy] = useState(false);
+    const logoInputRef = useRef(null);
+    const applicationTitle = deriveApplicationTitle(form.primaryDepartmentName);
 
     useEffect(() => {
         setForm({
             primaryDepartmentName: settings.primaryDepartmentName || "",
             provincialCouncilName: settings.provincialCouncilName || "",
             departmentShortName: settings.departmentShortName || "",
-            applicationName: settings.applicationName || "",
             councilLabel: settings.councilLabel || "",
             districts: [...(settings.districts || [])]
         });
@@ -226,7 +236,6 @@ export default function OrganizationSettingsPage() {
         primaryDepartmentName: form.primaryDepartmentName.trim(),
         provincialCouncilName: form.provincialCouncilName.trim(),
         departmentShortName: form.departmentShortName.trim(),
-        applicationName: form.applicationName.trim(),
         councilLabel: form.councilLabel.trim(),
         districts: cleanDistricts(form.districts),
         ...(departmentRenameMode ? { departmentRenameMode } : {})
@@ -240,7 +249,6 @@ export default function OrganizationSettingsPage() {
         form.primaryDepartmentName.trim()
         && form.provincialCouncilName.trim()
         && form.departmentShortName.trim()
-        && form.applicationName.trim()
         && form.councilLabel.trim()
         && cleanDistricts(form.districts).length > 0
     );
@@ -275,6 +283,46 @@ export default function OrganizationSettingsPage() {
             return;
         }
         save();
+    };
+
+    const handleLogoSelect = async (event) => {
+        const file = event.target.files?.[0];
+        event.target.value = "";
+        if (!file) {
+            return;
+        }
+        if (!LOGO_ACCEPT.split(",").includes(file.type)) {
+            toast.error("Only JPEG and PNG logos are allowed");
+            return;
+        }
+        if (file.size > LOGO_MAX_BYTES) {
+            toast.error("Logo must be smaller than 5 MB");
+            return;
+        }
+
+        setLogoBusy(true);
+        try {
+            const updated = await uploadOrganizationLogo(file);
+            applySettings(updated);
+            toast.success("Logo updated");
+        } catch (error) {
+            toast.error(getApiErrorMessage(error));
+        } finally {
+            setLogoBusy(false);
+        }
+    };
+
+    const handleRemoveLogo = async () => {
+        setLogoBusy(true);
+        try {
+            const updated = await deleteOrganizationLogo();
+            applySettings(updated);
+            toast.success("Logo removed");
+        } catch (error) {
+            toast.error(getApiErrorMessage(error));
+        } finally {
+            setLogoBusy(false);
+        }
     };
 
     const districtCount = cleanDistricts(form.districts).length;
@@ -388,6 +436,13 @@ export default function OrganizationSettingsPage() {
                                 sx={{ gridColumn: { sm: "1 / -1" } }}
                             />
                             <TextField
+                                label="Application title"
+                                value={applicationTitle}
+                                helperText="Browser tab and sidebar title. Built from the primary department name plus HRMS."
+                                slotProps={{ htmlInput: { readOnly: true } }}
+                                sx={{ gridColumn: { sm: "1 / -1" } }}
+                            />
+                            <TextField
                                 {...fieldProps}
                                 label="Department short name"
                                 name="departmentShortName"
@@ -397,18 +452,10 @@ export default function OrganizationSettingsPage() {
                             />
                             <TextField
                                 {...fieldProps}
-                                label="Application name"
-                                name="applicationName"
-                                value={form.applicationName}
-                                required
-                            />
-                            <TextField
-                                {...fieldProps}
                                 label="Provincial council name"
                                 name="provincialCouncilName"
                                 value={form.provincialCouncilName}
                                 required
-                                sx={{ gridColumn: { sm: "1 / -1" } }}
                             />
                             <TextField
                                 {...fieldProps}
@@ -420,6 +467,66 @@ export default function OrganizationSettingsPage() {
                                 sx={{ gridColumn: { sm: "1 / -1" } }}
                             />
                         </Box>
+                    </FormSection>
+
+                    <FormSection>
+                        <SectionHeading
+                            icon={<ImageIcon fontSize="small" />}
+                            title="Application logo"
+                            description="Shown in the sidebar, login screen, and browser tab. JPEG or PNG, up to 5 MB."
+                        />
+                        <input
+                            ref={logoInputRef}
+                            type="file"
+                            accept={LOGO_ACCEPT}
+                            hidden
+                            onChange={handleLogoSelect}
+                        />
+                        <Stack
+                            direction={{ xs: "column", sm: "row" }}
+                            spacing={2}
+                            sx={{ alignItems: { xs: "stretch", sm: "center" } }}
+                        >
+                            <Box
+                                sx={{
+                                    width: 88,
+                                    height: 88,
+                                    borderRadius: 2.5,
+                                    border: "1px solid",
+                                    borderColor: "divider",
+                                    display: "grid",
+                                    placeItems: "center",
+                                    overflow: "hidden",
+                                    bgcolor: "grey.50",
+                                    flexShrink: 0
+                                }}
+                            >
+                                <OrganizationLogo size={72} alt={`${applicationTitle} logo`} />
+                            </Box>
+                            <Stack spacing={1} sx={{ flex: 1 }}>
+                                <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                                    <Button
+                                        variant="outlined"
+                                        onClick={() => logoInputRef.current?.click()}
+                                        disabled={logoBusy}
+                                    >
+                                        {logoBusy ? "Updating…" : settings.hasLogo ? "Replace logo" : "Upload logo"}
+                                    </Button>
+                                    {settings.hasLogo && (
+                                        <Button
+                                            color="error"
+                                            onClick={handleRemoveLogo}
+                                            disabled={logoBusy}
+                                        >
+                                            Remove
+                                        </Button>
+                                    )}
+                                </Stack>
+                                <Typography variant="caption" color="text.secondary">
+                                    Square images work best. The current logo is used immediately after upload.
+                                </Typography>
+                            </Stack>
+                        </Stack>
                     </FormSection>
 
                     <FormSection>
@@ -480,7 +587,7 @@ export default function OrganizationSettingsPage() {
                             {form.primaryDepartmentName || "Primary department"}
                         </Typography>
                         <Typography variant="body2" sx={{ mt: 0.5, color: "primary.100" }}>
-                            {form.applicationName || "Application name"}
+                            {applicationTitle}
                         </Typography>
                         <Stack direction="row" spacing={1} sx={{ mt: 2, alignItems: "center" }}>
                             <Chip

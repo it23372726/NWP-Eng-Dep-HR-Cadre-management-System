@@ -102,6 +102,8 @@ public class VacancyReportExportService {
             sheet.setColumnWidth(5, 2500);
             sheet.setColumnWidth(6, 2500);
 
+            ReportSignatureBlock.addExcelRows(sheet, workbook, rowIdx - 1, 5);
+
             workbook.write(out);
             return out.toByteArray();
         } catch (Exception e) {
@@ -158,6 +160,9 @@ public class VacancyReportExportService {
             }
 
             document.add(table);
+            document.add(ReportSignatureBlock.pdfTable(
+                    FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10)
+            ));
             document.close();
             return out.toByteArray();
         } catch (Exception e) {

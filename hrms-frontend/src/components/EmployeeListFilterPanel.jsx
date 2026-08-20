@@ -1,299 +1,572 @@
+import { useMemo, useState } from "react";
 import {
+    Badge,
     Box,
-    Collapse,
-    IconButton,
-    Paper,
-    TextField,
-    MenuItem,
-    Stack,
-    Typography,
-    InputAdornment,
+    Button,
     Chip,
-    Button
+    Divider,
+    Drawer,
+    IconButton,
+    InputAdornment,
+    MenuItem,
+    Paper,
+    Stack,
+    TextField,
+    Typography,
+    useMediaQuery
 } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
 import FilterListOffIcon from "@mui/icons-material/FilterListOff";
-import ExpandLessIcon from "@mui/icons-material/ExpandLess";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import FilterListIcon from "@mui/icons-material/FilterList";
+import CloseIcon from "@mui/icons-material/Close";
 import {
+    EMPLOYMENT_TYPES,
     EMPLOYEE_TYPE_FILTER_OPTIONS,
     GRADE_PROMOTION_FILTER_OPTIONS,
-    RETIREMENT_FILTER_OPTIONS,
-    QUALIFICATION_FILTER_OPTIONS
+    PERMANENT_TRACK_FILTER_VALUES,
+    QUALIFICATION_FILTER_OPTIONS,
+    RETIREMENT_FILTER_OPTIONS
 } from "../constants/hrms";
 import { useOrganizationSettings } from "../context/OrganizationSettingsContext";
 import { PRIVATE_VEHICLE_FILTER_OPTIONS } from "../utils/privateVehicle";
-import { getActiveFilterLabels } from "../utils/employeeListFilters";
+import {
+    getActiveFilterLabels,
+    INCREMENT_STATUS_FILTER_OPTIONS
+} from "../utils/employeeListFilters";
 import { getDistrictFilterOptions } from "../utils/organizationSettingsStore";
 
-const filterFieldSx = {
-    minWidth: { xs: "100%", sm: 220 },
-    flex: { xs: "1 1 100%", sm: "1 1 calc(50% - 12px)", md: "1 1 calc(33.333% - 16px)" }
+const ALL_OPTION = { value: "", label: "All" };
+const ALL_STATUS_OPTION = { value: "ALL", label: "All" };
+
+const PERMANENT_STATUS_FILTER_OPTIONS = [
+    ALL_STATUS_OPTION,
+    ...EMPLOYEE_TYPE_FILTER_OPTIONS.filter((option) =>
+        PERMANENT_TRACK_FILTER_VALUES.includes(option.value)
+    )
+];
+
+const EMPLOYMENT_TYPE_FILTER_OPTIONS = [
+    ALL_OPTION,
+    ...EMPLOYMENT_TYPES
+];
+
+const DEFAULT_SECTIONS = {
+    placement: true,
+    employmentType: true,
+    permanentStatus: true,
+    gradePromotion: true,
+    retirement: true,
+    qualification: true,
+    incrementStatus: true,
+    privateVehicle: true
 };
+
+export const REPORT_FILTER_SECTIONS = {
+    placement: true,
+    employmentType: true,
+    permanentStatus: false,
+    gradePromotion: false,
+    retirement: true,
+    qualification: false,
+    incrementStatus: false,
+    privateVehicle: false
+};
+
+function FilterSelect({
+    label,
+    value,
+    onChange,
+    options,
+    disabled = false
+}) {
+    return (
+        <TextField
+            label={label}
+            select
+            size="small"
+            fullWidth
+            disabled={disabled}
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+        >
+            {options.map((option) => (
+                <MenuItem
+                    key={option.value || `${label}-all`}
+                    value={option.value}
+                >
+                    {option.label}
+                </MenuItem>
+            ))}
+        </TextField>
+    );
+}
+
+function FilterSection({ title, children }) {
+    return (
+        <Box>
+            <Typography
+                variant="overline"
+                sx={{
+                    display: "block",
+                    mb: 1.25,
+                    color: "text.secondary",
+                    fontWeight: 700,
+                    letterSpacing: 0.8
+                }}
+            >
+                {title}
+            </Typography>
+            <Stack spacing={1.75}>
+                {children}
+            </Stack>
+        </Box>
+    );
+}
 
 export default function EmployeeListFilterPanel({
     filterState,
+    filterOptions = {},
     onFilterChange,
     onClearFilters,
     onClearFilterKey,
     filtersActive,
     resultSummary,
-    expanded = true,
-    onToggleExpanded,
-    showDistrictFilter = true,
-    compact = false
+    showPlacementFilters = true,
+    sections = DEFAULT_SECTIONS,
+    resolveActiveFilterLabels = getActiveFilterLabels,
+    toolbarActions = null
 }) {
     useOrganizationSettings();
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+    const [drawerOpen, setDrawerOpen] = useState(false);
+
     const districtFilterOptions = getDistrictFilterOptions();
-    const activeFilterLabels = getActiveFilterLabels(filterState);
+    const sectionConfig = { ...DEFAULT_SECTIONS, ...sections };
+    const showPlacement = showPlacementFilters && sectionConfig.placement;
+    const activeFilterLabels = resolveActiveFilterLabels(filterState);
+    const activeFilterCount = activeFilterLabels.length;
+
+    const showEmploymentCareer = sectionConfig.employmentType
+        || sectionConfig.permanentStatus
+        || sectionConfig.gradePromotion
+        || sectionConfig.retirement;
+    const showPlanningCompliance = sectionConfig.qualification
+        || sectionConfig.incrementStatus
+        || sectionConfig.privateVehicle;
+
+    const {
+        designationOptions = [],
+        serviceOptions = [],
+        serviceLevelOptions = [],
+        gradeOptions = [],
+        officeOptions = []
+    } = filterOptions;
+
+    const permanentStatusOptions = useMemo(() => {
+        const current = filterState.permanentStatusFilter;
+        if (!current || current === "ALL"
+            || PERMANENT_TRACK_FILTER_VALUES.includes(current)) {
+            return PERMANENT_STATUS_FILTER_OPTIONS;
+        }
+
+        const legacy = EMPLOYEE_TYPE_FILTER_OPTIONS.find(
+            (option) => option.value === current
+        );
+        if (!legacy) {
+            return PERMANENT_STATUS_FILTER_OPTIONS;
+        }
+
+        return [...PERMANENT_STATUS_FILTER_OPTIONS, legacy];
+    }, [filterState.permanentStatusFilter]);
+
+    const withAll = (options) => [ALL_OPTION, ...options];
 
     return (
-        <Paper
-            variant="outlined"
-            sx={{
-                mb: 2,
-                borderRadius: 2,
-                bgcolor: "background.paper",
-                overflow: "hidden"
-            }}
-        >
-            <Stack
-                direction="row"
+        <>
+            <Paper
+                variant="outlined"
                 sx={{
-                    alignItems: "center",
-                    px: 2.5,
-                    py: 1.5,
-                    gap: 1.5,
-                    bgcolor: filtersActive ? "primary.50" : "grey.50",
-                    borderBottom: expanded ? "1px solid" : "none",
-                    borderColor: "divider"
+                    mb: 2,
+                    borderRadius: 2,
+                    bgcolor: "background.paper",
+                    overflow: "hidden"
                 }}
             >
-                <FilterListIcon
-                    sx={{ color: "primary.main", fontSize: 20, flexShrink: 0 }}
-                />
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }} noWrap>
-                        Search & Filters
-                    </Typography>
-                    {!expanded && (
-                        <Typography
-                            variant="caption"
-                            color="text.secondary"
+                <Stack
+                    spacing={1.5}
+                    sx={{
+                        px: { xs: 1.5, sm: 2 },
+                        py: 1.5
+                    }}
+                >
+                    <Stack
+                        direction={{ xs: "column", md: "row" }}
+                        spacing={1.5}
+                        sx={{ alignItems: { md: "center" } }}
+                    >
+                        <TextField
+                            label="Search employees"
+                            placeholder="Name, S/N, NIC, designation, service..."
+                            value={filterState.searchTerm}
+                            onChange={(event) => onFilterChange({
+                                searchTerm: event.target.value
+                            })}
+                            size="small"
+                            fullWidth
+                            sx={{ flex: 1, minWidth: 0 }}
+                            slotProps={{
+                                input: {
+                                    startAdornment: (
+                                        <InputAdornment position="start">
+                                            <SearchIcon sx={{ color: "text.secondary" }} />
+                                        </InputAdornment>
+                                    ),
+                                    endAdornment: filterState.searchTerm ? (
+                                        <InputAdornment position="end">
+                                            <IconButton
+                                                size="small"
+                                                onClick={() => onFilterChange({
+                                                    searchTerm: ""
+                                                })}
+                                                edge="end"
+                                                aria-label="Clear search"
+                                            >
+                                                <ClearIcon fontSize="small" />
+                                            </IconButton>
+                                        </InputAdornment>
+                                    ) : null
+                                }
+                            }}
+                        />
+
+                        <Stack
+                            direction="row"
+                            spacing={1}
+                            useFlexGap
                             sx={{
-                                display: "block",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap"
+                                alignItems: "center",
+                                flexWrap: "wrap",
+                                flexShrink: 0
                             }}
                         >
-                            {resultSummary}
-                        </Typography>
-                    )}
-                </Box>
-                {filtersActive && (
-                    <Chip
-                        label={`${activeFilterLabels.length} active`}
-                        size="small"
-                        color="primary"
-                        variant="outlined"
-                        sx={{ flexShrink: 0, display: { xs: "none", sm: "inline-flex" } }}
-                    />
-                )}
-                {onToggleExpanded && (
-                    <IconButton
-                        size="small"
-                        onClick={onToggleExpanded}
-                        aria-label={expanded ? "Collapse filters" : "Expand filters"}
-                        sx={{ flexShrink: 0, ml: "auto" }}
-                    >
-                        {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                    </IconButton>
-                )}
-            </Stack>
+                            <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{ whiteSpace: "nowrap" }}
+                            >
+                                {resultSummary}
+                            </Typography>
 
-            <Collapse in={expanded}>
-                <Box sx={{ p: 2.5 }}>
-            <TextField
-                label="Search employees"
-                placeholder="Name, S/N, NIC, designation, service code, service level, contact..."
-                value={filterState.searchTerm}
-                onChange={(e) => onFilterChange({ searchTerm: e.target.value })}
-                size="small"
-                fullWidth
-                sx={{ mb: 2 }}
-                slotProps={{
-                    input: {
-                        startAdornment: (
-                            <InputAdornment position="start">
-                                <SearchIcon sx={{ color: "text.secondary" }} />
-                            </InputAdornment>
-                        ),
-                        endAdornment: filterState.searchTerm ? (
-                            <InputAdornment position="end">
-                                <IconButton
-                                    size="small"
-                                    onClick={() => onFilterChange({ searchTerm: "" })}
-                                    edge="end"
-                                    aria-label="Clear search"
+                            <Badge
+                                color="primary"
+                                badgeContent={activeFilterCount}
+                                invisible={activeFilterCount === 0}
+                                overlap="circular"
+                            >
+                                <Button
+                                    variant="outlined"
+                                    startIcon={<FilterListIcon />}
+                                    onClick={() => setDrawerOpen(true)}
                                 >
-                                    <ClearIcon fontSize="small" />
-                                </IconButton>
-                            </InputAdornment>
-                        ) : null
+                                    Filters
+                                </Button>
+                            </Badge>
+
+                            {filtersActive && (
+                                <Button
+                                    size="small"
+                                    startIcon={<FilterListOffIcon />}
+                                    onClick={onClearFilters}
+                                >
+                                    Clear all
+                                </Button>
+                            )}
+
+                            {toolbarActions}
+                        </Stack>
+                    </Stack>
+
+                    {filtersActive && (
+                        <Stack
+                            direction="row"
+                            spacing={1}
+                            useFlexGap
+                            sx={{ alignItems: "center", flexWrap: "wrap" }}
+                        >
+                            {activeFilterLabels.map((filter) => (
+                                <Chip
+                                    key={filter.key}
+                                    label={filter.label}
+                                    size="small"
+                                    color="primary"
+                                    variant="outlined"
+                                    onDelete={() => onClearFilterKey(filter.key)}
+                                />
+                            ))}
+                        </Stack>
+                    )}
+                </Stack>
+            </Paper>
+
+            <Drawer
+                anchor="right"
+                open={drawerOpen}
+                onClose={() => setDrawerOpen(false)}
+                PaperProps={{
+                    sx: {
+                        width: isMobile ? "100%" : 400,
+                        maxWidth: "100%"
                     }
                 }}
-            />
-
-            {!compact && (
-            <Box
-                sx={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: 1.5
-                }}
             >
-                <TextField
-                    label="Employee type"
-                    select
-                    size="small"
-                    value={filterState.permanentStatusFilter}
-                    onChange={(e) => onFilterChange({
-                        permanentStatusFilter: e.target.value
-                    })}
-                    sx={filterFieldSx}
+                <Box
+                    sx={{
+                        display: "flex",
+                        flexDirection: "column",
+                        height: "100%"
+                    }}
                 >
-                    {EMPLOYEE_TYPE_FILTER_OPTIONS.map((option) => (
-                        <MenuItem key={option.value} value={option.value}>
-                            {option.label}
-                        </MenuItem>
-                    ))}
-                </TextField>
+                    <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={{
+                            alignItems: "center",
+                            px: 2.5,
+                            py: 2,
+                            borderBottom: "1px solid",
+                            borderColor: "divider"
+                        }}
+                    >
+                        <FilterListIcon color="primary" />
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                                Filters
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                {resultSummary}
+                            </Typography>
+                        </Box>
+                        <IconButton
+                            onClick={() => setDrawerOpen(false)}
+                            aria-label="Close filters"
+                        >
+                            <CloseIcon />
+                        </IconButton>
+                    </Stack>
 
-                <TextField
-                    label="Grade promotion"
-                    select
-                    size="small"
-                    value={filterState.gradePromotionFilter}
-                    onChange={(e) => onFilterChange({
-                        gradePromotionFilter: e.target.value
-                    })}
-                    sx={filterFieldSx}
-                >
-                    {GRADE_PROMOTION_FILTER_OPTIONS.map((option) => (
-                        <MenuItem key={option.value} value={option.value}>
-                            {option.label}
-                        </MenuItem>
-                    ))}
-                </TextField>
+                    <Box
+                        sx={{
+                            flex: 1,
+                            overflowY: "auto",
+                            px: 2.5,
+                            py: 2.5
+                        }}
+                    >
+                        <Stack spacing={3} divider={<Divider flexItem />}>
+                            {showPlacement && (
+                                <FilterSection title="Placement & Role">
+                                    <FilterSelect
+                                        label="District"
+                                        value={filterState.districtFilter}
+                                        onChange={(value) => onFilterChange({
+                                            districtFilter: value
+                                        })}
+                                        options={districtFilterOptions}
+                                    />
+                                    <FilterSelect
+                                        label="Office"
+                                        value={filterState.officeFilter}
+                                        onChange={(value) => onFilterChange({
+                                            officeFilter: value
+                                        })}
+                                        options={withAll(officeOptions)}
+                                    />
+                                    <FilterSelect
+                                        label="Designation"
+                                        value={filterState.designationFilter}
+                                        onChange={(value) => onFilterChange({
+                                            designationFilter: value
+                                        })}
+                                        options={withAll(designationOptions)}
+                                    />
+                                    <FilterSelect
+                                        label="Service"
+                                        value={filterState.serviceFilter}
+                                        onChange={(value) => onFilterChange({
+                                            serviceFilter: value
+                                        })}
+                                        options={withAll(serviceOptions)}
+                                    />
+                                    <FilterSelect
+                                        label="Service level"
+                                        value={filterState.serviceLevelFilter}
+                                        onChange={(value) => onFilterChange({
+                                            serviceLevelFilter: value
+                                        })}
+                                        options={withAll(serviceLevelOptions)}
+                                    />
+                                    <FilterSelect
+                                        label="Grade"
+                                        value={filterState.gradeFilter}
+                                        onChange={(value) => onFilterChange({
+                                            gradeFilter: value
+                                        })}
+                                        options={withAll(gradeOptions)}
+                                    />
+                                </FilterSection>
+                            )}
 
-                <TextField
-                    label="Retirement"
-                    select
-                    size="small"
-                    value={filterState.retiringWithinMonths}
-                    onChange={(e) => onFilterChange({
-                        retiringWithinMonths: e.target.value
-                    })}
-                    sx={filterFieldSx}
-                >
-                    {RETIREMENT_FILTER_OPTIONS.map((option) => (
-                        <MenuItem key={option.value || "ALL"} value={option.value}>
-                            {option.label}
-                        </MenuItem>
-                    ))}
-                </TextField>
+                            {!showPlacement && (
+                                <FilterSection title="Role">
+                                    <FilterSelect
+                                        label="Designation"
+                                        value={filterState.designationFilter}
+                                        onChange={(value) => onFilterChange({
+                                            designationFilter: value
+                                        })}
+                                        options={withAll(designationOptions)}
+                                    />
+                                    <FilterSelect
+                                        label="Service"
+                                        value={filterState.serviceFilter}
+                                        onChange={(value) => onFilterChange({
+                                            serviceFilter: value
+                                        })}
+                                        options={withAll(serviceOptions)}
+                                    />
+                                    <FilterSelect
+                                        label="Service level"
+                                        value={filterState.serviceLevelFilter}
+                                        onChange={(value) => onFilterChange({
+                                            serviceLevelFilter: value
+                                        })}
+                                        options={withAll(serviceLevelOptions)}
+                                    />
+                                    <FilterSelect
+                                        label="Grade"
+                                        value={filterState.gradeFilter}
+                                        onChange={(value) => onFilterChange({
+                                            gradeFilter: value
+                                        })}
+                                        options={withAll(gradeOptions)}
+                                    />
+                                </FilterSection>
+                            )}
 
-                {showDistrictFilter && (
-                <TextField
-                    label="District"
-                    select
-                    size="small"
-                    value={filterState.districtFilter}
-                    onChange={(e) => onFilterChange({
-                        districtFilter: e.target.value
-                    })}
-                    sx={filterFieldSx}
-                >
-                    {districtFilterOptions.map((option) => (
-                        <MenuItem key={option.value || "ALL"} value={option.value}>
-                            {option.label}
-                        </MenuItem>
-                    ))}
-                </TextField>
-                )}
+                            {showEmploymentCareer && (
+                                <FilterSection title="Employment & Career">
+                                    {sectionConfig.employmentType && (
+                                        <FilterSelect
+                                            label="Employment type"
+                                            value={filterState.employmentTypeFilter}
+                                            onChange={(value) => onFilterChange({
+                                                employmentTypeFilter: value
+                                            })}
+                                            options={EMPLOYMENT_TYPE_FILTER_OPTIONS}
+                                        />
+                                    )}
+                                    {sectionConfig.permanentStatus && (
+                                        <FilterSelect
+                                            label="Permanent status"
+                                            value={filterState.permanentStatusFilter}
+                                            onChange={(value) => onFilterChange({
+                                                permanentStatusFilter: value
+                                            })}
+                                            options={permanentStatusOptions}
+                                        />
+                                    )}
+                                    {sectionConfig.gradePromotion && (
+                                        <FilterSelect
+                                            label="Grade promotion"
+                                            value={filterState.gradePromotionFilter}
+                                            onChange={(value) => onFilterChange({
+                                                gradePromotionFilter: value
+                                            })}
+                                            options={GRADE_PROMOTION_FILTER_OPTIONS}
+                                        />
+                                    )}
+                                    {sectionConfig.retirement && (
+                                        <FilterSelect
+                                            label="Retirement"
+                                            value={filterState.retiringWithinMonths}
+                                            onChange={(value) => onFilterChange({
+                                                retiringWithinMonths: value
+                                            })}
+                                            options={RETIREMENT_FILTER_OPTIONS}
+                                        />
+                                    )}
+                                </FilterSection>
+                            )}
 
-                <TextField
-                    label="Qualification"
-                    select
-                    size="small"
-                    value={filterState.qualificationFilter}
-                    onChange={(e) => onFilterChange({
-                        qualificationFilter: e.target.value
-                    })}
-                    sx={filterFieldSx}
-                >
-                    {QUALIFICATION_FILTER_OPTIONS.map((option) => (
-                        <MenuItem key={option.value || "ALL"} value={option.value}>
-                            {option.label}
-                        </MenuItem>
-                    ))}
-                </TextField>
+                            {showPlanningCompliance && (
+                                <FilterSection title="Planning & Compliance">
+                                    {sectionConfig.qualification && (
+                                        <FilterSelect
+                                            label="Qualification"
+                                            value={filterState.qualificationFilter}
+                                            onChange={(value) => onFilterChange({
+                                                qualificationFilter: value
+                                            })}
+                                            options={QUALIFICATION_FILTER_OPTIONS}
+                                        />
+                                    )}
+                                    {sectionConfig.incrementStatus && (
+                                        <FilterSelect
+                                            label="Salary increment"
+                                            value={filterState.incrementStatusFilter}
+                                            onChange={(value) => onFilterChange({
+                                                incrementStatusFilter: value
+                                            })}
+                                            options={INCREMENT_STATUS_FILTER_OPTIONS}
+                                        />
+                                    )}
+                                    {sectionConfig.privateVehicle && (
+                                        <FilterSelect
+                                            label="Private vehicle"
+                                            value={filterState.privateVehicleFilter}
+                                            onChange={(value) => onFilterChange({
+                                                privateVehicleFilter: value
+                                            })}
+                                            options={PRIVATE_VEHICLE_FILTER_OPTIONS}
+                                        />
+                                    )}
+                                </FilterSection>
+                            )}
+                        </Stack>
+                    </Box>
 
-                <TextField
-                    label="Private vehicle"
-                    select
-                    size="small"
-                    value={filterState.privateVehicleFilter}
-                    onChange={(e) => onFilterChange({
-                        privateVehicleFilter: e.target.value
-                    })}
-                    sx={filterFieldSx}
-                >
-                    {PRIVATE_VEHICLE_FILTER_OPTIONS.map((option) => (
-                        <MenuItem key={option.value || "ALL"} value={option.value}>
-                            {option.label}
-                        </MenuItem>
-                    ))}
-                </TextField>
-            </Box>
-            )}
-
-            <Stack
-                direction="row"
-                spacing={1}
-                useFlexGap
-                sx={{ mt: 2, alignItems: "center", flexWrap: "wrap" }}
-            >
-                <Typography variant="body2" color="text.secondary">
-                    {resultSummary}
-                </Typography>
-                {filtersActive && (
-                    <>
-                        {activeFilterLabels.map((filter) => (
-                            <Chip
-                                key={filter.key}
-                                label={filter.label}
-                                size="small"
-                                color="primary"
-                                variant="outlined"
-                                onDelete={() => onClearFilterKey(filter.key)}
-                            />
-                        ))}
+                    <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={{
+                            px: 2.5,
+                            py: 2,
+                            borderTop: "1px solid",
+                            borderColor: "divider"
+                        }}
+                    >
                         <Button
-                            size="small"
+                            fullWidth
+                            variant="outlined"
                             startIcon={<FilterListOffIcon />}
                             onClick={onClearFilters}
+                            disabled={!filtersActive}
                         >
                             Clear all
                         </Button>
-                    </>
-                )}
-            </Stack>
+                        <Button
+                            fullWidth
+                            variant="contained"
+                            onClick={() => setDrawerOpen(false)}
+                        >
+                            Done
+                        </Button>
+                    </Stack>
                 </Box>
-            </Collapse>
-        </Paper>
+            </Drawer>
+        </>
     );
 }

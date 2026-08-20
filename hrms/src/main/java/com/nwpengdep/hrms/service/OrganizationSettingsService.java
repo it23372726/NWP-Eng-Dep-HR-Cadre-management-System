@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nwpengdep.hrms.constants.DepartmentConstants;
+import com.nwpengdep.hrms.dto.OrganizationBrandingResponse;
 import com.nwpengdep.hrms.dto.OrganizationSettingsResponse;
 import com.nwpengdep.hrms.dto.OrganizationSettingsUpdateRequest;
 import com.nwpengdep.hrms.entity.OrganizationSettings;
@@ -44,6 +45,18 @@ public class OrganizationSettingsService {
     @Transactional(readOnly = true)
     public Optional<OrganizationSettings> getEntity() {
         return findSettings();
+    }
+
+    @Transactional(readOnly = true)
+    public OrganizationBrandingResponse getBranding() {
+        return findSettings()
+                .map(this::toBranding)
+                .orElseGet(() -> OrganizationBrandingResponse.builder()
+                        .primaryDepartmentName("")
+                        .applicationName(OrganizationSettingsDefaults.applicationTitle(""))
+                        .hasLogo(false)
+                        .updatedAt(null)
+                        .build());
     }
 
     public String getPrimaryDepartmentName() {
@@ -139,10 +152,9 @@ public class OrganizationSettingsService {
                 request.getDepartmentShortName(),
                 "Department short name"
         ));
-        settings.setApplicationName(requireText(
-                request.getApplicationName(),
-                "Application name"
-        ));
+        settings.setApplicationName(
+                OrganizationSettingsDefaults.applicationTitle(newPrimary)
+        );
         settings.setCouncilLabel(requireText(
                 request.getCouncilLabel(),
                 "Council label"
@@ -178,7 +190,7 @@ public class OrganizationSettingsService {
                 .primaryDepartmentName("")
                 .provincialCouncilName("")
                 .departmentShortName("")
-                .applicationName("")
+                .applicationName("HRMS")
                 .councilLabel("")
                 .districtsJson("[]")
                 .build();
@@ -189,8 +201,9 @@ public class OrganizationSettingsService {
                 .primaryDepartmentName("")
                 .provincialCouncilName("")
                 .departmentShortName("")
-                .applicationName("")
+                .applicationName(OrganizationSettingsDefaults.applicationTitle(""))
                 .councilLabel("")
+                .hasLogo(false)
                 .districts(List.of())
                 .reportHeaderSubtitle("")
                 .reportHeaderUppercase("")
@@ -401,8 +414,11 @@ public class OrganizationSettingsService {
                 .primaryDepartmentName(nullToEmpty(settings.getPrimaryDepartmentName()))
                 .provincialCouncilName(nullToEmpty(settings.getProvincialCouncilName()))
                 .departmentShortName(nullToEmpty(settings.getDepartmentShortName()))
-                .applicationName(nullToEmpty(settings.getApplicationName()))
+                .applicationName(OrganizationSettingsDefaults.applicationTitle(
+                        settings.getPrimaryDepartmentName()
+                ))
                 .councilLabel(nullToEmpty(settings.getCouncilLabel()))
+                .hasLogo(hasLogo(settings))
                 .districts(districts)
                 .reportHeaderSubtitle(OrganizationSettingsDefaults.reportHeaderSubtitle(
                         settings.getProvincialCouncilName(),
@@ -414,6 +430,21 @@ public class OrganizationSettingsService {
                 ))
                 .updatedAt(settings.getUpdatedAt())
                 .build();
+    }
+
+    private OrganizationBrandingResponse toBranding(OrganizationSettings settings) {
+        return OrganizationBrandingResponse.builder()
+                .primaryDepartmentName(nullToEmpty(settings.getPrimaryDepartmentName()))
+                .applicationName(OrganizationSettingsDefaults.applicationTitle(
+                        settings.getPrimaryDepartmentName()
+                ))
+                .hasLogo(hasLogo(settings))
+                .updatedAt(settings.getUpdatedAt())
+                .build();
+    }
+
+    private boolean hasLogo(OrganizationSettings settings) {
+        return settings.getLogoPath() != null && !settings.getLogoPath().isBlank();
     }
 
     private List<String> parseDistricts(String json) {

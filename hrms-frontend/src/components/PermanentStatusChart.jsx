@@ -8,13 +8,22 @@ import {
 import { buildEmployeeListUrl } from "../utils/dashboardNavigation";
 
 const CATEGORY_TO_FILTER = {
-    Probation: "PROBATION",
-    "Qualified for Permanent": "QUALIFIED_FOR_PERMANENT",
-    "Confirmed Permanent": "PERMANENT",
-    Acting: "ACTING",
-    Contract: "CONTRACT",
-    Casual: "CASUAL",
-    Substitute: "SUBSTITUTE"
+    Probation: {
+        employmentType: "PERMANENT",
+        permanentStatus: "PROBATION"
+    },
+    "Qualified for Permanent": {
+        employmentType: "PERMANENT",
+        permanentStatus: "QUALIFIED_FOR_PERMANENT"
+    },
+    "Confirmed Permanent": {
+        employmentType: "PERMANENT",
+        permanentStatus: "PERMANENT"
+    },
+    Acting: { employmentType: "ACTING" },
+    Contract: { employmentType: "CONTRACT" },
+    Casual: { employmentType: "CASUAL" },
+    Substitute: { employmentType: "SUBSTITUTE" }
 };
 
 const CustomTooltip = ({ active, payload, totalEmployees }) => {
@@ -82,7 +91,7 @@ export default function PermanentStatusChart({ data, loading }) {
     const handleSliceClick = (entry) => {
         const filter = CATEGORY_TO_FILTER[entry.category];
         if (filter) {
-            navigate(buildEmployeeListUrl({ permanentStatus: filter }));
+            navigate(buildEmployeeListUrl(filter));
         }
     };
 

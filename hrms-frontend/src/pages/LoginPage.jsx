@@ -10,7 +10,6 @@ import {
     TextField,
     Typography
 } from "@mui/material";
-import BadgeOutlinedIcon from "@mui/icons-material/BadgeOutlined";
 import CheckCircleOutlineRoundedIcon from "@mui/icons-material/CheckCircleOutlineRounded";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import SecurityRoundedIcon from "@mui/icons-material/SecurityRounded";
@@ -18,6 +17,7 @@ import SecurityRoundedIcon from "@mui/icons-material/SecurityRounded";
 import { getApplicationName } from "../constants/hrms";
 import { getDefaultRouteForUser } from "../constants/permissions";
 import { useOrganizationSettings } from "../context/OrganizationSettingsContext";
+import OrganizationLogo from "../components/OrganizationLogo";
 import { setStoredUser } from "../hooks/useAuth";
 import { login } from "../services/authService";
 import { generateCorrelationId } from "../utils/tokenUtils";
@@ -130,20 +130,7 @@ export default function LoginPage() {
                     }}
                 />
                 <Stack direction="row" spacing={1.5} sx={{alignItems: "center",  position: "relative" }}>
-                    <Box
-                        sx={{
-                            width: 46,
-                            height: 46,
-                            borderRadius: 2.5,
-                            display: "grid",
-                            placeItems: "center",
-                            bgcolor: "rgba(255,255,255,0.12)",
-                            border: "1px solid rgba(255,255,255,0.18)",
-                            backdropFilter: "blur(10px)"
-                        }}
-                    >
-                        <BadgeOutlinedIcon />
-                    </Box>
+                    <OrganizationLogo size={46} inverted alt={`${applicationName} logo`} />
                     <Box>
                         <Typography variant="subtitle1" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
                             {applicationName}
@@ -226,19 +213,7 @@ export default function LoginPage() {
 
                         sx={{alignItems: "center",  display: { xs: "flex", lg: "none" }, mb: 4 }}
                     >
-                        <Box
-                            sx={{
-                                width: 42,
-                                height: 42,
-                                borderRadius: 2.25,
-                                display: "grid",
-                                placeItems: "center",
-                                color: "common.white",
-                                background: "linear-gradient(135deg, #11558F, #0C8877)"
-                            }}
-                        >
-                            <BadgeOutlinedIcon fontSize="small" />
-                        </Box>
+                        <OrganizationLogo size={42} alt={`${applicationName} logo`} />
                         <Box sx={{ minWidth: 0 }}>
                             <Typography variant="subtitle1" noWrap sx={{ fontWeight: 800, lineHeight: 1.2 }}>
                                 {applicationName}

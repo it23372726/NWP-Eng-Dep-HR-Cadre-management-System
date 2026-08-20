@@ -10,6 +10,7 @@ export const DEFAULT_ORGANIZATION_SETTINGS = {
     districts: [],
     reportHeaderSubtitle: "",
     reportHeaderUppercase: "",
+    hasLogo: false,
     updatedAt: null
 };
 
@@ -25,7 +26,11 @@ export function setOrganizationSettingsCache(settings) {
         ...settings,
         districts: Array.isArray(settings.districts)
             ? [...settings.districts]
-            : []
+            : [],
+        applicationName: deriveApplicationTitle(
+            settings.primaryDepartmentName ?? cachedSettings.primaryDepartmentName
+        ),
+        hasLogo: Boolean(settings.hasLogo)
     };
     return cachedSettings;
 }
@@ -106,8 +111,19 @@ export function getReportHeaderUppercase() {
             .toUpperCase();
 }
 
+export function deriveApplicationTitle(primaryDepartmentName) {
+    const department = (primaryDepartmentName || "").trim();
+    if (!department) {
+        return "HRMS";
+    }
+    if (/\sHRMS$/i.test(department)) {
+        return department;
+    }
+    return `${department} HRMS`;
+}
+
 export function getApplicationName() {
-    return cachedSettings.applicationName || "HRMS";
+    return deriveApplicationTitle(cachedSettings.primaryDepartmentName);
 }
 
 export function getCouncilLabel() {

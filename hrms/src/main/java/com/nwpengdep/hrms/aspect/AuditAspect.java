@@ -225,7 +225,7 @@ public class AuditAspect {
             if (name.contains("export")) {
                 return AuditAction.EXPORT;
             }
-            if (isInlineEmployeePhotoRequest(name)) {
+            if (isInlineMediaRequest(name)) {
                 return null;
             }
             if (shouldAuditView(method.getName())) {
@@ -236,8 +236,9 @@ public class AuditAspect {
         return null;
     }
 
-    private boolean isInlineEmployeePhotoRequest(String methodName) {
-        return methodName.equals("getemployeephoto");
+    private boolean isInlineMediaRequest(String methodName) {
+        return methodName.equals("getemployeephoto")
+                || methodName.equals("getlogo");
     }
 
     private boolean shouldAuditView(String methodName) {

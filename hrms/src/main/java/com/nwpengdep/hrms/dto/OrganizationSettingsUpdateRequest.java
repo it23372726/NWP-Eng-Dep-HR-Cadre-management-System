@@ -18,7 +18,6 @@ public class OrganizationSettingsUpdateRequest {
     @NotBlank(message = "Department short name is required")
     private String departmentShortName;
 
-    @NotBlank(message = "Application name is required")
     private String applicationName;
 
     @NotBlank(message = "Council label is required")

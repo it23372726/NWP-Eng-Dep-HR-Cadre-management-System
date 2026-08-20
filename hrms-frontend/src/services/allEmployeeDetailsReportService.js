@@ -1,23 +1,38 @@
 import api from "../api/axios";
+import { printPdfBlob } from "./cadreReportService";
+
+export { printPdfBlob };
 
 export const getAllEmployeeDetailsReport = async () => {
     const response = await api.get("/reports/all-employee-details");
     return response.data;
 };
 
-export const downloadAllEmployeeDetailsReportExcel = async () => {
-    const response = await api.get(
-        "/reports/all-employee-details/export/excel",
-        { responseType: "blob" }
-    );
+export const downloadAllEmployeeDetailsReportExcel = async (report) => {
+    const response = report
+        ? await api.post(
+            "/reports/all-employee-details/export/excel",
+            report,
+            { responseType: "blob" }
+        )
+        : await api.get(
+            "/reports/all-employee-details/export/excel",
+            { responseType: "blob" }
+        );
     return response.data;
 };
 
-export const downloadAllEmployeeDetailsReportPdf = async () => {
-    const response = await api.get(
-        "/reports/all-employee-details/export/pdf",
-        { responseType: "blob" }
-    );
+export const downloadAllEmployeeDetailsReportPdf = async (report) => {
+    const response = report
+        ? await api.post(
+            "/reports/all-employee-details/export/pdf",
+            report,
+            { responseType: "blob" }
+        )
+        : await api.get(
+            "/reports/all-employee-details/export/pdf",
+            { responseType: "blob" }
+        );
     return response.data;
 };
 

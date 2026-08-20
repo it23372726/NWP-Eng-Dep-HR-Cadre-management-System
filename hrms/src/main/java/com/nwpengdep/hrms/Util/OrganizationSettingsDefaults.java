@@ -9,6 +9,7 @@ public final class OrganizationSettingsDefaults {
 
     public static final String RENAME_MIGRATE = "MIGRATE_EXISTING";
     public static final String RENAME_KEEP = "KEEP_EXISTING";
+    public static final String APPLICATION_NAME_SUFFIX = "HRMS";
 
     private OrganizationSettingsDefaults() {
     }
@@ -36,6 +37,20 @@ public final class OrganizationSettingsDefaults {
         }
 
         return new ArrayList<>(unique);
+    }
+
+    public static String applicationTitle(String primaryDepartmentName) {
+        String department = primaryDepartmentName != null
+                ? primaryDepartmentName.trim()
+                : "";
+        if (department.isEmpty()) {
+            return APPLICATION_NAME_SUFFIX;
+        }
+        if (department.toUpperCase(Locale.ROOT)
+                .endsWith(" " + APPLICATION_NAME_SUFFIX)) {
+            return department;
+        }
+        return department + " " + APPLICATION_NAME_SUFFIX;
     }
 
     public static String reportHeaderSubtitle(

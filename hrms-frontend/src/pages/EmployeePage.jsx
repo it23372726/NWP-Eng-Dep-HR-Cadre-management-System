@@ -40,6 +40,7 @@ import {
     EmployeeListSkeleton
 } from "../components/EmployeeListStates";
 import {
+    deriveEmployeeFilterOptions,
     filterActiveEmployees,
     hasActiveEmployeeFilters,
     sortEmployeesBySerialNo
@@ -123,11 +124,14 @@ export default function EmployeePage() {
     const [retiringWithinMonths, setRetiringWithinMonths] = useState("");
     const [districtFilter, setDistrictFilter] = useState("");
     const [officeFilter, setOfficeFilter] = useState("");
+    const [designationFilter, setDesignationFilter] = useState("");
+    const [serviceFilter, setServiceFilter] = useState("");
+    const [serviceLevelFilter, setServiceLevelFilter] = useState("");
+    const [gradeFilter, setGradeFilter] = useState("");
     const [qualificationFilter, setQualificationFilter] = useState("");
     const [incrementStatusFilter, setIncrementStatusFilter] = useState("");
     const [privateVehicleFilter, setPrivateVehicleFilter] = useState("");
     const [departmentScope, setDepartmentScope] = useState("NWP");
-    const [filtersExpanded, setFiltersExpanded] = useState(true);
     const [viewMode, setViewMode] = useState(loadViewMode);
 
     const navigate = useNavigate();
@@ -156,6 +160,10 @@ export default function EmployeePage() {
         setRetiringWithinMonths(parsed.retiringWithinMonths);
         setDistrictFilter(parsed.districtFilter);
         setOfficeFilter(parsed.officeFilter);
+        setDesignationFilter(parsed.designationFilter);
+        setServiceFilter(parsed.serviceFilter);
+        setServiceLevelFilter(parsed.serviceLevelFilter);
+        setGradeFilter(parsed.gradeFilter);
         setQualificationFilter(parsed.qualificationFilter);
         setIncrementStatusFilter(parsed.incrementStatusFilter);
         setPrivateVehicleFilter(parsed.privateVehicleFilter);
@@ -170,19 +178,45 @@ export default function EmployeePage() {
         retiringWithinMonths,
         districtFilter,
         officeFilter,
+        designationFilter,
+        serviceFilter,
+        serviceLevelFilter,
+        gradeFilter,
         qualificationFilter,
         incrementStatusFilter,
         privateVehicleFilter
     };
 
+    const filterOptions = useMemo(
+        () => deriveEmployeeFilterOptions(allEmployees, { districtFilter }),
+        [allEmployees, districtFilter]
+    );
+
     const syncFiltersToUrl = useCallback((nextFilters) => {
-        const params = employeeFiltersToSearchParams({
+        const merged = {
             ...filterState,
             departmentScope,
             ...nextFilters
-        });
-        setSearchParams(params, { replace: true });
-    }, [departmentScope, filterState, setSearchParams]);
+        };
+
+        if (Object.prototype.hasOwnProperty.call(nextFilters, "districtFilter")
+            && nextFilters.districtFilter !== filterState.districtFilter
+            && !Object.prototype.hasOwnProperty.call(nextFilters, "officeFilter")) {
+            const nextDistrict = nextFilters.districtFilter || "";
+            const offices = deriveEmployeeFilterOptions(allEmployees, {
+                districtFilter: nextDistrict
+            }).officeOptions.map((option) => option.value.toLowerCase());
+            const currentOffice = (merged.officeFilter || "").toLowerCase();
+            if (currentOffice && !offices.includes(currentOffice)) {
+                merged.officeFilter = "";
+            }
+        }
+
+        setSearchParams(
+            employeeFiltersToSearchParams(merged),
+            { replace: true }
+        );
+    }, [allEmployees, departmentScope, filterState, setSearchParams]);
 
     const employees = sortEmployeesBySerialNo(
         filterActiveEmployees(allEmployees, filterState)
@@ -252,6 +286,10 @@ export default function EmployeePage() {
             retiringWithin: { retiringWithinMonths: "" },
             district: { districtFilter: "", officeFilter: "" },
             office: { officeFilter: "" },
+            designation: { designationFilter: "" },
+            service: { serviceFilter: "" },
+            serviceLevel: { serviceLevelFilter: "" },
+            grade: { gradeFilter: "" },
             qualification: { qualificationFilter: "" },
             incrementStatus: { incrementStatusFilter: "" },
             privateVehicle: { privateVehicleFilter: "" },
@@ -269,7 +307,6 @@ export default function EmployeePage() {
             return;
         }
         syncFiltersToUrl(filter);
-        setFiltersExpanded(true);
     };
 
     const handleViewModeChange = (_, nextMode) => {
@@ -511,15 +548,13 @@ export default function EmployeePage() {
 
             <EmployeeListFilterPanel
                 filterState={filterState}
+                filterOptions={filterOptions}
                 onFilterChange={syncFiltersToUrl}
                 onClearFilters={clearFilters}
                 onClearFilterKey={clearFilterKey}
                 filtersActive={filtersActive}
                 resultSummary={resultSummary}
-                expanded={filtersExpanded}
-                onToggleExpanded={() => setFiltersExpanded((prev) => !prev)}
-                showDistrictFilter={departmentScope === "NWP"}
-                compact={isSystemPendingScope}
+                showPlacementFilters={departmentScope === "NWP"}
             />
 
             <Box

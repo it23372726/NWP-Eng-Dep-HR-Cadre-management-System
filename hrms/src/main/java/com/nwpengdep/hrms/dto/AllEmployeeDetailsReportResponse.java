@@ -17,5 +17,8 @@ public class AllEmployeeDetailsReportResponse {
 
     private int totalCount;
 
+    /** Optional export heading; defaults to ALL EMPLOYEE DETAILS REPORT. */
+    private String reportTitle;
+
     private List<AllEmployeeDetailsReportRowResponse> rows;
 }

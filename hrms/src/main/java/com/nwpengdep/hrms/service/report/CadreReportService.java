@@ -208,8 +208,8 @@ public class CadreReportService {
             long activeAtEnd = permanent + casual + substitute + contracts;
 
             long approvedCadre = approvedCadreMap.getOrDefault(designationId, 0);
-            long vacancies = Math.max(0, approvedCadre - activeAtEnd);
-            long excess = Math.max(0, activeAtEnd - approvedCadre);
+            long vacancies = CadreVacancyCalculator.vacancy(approvedCadre, activeAtEnd);
+            long excess = CadreVacancyCalculator.excess(approvedCadre, activeAtEnd);
 
             rows.add(
                     CadreReportRowResponse.builder()

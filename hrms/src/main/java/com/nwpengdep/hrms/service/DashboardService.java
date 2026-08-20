@@ -5,6 +5,7 @@ import com.nwpengdep.hrms.dto.*;
 import com.nwpengdep.hrms.entity.*;
 import com.nwpengdep.hrms.repository.*;
 import com.nwpengdep.hrms.util.EmployeeTrainingUtil;
+import com.nwpengdep.hrms.service.report.CadreVacancyCalculator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -37,6 +38,7 @@ public class DashboardService {
     private final SalaryIncrementService salaryIncrementService;
     private final EmployeeServiceResolver employeeServiceResolver;
     private final OrganizationSettingsService organizationSettingsService;
+    private final CadrePositionService cadrePositionService;
 
     public DashboardStatsResponse getDashboardStats() {
         List<Employee> activeNwpEmployees = getActiveNwpEmployees();
@@ -67,7 +69,10 @@ public class DashboardService {
                 .mapToLong(CadreStatusDto::getVacancy)
                 .sum();
         long totalExcess = cadreStatuses.stream()
-                .mapToLong(cadre -> Math.max(0, cadre.getExisting() - cadre.getApproved()))
+                .mapToLong(cadre -> CadreVacancyCalculator.excess(
+                        nvl(cadre.getApproved()),
+                        nvl(cadre.getExisting())
+                ))
                 .sum();
 
         long retirementWatch = countRetiringWithinMonths(RETIREMENT_WATCH_MONTHS);
@@ -398,15 +403,10 @@ public class DashboardService {
                     long approved = cadre.getApprovedCount() != null
                             ? cadre.getApprovedCount().longValue()
                             : 0L;
-                    long existing = cadre.getDesignation() != null
-                            ? employeeRepository
-                                    .countCadreEligibleByDesignationIdAndStatusAndCurrentDepartment(
-                                            cadre.getDesignation().getId(),
-                                            EmployeeStatus.ACTIVE,
-                                            DepartmentConstants.NWP_ENGINEERING
-                                    )
-                            : 0;
-                    long vacancy = Math.max(0, approved - existing);
+                    long existing = cadrePositionService.countCurrentCadreOccupancy(
+                            cadre.getDesignation()
+                    );
+                    long vacancy = CadreVacancyCalculator.vacancy(approved, existing);
                     String vacancyStatus = vacancy == 0 ? "green" : vacancy <= 2 ? "orange" : "red";
                     return CadreStatusDto.builder()
                             .designation(cadre.getDesignation() != null ? 
@@ -795,6 +795,10 @@ public class DashboardService {
                 .stream()
                 .filter(this::isNwpEmployee)
                 .toList();
+    }
+
+    private long nvl(Long value) {
+        return value != null ? value : 0L;
     }
 
     private boolean isNwpEmployee(Employee employee) {

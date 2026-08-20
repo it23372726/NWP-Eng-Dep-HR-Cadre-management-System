@@ -15,6 +15,7 @@ public class OrganizationSettingsResponse {
     private String departmentShortName;
     private String applicationName;
     private String councilLabel;
+    private boolean hasLogo;
     private List<String> districts;
     private String reportHeaderSubtitle;
     private String reportHeaderUppercase;

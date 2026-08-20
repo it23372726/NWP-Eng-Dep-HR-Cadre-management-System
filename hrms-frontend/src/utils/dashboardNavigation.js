@@ -5,6 +5,10 @@ export const EMPLOYEE_FILTER_PARAMS = {
     retiringWithin: "retiringWithin",
     district: "district",
     office: "office",
+    designation: "designation",
+    service: "service",
+    serviceLevel: "serviceLevel",
+    grade: "grade",
     qualification: "qualification",
     incrementStatus: "incrementStatus",
     privateVehicle: "privateVehicle",
@@ -19,6 +23,10 @@ const DEFAULT_EMPLOYEE_FILTERS = {
     retiringWithin: "",
     district: "",
     office: "",
+    designation: "",
+    service: "",
+    serviceLevel: "",
+    grade: "",
     qualification: "",
     incrementStatus: "",
     privateVehicle: "",
@@ -89,6 +97,10 @@ export function parseEmployeeListSearchParams(searchParams) {
         retiringWithinMonths: get(EMPLOYEE_FILTER_PARAMS.retiringWithin),
         districtFilter: get(EMPLOYEE_FILTER_PARAMS.district),
         officeFilter: get(EMPLOYEE_FILTER_PARAMS.office),
+        designationFilter: get(EMPLOYEE_FILTER_PARAMS.designation),
+        serviceFilter: get(EMPLOYEE_FILTER_PARAMS.service),
+        serviceLevelFilter: get(EMPLOYEE_FILTER_PARAMS.serviceLevel),
+        gradeFilter: get(EMPLOYEE_FILTER_PARAMS.grade),
         qualificationFilter: resolveQualificationFilter(searchParams),
         incrementStatusFilter: get(EMPLOYEE_FILTER_PARAMS.incrementStatus),
         privateVehicleFilter: get(EMPLOYEE_FILTER_PARAMS.privateVehicle),
@@ -136,6 +148,24 @@ export function employeeFiltersToSearchParams(filterState) {
     }
     if (filterState.officeFilter) {
         params.set(EMPLOYEE_FILTER_PARAMS.office, filterState.officeFilter);
+    }
+    if (filterState.designationFilter) {
+        params.set(
+            EMPLOYEE_FILTER_PARAMS.designation,
+            filterState.designationFilter
+        );
+    }
+    if (filterState.serviceFilter) {
+        params.set(EMPLOYEE_FILTER_PARAMS.service, filterState.serviceFilter);
+    }
+    if (filterState.serviceLevelFilter) {
+        params.set(
+            EMPLOYEE_FILTER_PARAMS.serviceLevel,
+            filterState.serviceLevelFilter
+        );
+    }
+    if (filterState.gradeFilter) {
+        params.set(EMPLOYEE_FILTER_PARAMS.grade, filterState.gradeFilter);
     }
     if (filterState.qualificationFilter) {
         params.set(

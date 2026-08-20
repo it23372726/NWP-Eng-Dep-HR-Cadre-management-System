@@ -1,7 +1,9 @@
 import { Paper, Typography, Box, Skeleton, Alert } from "@mui/material";
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { useNavigate } from "react-router-dom";
 
 import { CHART_HEIGHT, getServiceLevelColor } from "../constants/dashboardTheme";
+import { buildEmployeeListUrl } from "../utils/dashboardNavigation";
 
 // Custom tooltip with percentage - moved outside component to prevent recreation
 const CustomTooltip = ({ active, payload, totalEmployees }) => {
@@ -40,6 +42,8 @@ const renderLabel = (entry, totalEmployees) => {
 };
 
 export default function ServiceLevelDistributionChart({ data, loading }) {
+    const navigate = useNavigate();
+
     if (loading) {
         return (
             <Paper sx={{ p: 3, borderRadius: 2 }}>
@@ -77,6 +81,11 @@ export default function ServiceLevelDistributionChart({ data, loading }) {
         count: item.count
     }));
 
+    const handleSliceClick = (entry) => {
+        if (entry?.serviceLevel) {
+            navigate(buildEmployeeListUrl({ serviceLevel: entry.serviceLevel }));
+        }
+    };
 
     return (
         <Paper sx={{ p: 3, borderRadius: 2, height: "100%" }}>
@@ -99,6 +108,8 @@ export default function ServiceLevelDistributionChart({ data, loading }) {
                             outerRadius={100}
                             label={(entry) => renderLabel(entry, totalEmployees)}
                             labelLine={true}
+                            onClick={handleSliceClick}
+                            style={{ cursor: "pointer" }}
                         >
                             {chartData.map((entry, index) => (
                                 <Cell

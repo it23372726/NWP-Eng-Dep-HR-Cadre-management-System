@@ -9,6 +9,7 @@ import com.nwpengdep.hrms.entity.EmployeeStatus;
 import com.nwpengdep.hrms.repository.CadrePositionRepository;
 import com.nwpengdep.hrms.repository.DesignationRepository;
 import com.nwpengdep.hrms.repository.EmployeeRepository;
+import com.nwpengdep.hrms.service.report.CadreVacancyCalculator;
 import com.nwpengdep.hrms.service.report.ReportSortOrder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -142,17 +143,12 @@ public class CadrePositionService {
 
         for (CadrePosition cadre : cadres) {
             Designation designation = cadre.getDesignation();
-            long currentCount = employeeRepository
-                    .countCadreEligibleByDesignationIdAndStatusAndCurrentDepartment(
-                            designation.getId(),
-                            EmployeeStatus.ACTIVE,
-                            DepartmentConstants.NWP_ENGINEERING
-                    );
+            long currentCount = countCurrentCadreOccupancy(designation);
             long approved = cadre.getApprovedCount() != null
                     ? cadre.getApprovedCount().longValue()
                     : 0L;
-            long vacancy = Math.max(0, approved - currentCount);
-            long excess = Math.max(0, currentCount - approved);
+            long vacancy = CadreVacancyCalculator.vacancy(approved, currentCount);
+            long excess = CadreVacancyCalculator.excess(approved, currentCount);
 
             totalApproved += approved;
             totalCurrent += currentCount;
@@ -197,6 +193,24 @@ public class CadrePositionService {
         );
 
         return report;
+    }
+
+    public long countCurrentCadreOccupancy(Designation designation) {
+        if (designation == null || designation.getId() == null) {
+            return 0L;
+        }
+
+        String primaryDepartment = DepartmentConstants.getPrimaryDepartmentName();
+        if (primaryDepartment == null || primaryDepartment.isBlank()) {
+            return 0L;
+        }
+
+        return employeeRepository
+                .countCadreEligibleByDesignationIdAndStatusAndCurrentDepartment(
+                        designation.getId(),
+                        EmployeeStatus.ACTIVE,
+                        primaryDepartment.trim()
+                );
     }
 
     public void sortCadresForDisplay(List<CadrePosition> cadres) {

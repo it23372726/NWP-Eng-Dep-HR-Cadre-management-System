@@ -7,7 +7,10 @@ import {
     useState
 } from "react";
 
-import { getOrganizationSettings as fetchOrganizationSettings } from "../services/organizationSettingsService";
+import {
+    getOrganizationBranding,
+    getOrganizationSettings as fetchOrganizationSettings
+} from "../services/organizationSettingsService";
 import {
     DEFAULT_ORGANIZATION_SETTINGS,
     getOrganizationSettings as readCachedSettings,
@@ -33,17 +36,31 @@ export function OrganizationSettingsProvider({ children }) {
     }, []);
 
     const refresh = useCallback(async () => {
-        const user = getStoredUser();
-        const token = localStorage.getItem("token");
-        if (!user || !token) {
-            applySettings(DEFAULT_ORGANIZATION_SETTINGS);
-            return DEFAULT_ORGANIZATION_SETTINGS;
-        }
-
         setLoading(true);
         try {
-            const data = await fetchOrganizationSettings();
-            return applySettings(data);
+            const branding = await getOrganizationBranding();
+            const user = getStoredUser();
+            const token = localStorage.getItem("token");
+
+            if (!user || !token) {
+                return applySettings({
+                    ...DEFAULT_ORGANIZATION_SETTINGS,
+                    ...branding
+                });
+            }
+
+            try {
+                const data = await fetchOrganizationSettings();
+                return applySettings({
+                    ...data,
+                    hasLogo: data.hasLogo ?? branding.hasLogo
+                });
+            } catch {
+                return applySettings({
+                    ...DEFAULT_ORGANIZATION_SETTINGS,
+                    ...branding
+                });
+            }
         } catch {
             return readCachedSettings();
         } finally {
@@ -76,7 +93,8 @@ export function OrganizationSettingsProvider({ children }) {
             applicationName: settings.applicationName,
             councilLabel: settings.councilLabel,
             reportHeaderSubtitle: settings.reportHeaderSubtitle,
-            reportHeaderUppercase: settings.reportHeaderUppercase
+            reportHeaderUppercase: settings.reportHeaderUppercase,
+            hasLogo: Boolean(settings.hasLogo)
         }),
         [settings, loading, refresh, applySettings]
     );

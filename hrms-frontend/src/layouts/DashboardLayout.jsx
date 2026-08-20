@@ -16,11 +16,11 @@ import {
     useMediaQuery,
     useTheme
 } from "@mui/material";
-import BadgeOutlinedIcon from "@mui/icons-material/BadgeOutlined";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import MenuRoundedIcon from "@mui/icons-material/MenuRounded";
 
 import SidebarNav from "../components/layout/SidebarNav";
+import OrganizationLogo from "../components/OrganizationLogo";
 import { getApplicationName } from "../constants/hrms";
 import { getPageTitle } from "../constants/navigation";
 import { getDefaultRouteForUser } from "../constants/permissions";
@@ -64,21 +64,7 @@ function DrawerBranding({ collapsed }) {
                 flexShrink: 0
             }}
         >
-            <Box
-                sx={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: 2.25,
-                    display: "grid",
-                    placeItems: "center",
-                    flexShrink: 0,
-                    color: "common.white",
-                    background: "linear-gradient(135deg, #1767B0 0%, #0C8877 120%)",
-                    boxShadow: "0 8px 18px rgba(17, 85, 143, 0.20)"
-                }}
-            >
-                <BadgeOutlinedIcon fontSize="small" />
-            </Box>
+            <OrganizationLogo size={42} alt={`${appName} logo`} />
             {!collapsed && (
                 <Box sx={{ minWidth: 0 }}>
                     <Typography
@@ -213,8 +199,18 @@ export default function DashboardLayout() {
     };
 
     return (
-        <Box sx={{ display: "flex", minHeight: "100dvh" }}>
-            <AppBar position="fixed" sx={{ zIndex: (appTheme) => appTheme.zIndex.drawer + 1 }}>
+        <Box
+            sx={{
+                display: "flex",
+                minHeight: "100dvh",
+                "@media print": {
+                    display: "block",
+                    minHeight: 0,
+                    height: "auto"
+                }
+            }}
+        >
+            <AppBar position="fixed" className="no-print" sx={{ zIndex: (appTheme) => appTheme.zIndex.drawer + 1 }}>
                 <Toolbar
                     sx={{
                         minHeight: { xs: "64px !important", sm: "72px !important" },
@@ -304,6 +300,7 @@ export default function DashboardLayout() {
 
             {isMobile ? (
                 <Drawer
+                    className="no-print"
                     variant="temporary"
                     open={mobileOpen}
                     onClose={() => setMobileOpen(false)}
@@ -319,6 +316,7 @@ export default function DashboardLayout() {
                 </Drawer>
             ) : (
                 <Drawer
+                    className="no-print"
                     variant="permanent"
                     sx={{
                         width: collapsed ? COLLAPSED_WIDTH : DRAWER_WIDTH,
@@ -345,10 +343,26 @@ export default function DashboardLayout() {
                     width: "100%",
                     px: { xs: 1.5, sm: 2.5, lg: 3.5 },
                     pt: { xs: 10, sm: 11.5 },
-                    pb: { xs: 3, sm: 4 }
+                    pb: { xs: 3, sm: 4 },
+                    "@media print": {
+                        px: "0 !important",
+                        pt: "0 !important",
+                        pb: "0 !important",
+                        width: "100%"
+                    }
                 }}
             >
-                <Box sx={{ width: "100%", maxWidth: 1700, mx: "auto" }}>
+                <Box
+                    sx={{
+                        width: "100%",
+                        maxWidth: 1700,
+                        mx: "auto",
+                        "@media print": {
+                            maxWidth: "none",
+                            mx: 0
+                        }
+                    }}
+                >
                     <Outlet />
                 </Box>
             </Box>

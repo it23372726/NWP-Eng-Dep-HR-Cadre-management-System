@@ -36,7 +36,7 @@ export default function DesignationDistributionChart({ data, loading }) {
 
     const handleBarClick = (entry) => {
         if (entry?.name) {
-            navigate(buildEmployeeListUrl({ search: entry.name }));
+            navigate(buildEmployeeListUrl({ designation: entry.name }));
         }
     };
 

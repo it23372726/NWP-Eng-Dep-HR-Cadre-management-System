@@ -41,6 +41,9 @@ public class OrganizationSettings {
     @Column(name = "application_name", nullable = false, length = 120)
     private String applicationName;
 
+    @Column(name = "logo_path", length = 512)
+    private String logoPath;
+
     @Column(name = "council_label", nullable = false, length = 120)
     private String councilLabel;
 

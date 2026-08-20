@@ -26,7 +26,9 @@ public class AuditDiffUtil {
             "profilePhoto",
             "photo",
             "photoData",
-            "file"
+            "file",
+            "logoPath",
+            "logo"
     );
 
     private final ObjectMapper objectMapper = createObjectMapper();

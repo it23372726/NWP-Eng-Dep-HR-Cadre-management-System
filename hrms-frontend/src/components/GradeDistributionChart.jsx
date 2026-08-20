@@ -10,13 +10,16 @@ import {
     ResponsiveContainer,
     Cell
 } from "recharts";
+import { useNavigate } from "react-router-dom";
 import {
     CHART_HEIGHT,
     GRADE_NAMED_COLORS,
     buildChartColorMap
 } from "../constants/dashboardTheme";
+import { buildEmployeeListUrl } from "../utils/dashboardNavigation";
 
 export default function GradeDistributionChart({ data, loading }) {
+    const navigate = useNavigate();
     const colorMap = useMemo(
         () => buildChartColorMap(
             (data || []).map((item) => item.category),
@@ -42,6 +45,14 @@ export default function GradeDistributionChart({ data, loading }) {
             </Paper>
         );
     }
+
+    const handleBarClick = (entry) => {
+        if (!entry?.category) {
+            return;
+        }
+        const grade = String(entry.category).replace(/^Grade\s+/i, "").trim();
+        navigate(buildEmployeeListUrl({ grade: grade || entry.category }));
+    };
 
     return (
         <Paper sx={{ p: 3, borderRadius: 2, height: "100%" }}>
@@ -79,6 +90,8 @@ export default function GradeDistributionChart({ data, loading }) {
                             dataKey="count"
                             radius={[4, 4, 0, 0]}
                             maxBarSize={56}
+                            cursor="pointer"
+                            onClick={handleBarClick}
                         >
                             {data.map((entry) => (
                                 <Cell

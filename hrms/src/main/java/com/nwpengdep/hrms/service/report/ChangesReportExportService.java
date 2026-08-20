@@ -111,6 +111,13 @@ public class ChangesReportExportService {
                 );
             }
 
+            ReportSignatureBlock.addExcelRows(
+                    sheet,
+                    workbook,
+                    rowIdx - 1,
+                    5
+            );
+
             workbook.write(out);
             return out.toByteArray();
         } catch (Exception e) {
@@ -172,6 +179,9 @@ public class ChangesReportExportService {
             }
 
             document.add(table);
+            document.add(ReportSignatureBlock.pdfTable(
+                    FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10)
+            ));
             document.close();
             return out.toByteArray();
         } catch (Exception e) {

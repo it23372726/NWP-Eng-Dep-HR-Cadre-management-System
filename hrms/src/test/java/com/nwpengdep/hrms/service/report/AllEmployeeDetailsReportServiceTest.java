@@ -6,6 +6,8 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -19,11 +21,24 @@ import com.nwpengdep.hrms.repository.EmployeeRepository;
 @ExtendWith(MockitoExtension.class)
 class AllEmployeeDetailsReportServiceTest {
 
+    private static final String PRIMARY_DEPARTMENT =
+            "NWP Engineering Department";
+
     @Mock
     private EmployeeRepository employeeRepository;
 
     @InjectMocks
     private AllEmployeeDetailsReportService reportService;
+
+    @BeforeEach
+    void configurePrimaryDepartment() {
+        DepartmentConstants.setPrimaryDepartmentName(PRIMARY_DEPARTMENT);
+    }
+
+    @AfterEach
+    void clearPrimaryDepartment() {
+        DepartmentConstants.setPrimaryDepartmentName(null);
+    }
 
     @Test
     void generateReportIncludesOnlyEmployeesCurrentlyInNwpDepartment() {
@@ -31,7 +46,7 @@ class AllEmployeeDetailsReportServiceTest {
                 .id(1L)
                 .employeeNo("101")
                 .fullName("NWP Staff")
-                .currentDepartment(DepartmentConstants.NWP_ENGINEERING)
+                .currentDepartment(PRIMARY_DEPARTMENT)
                 .build();
         Employee otherDepartmentEmployee = Employee.builder()
                 .id(2L)

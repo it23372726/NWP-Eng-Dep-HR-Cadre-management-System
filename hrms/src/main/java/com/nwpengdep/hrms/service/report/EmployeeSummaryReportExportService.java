@@ -122,6 +122,9 @@ public class EmployeeSummaryReportExportService {
             }
 
             document.add(historyTable);
+            document.add(ReportSignatureBlock.pdfTable(
+                    FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10)
+            ));
             document.close();
             return out.toByteArray();
         } catch (Exception e) {

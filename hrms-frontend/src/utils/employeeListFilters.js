@@ -6,13 +6,23 @@ import {
     EMPLOYEE_TYPE_FILTER_OPTIONS,
     getEmploymentTypeLabel,
     isTrainingEmployee,
+    resolveEmployeeDesignationName,
     resolveEmployeeService,
     NON_PERMANENT_EMPLOYMENT_FILTER_VALUES,
     PERMANENT_TRACK_FILTER_VALUES,
     GRADE_PROMOTION_FILTER_OPTIONS,
     RETIREMENT_FILTER_OPTIONS,
-    QUALIFICATION_FILTER_OPTIONS
+    QUALIFICATION_FILTER_OPTIONS,
+    GRADES
 } from "../constants/hrms";
+
+export const INCREMENT_STATUS_FILTER_OPTIONS = [
+    { value: "", label: "All" },
+    { value: "PENDING", label: "Pending salary increments" },
+    { value: "UPCOMING", label: "Upcoming salary increments" }
+];
+
+const GRADE_FILTER_ORDER = GRADES.filter((grade) => grade !== "None");
 
 const PERMANENT_REQUIREMENT_TYPES = ["CUSTOM_PERMANENT_REQUIREMENT"];
 const GRADE2_REQUIREMENT_TYPES = ["CUSTOM_GRADE_2_REQUIREMENT"];
@@ -126,6 +136,115 @@ export function matchesOfficeFilter(employee, office) {
     }
 
     return employeeOffice.toLowerCase() === office.toLowerCase();
+}
+
+function equalsIgnoreCase(left, right) {
+    if (!left || !right) {
+        return false;
+    }
+    return String(left).toLowerCase() === String(right).toLowerCase();
+}
+
+export function resolveEmployeeServiceLabel(employee) {
+    const service = resolveEmployeeService(employee);
+    if (!service) {
+        return null;
+    }
+    const code = service.serviceCode?.trim();
+    if (code) {
+        return code;
+    }
+    return service.description?.trim() || null;
+}
+
+export function matchesDesignationFilter(employee, designation) {
+    if (!designation) {
+        return true;
+    }
+    const name = resolveEmployeeDesignationName(employee);
+    return equalsIgnoreCase(name, designation);
+}
+
+export function matchesServiceFilter(employee, service) {
+    if (!service) {
+        return true;
+    }
+    return equalsIgnoreCase(resolveEmployeeServiceLabel(employee), service);
+}
+
+export function matchesServiceLevelFilter(employee, serviceLevel) {
+    if (!serviceLevel) {
+        return true;
+    }
+    return equalsIgnoreCase(employee?.serviceLevel?.levelName, serviceLevel);
+}
+
+export function matchesGradeFilter(employee, grade) {
+    if (!grade) {
+        return true;
+    }
+
+    const employeeGrade = employee?.grade;
+    if (!employeeGrade || employeeGrade === "None" || employeeGrade === "NONE") {
+        return false;
+    }
+
+    const normalized = String(employeeGrade).replace(/^Grade\s+/i, "").trim();
+    return equalsIgnoreCase(normalized, grade)
+        || equalsIgnoreCase(employeeGrade, grade)
+        || equalsIgnoreCase(`Grade ${normalized}`, grade);
+}
+
+function uniqueSortedLabels(values) {
+    return [...new Set(values.filter(Boolean))]
+        .sort((left, right) => left.localeCompare(right, undefined, {
+            sensitivity: "base",
+            numeric: true
+        }));
+}
+
+export function deriveEmployeeFilterOptions(employees = [], { districtFilter = "" } = {}) {
+    const designationOptions = uniqueSortedLabels(
+        employees.map((employee) => resolveEmployeeDesignationName(employee))
+    ).map((value) => ({ value, label: value }));
+
+    const serviceOptions = uniqueSortedLabels(
+        employees.map((employee) => resolveEmployeeServiceLabel(employee))
+    ).map((value) => ({ value, label: value }));
+
+    const serviceLevelOptions = uniqueSortedLabels(
+        employees.map((employee) => employee?.serviceLevel?.levelName)
+    ).map((value) => ({ value, label: value }));
+
+    const gradeValues = uniqueSortedLabels(
+        employees
+            .map((employee) => {
+                const grade = employee?.grade;
+                if (!grade || grade === "None" || grade === "NONE") {
+                    return null;
+                }
+                return String(grade).replace(/^Grade\s+/i, "").trim();
+            })
+    );
+    const gradeOptions = [
+        ...GRADE_FILTER_ORDER.filter((grade) => gradeValues.includes(grade)),
+        ...gradeValues.filter((grade) => !GRADE_FILTER_ORDER.includes(grade))
+    ].map((value) => ({ value, label: value }));
+
+    const officesInScope = employees.filter((employee) =>
+        matchesDistrictFilter(employee, districtFilter)
+    );
+    const officeOptions = uniqueSortedLabels(
+        officesInScope.map((employee) => resolveEmployeeOffice(employee))
+    ).map((value) => ({ value, label: value }));
+
+    return {
+        designationOptions,
+        serviceOptions,
+        serviceLevelOptions,
+        gradeOptions,
+        officeOptions
+    };
 }
 
 export function matchesQualificationFilter(employee, filterValue) {
@@ -266,6 +385,10 @@ export function filterActiveEmployees(
         retiringWithinMonths = "",
         districtFilter = "",
         officeFilter = "",
+        designationFilter = "",
+        serviceFilter = "",
+        serviceLevelFilter = "",
+        gradeFilter = "",
         qualificationFilter = "",
         incrementStatusFilter = "",
         privateVehicleFilter = ""
@@ -295,6 +418,22 @@ export function filterActiveEmployees(
         }
 
         if (!matchesOfficeFilter(employee, officeFilter)) {
+            return false;
+        }
+
+        if (!matchesDesignationFilter(employee, designationFilter)) {
+            return false;
+        }
+
+        if (!matchesServiceFilter(employee, serviceFilter)) {
+            return false;
+        }
+
+        if (!matchesServiceLevelFilter(employee, serviceLevelFilter)) {
+            return false;
+        }
+
+        if (!matchesGradeFilter(employee, gradeFilter)) {
             return false;
         }
 
@@ -330,6 +469,10 @@ export function hasActiveEmployeeFilters({
     retiringWithinMonths = "",
     districtFilter = "",
     officeFilter = "",
+    designationFilter = "",
+    serviceFilter = "",
+    serviceLevelFilter = "",
+    gradeFilter = "",
     qualificationFilter = "",
     incrementStatusFilter = "",
     privateVehicleFilter = ""
@@ -341,6 +484,10 @@ export function hasActiveEmployeeFilters({
         || Boolean(retiringWithinMonths)
         || Boolean(districtFilter)
         || Boolean(officeFilter)
+        || Boolean(designationFilter)
+        || Boolean(serviceFilter)
+        || Boolean(serviceLevelFilter)
+        || Boolean(gradeFilter)
         || Boolean(qualificationFilter)
         || Boolean(incrementStatusFilter)
         || Boolean(privateVehicleFilter);
@@ -393,10 +540,10 @@ export function getActiveFilterLabels(filterState) {
         && filterState.permanentStatusFilter !== "ALL") {
         labels.push({
             key: "permanentStatus",
-            label: findOptionLabel(
+            label: `Permanent status: ${findOptionLabel(
                 EMPLOYEE_TYPE_FILTER_OPTIONS,
                 filterState.permanentStatusFilter
-            )
+            )}`
         });
     }
     if (filterState.gradePromotionFilter
@@ -430,6 +577,30 @@ export function getActiveFilterLabels(filterState) {
             label: `Office: ${filterState.officeFilter}`
         });
     }
+    if (filterState.designationFilter) {
+        labels.push({
+            key: "designation",
+            label: `Designation: ${filterState.designationFilter}`
+        });
+    }
+    if (filterState.serviceFilter) {
+        labels.push({
+            key: "service",
+            label: `Service: ${filterState.serviceFilter}`
+        });
+    }
+    if (filterState.serviceLevelFilter) {
+        labels.push({
+            key: "serviceLevel",
+            label: `Service level: ${filterState.serviceLevelFilter}`
+        });
+    }
+    if (filterState.gradeFilter) {
+        labels.push({
+            key: "grade",
+            label: `Grade: ${filterState.gradeFilter}`
+        });
+    }
     if (filterState.qualificationFilter) {
         labels.push({
             key: "qualification",
@@ -439,16 +610,13 @@ export function getActiveFilterLabels(filterState) {
             )
         });
     }
-    if (filterState.incrementStatusFilter === "PENDING") {
+    if (filterState.incrementStatusFilter) {
         labels.push({
             key: "incrementStatus",
-            label: "Pending salary increments"
-        });
-    }
-    if (filterState.incrementStatusFilter === "UPCOMING") {
-        labels.push({
-            key: "incrementStatus",
-            label: "Upcoming salary increments"
+            label: findOptionLabel(
+                INCREMENT_STATUS_FILTER_OPTIONS,
+                filterState.incrementStatusFilter
+            )
         });
     }
     if (filterState.privateVehicleFilter) {
@@ -459,4 +627,252 @@ export function getActiveFilterLabels(filterState) {
     }
 
     return labels;
+}
+
+export const EMPTY_EMPLOYEE_FILTER_STATE = {
+    searchTerm: "",
+    permanentStatusFilter: "ALL",
+    employmentTypeFilter: "",
+    gradePromotionFilter: "ALL",
+    retiringWithinMonths: "",
+    districtFilter: "",
+    officeFilter: "",
+    designationFilter: "",
+    serviceFilter: "",
+    serviceLevelFilter: "",
+    gradeFilter: "",
+    qualificationFilter: "",
+    incrementStatusFilter: "",
+    privateVehicleFilter: ""
+};
+
+function isReportPlaceholder(value) {
+    if (value === null || value === undefined) {
+        return true;
+    }
+    const text = String(value).trim();
+    return !text || text === "—";
+}
+
+const NATURE_TO_EMPLOYMENT_TYPE = {
+    Permanent: "PERMANENT",
+    Acting: "ACTING",
+    Contract: "CONTRACT",
+    Casual: "CASUAL",
+    Substitute: "SUBSTITUTE",
+    Training: "TRAINING"
+};
+
+export function resolveReportRowOffice(row) {
+    return resolveEmployeeOffice({
+        currentOffice: null,
+        currentWorkingPlace: isReportPlaceholder(row?.currentWorkingPlace)
+            ? null
+            : row.currentWorkingPlace
+    });
+}
+
+export function resolveReportRowEmploymentType(row) {
+    if (isReportPlaceholder(row?.natureOfAppointment)) {
+        return null;
+    }
+    return NATURE_TO_EMPLOYMENT_TYPE[row.natureOfAppointment] || null;
+}
+
+export function deriveReportFilterOptions(rows = [], { districtFilter = "" } = {}) {
+    const usable = (value) => (isReportPlaceholder(value) ? null : String(value).trim());
+
+    const designationOptions = uniqueSortedLabels(
+        rows.map((row) => usable(row.designation))
+    ).map((value) => ({ value, label: value }));
+
+    const serviceOptions = uniqueSortedLabels(
+        rows.map((row) => usable(row.service))
+    ).map((value) => ({ value, label: value }));
+
+    const serviceLevelOptions = uniqueSortedLabels(
+        rows.map((row) => usable(row.serviceCategory))
+    ).map((value) => ({ value, label: value }));
+
+    const gradeValues = uniqueSortedLabels(
+        rows.map((row) => {
+            const grade = usable(row.grade);
+            if (!grade || grade === "None" || grade === "NONE") {
+                return null;
+            }
+            return String(grade).replace(/^Grade\s+/i, "").trim();
+        })
+    );
+    const gradeOptions = [
+        ...GRADE_FILTER_ORDER.filter((grade) =>
+            gradeValues.some((value) => equalsIgnoreCase(value, grade))
+        ),
+        ...gradeValues.filter((grade) =>
+            !GRADE_FILTER_ORDER.some((known) => equalsIgnoreCase(known, grade))
+        )
+    ].map((value) => ({ value, label: value }));
+
+    const officesInScope = rows.filter((row) => {
+        if (!districtFilter) {
+            return true;
+        }
+        if (isReportPlaceholder(row.currentDistrictOfWorking)) {
+            return false;
+        }
+        return equalsIgnoreCase(row.currentDistrictOfWorking, districtFilter);
+    });
+    const officeOptions = uniqueSortedLabels(
+        officesInScope.map((row) => resolveReportRowOffice(row))
+    ).map((value) => ({ value, label: value }));
+
+    return {
+        designationOptions,
+        serviceOptions,
+        serviceLevelOptions,
+        gradeOptions,
+        officeOptions
+    };
+}
+
+function matchesReportSearch(row, searchTerm) {
+    if (!searchTerm?.trim()) {
+        return true;
+    }
+
+    const term = searchTerm.toLowerCase().trim();
+    const fields = [
+        row.serialNo,
+        row.employeeName,
+        row.nic,
+        row.designation,
+        row.serviceCategory,
+        row.service,
+        row.grade,
+        row.natureOfAppointment,
+        row.currentWorkingPlace,
+        row.currentDistrictOfWorking,
+        row.contactNo
+    ];
+
+    return fields.some((field) => {
+        if (isReportPlaceholder(field)) {
+            return false;
+        }
+        return String(field).toLowerCase().includes(term);
+    });
+}
+
+export function filterAllEmployeeDetailsReportRows(rows = [], filterState = {}) {
+    const {
+        searchTerm = "",
+        employmentTypeFilter = "",
+        retiringWithinMonths = "",
+        districtFilter = "",
+        officeFilter = "",
+        designationFilter = "",
+        serviceFilter = "",
+        serviceLevelFilter = "",
+        gradeFilter = ""
+    } = filterState;
+
+    return rows.filter((row) => {
+        if (employmentTypeFilter) {
+            const employmentType = resolveReportRowEmploymentType(row);
+            if (employmentTypeFilter === "TRAINING") {
+                if (employmentType !== "TRAINING") {
+                    return false;
+                }
+            } else if (employmentType !== employmentTypeFilter) {
+                return false;
+            }
+        }
+
+        if (!matchesRetiringWithin(
+            { dateOfBirth: row.dateOfBirth },
+            retiringWithinMonths
+        )) {
+            return false;
+        }
+
+        if (districtFilter) {
+            if (isReportPlaceholder(row.currentDistrictOfWorking)
+                || !equalsIgnoreCase(row.currentDistrictOfWorking, districtFilter)) {
+                return false;
+            }
+        }
+
+        if (officeFilter) {
+            const office = resolveReportRowOffice(row);
+            if (!office || !equalsIgnoreCase(office, officeFilter)) {
+                return false;
+            }
+        }
+
+        if (designationFilter) {
+            if (isReportPlaceholder(row.designation)
+                || !equalsIgnoreCase(row.designation, designationFilter)) {
+                return false;
+            }
+        }
+
+        if (serviceFilter) {
+            if (isReportPlaceholder(row.service)
+                || !equalsIgnoreCase(row.service, serviceFilter)) {
+                return false;
+            }
+        }
+
+        if (serviceLevelFilter) {
+            if (isReportPlaceholder(row.serviceCategory)
+                || !equalsIgnoreCase(row.serviceCategory, serviceLevelFilter)) {
+                return false;
+            }
+        }
+
+        if (gradeFilter) {
+            if (isReportPlaceholder(row.grade)
+                || !matchesGradeFilter({ grade: row.grade }, gradeFilter)) {
+                return false;
+            }
+        }
+
+        return matchesReportSearch(row, searchTerm);
+    });
+}
+
+export function hasActiveReportFilters(filterState = {}) {
+    return Boolean(filterState.searchTerm?.trim())
+        || Boolean(filterState.employmentTypeFilter)
+        || Boolean(filterState.retiringWithinMonths)
+        || Boolean(filterState.districtFilter)
+        || Boolean(filterState.officeFilter)
+        || Boolean(filterState.designationFilter)
+        || Boolean(filterState.serviceFilter)
+        || Boolean(filterState.serviceLevelFilter)
+        || Boolean(filterState.gradeFilter);
+}
+
+export function getActiveReportFilterLabels(filterState = {}) {
+    return getActiveFilterLabels({
+        ...EMPTY_EMPLOYEE_FILTER_STATE,
+        ...filterState,
+        permanentStatusFilter: "ALL",
+        gradePromotionFilter: "ALL",
+        qualificationFilter: "",
+        incrementStatusFilter: "",
+        privateVehicleFilter: ""
+    });
+}
+
+export function buildAllEmployeeDetailsReportTitle(filterState = {}) {
+    const baseTitle = "ALL EMPLOYEE DETAILS REPORT";
+    const labels = getActiveReportFilterLabels(filterState)
+        .map((filter) => filter.label)
+        .filter(Boolean);
+
+    if (labels.length === 0) {
+        return baseTitle;
+    }
+
+    return `${baseTitle}\n${labels.join(", ")}`;
 }

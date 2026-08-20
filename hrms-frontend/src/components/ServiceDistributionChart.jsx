@@ -1,6 +1,8 @@
 import { Paper, Typography, Box, Skeleton, Alert } from "@mui/material";
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { useNavigate } from "react-router-dom";
 import { CHART_HEIGHT, buildServiceChartColorMap } from "../constants/dashboardTheme";
+import { buildEmployeeListUrl } from "../utils/dashboardNavigation";
 
 const renderLegend = (props) => {
     const { payload } = props;
@@ -81,6 +83,8 @@ const renderLabel = (entry, totalEmployees) => {
 };
 
 export default function ServiceDistributionChart({ data, loading }) {
+    const navigate = useNavigate();
+
     if (loading) {
         return (
             <Paper sx={{ p: 3, borderRadius: 2 }}>
@@ -118,6 +122,12 @@ export default function ServiceDistributionChart({ data, loading }) {
         fill: colorMap.get(item.category)
     }));
 
+    const handleSliceClick = (entry) => {
+        if (entry?.category) {
+            navigate(buildEmployeeListUrl({ service: entry.category }));
+        }
+    };
+
     return (
         <Paper sx={{ p: 3, borderRadius: 2, height: "100%" }}>
             <Typography variant="h6" sx={{ mb: 3, fontWeight: 700 }}>
@@ -143,6 +153,8 @@ export default function ServiceDistributionChart({ data, loading }) {
                             strokeWidth={2}
                             label={(entry) => renderLabel(entry, totalEmployees)}
                             labelLine
+                            onClick={handleSliceClick}
+                            style={{ cursor: "pointer" }}
                         >
                             {chartData.map((entry, index) => (
                                 <Cell
