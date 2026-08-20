@@ -18,6 +18,11 @@ public final class ReportSignatureBlock {
     public static final String PREPARED_BY = "Prepared By:";
     public static final String CHECKED_BY = "Checked By:";
 
+    /**
+     * Default system identity shown under Prepared By on Cadre exports.
+     */
+    public static final String DEFAULT_SYSTEM_NAME = "HR Cadre Management System";
+
     private ReportSignatureBlock() {
     }
 
@@ -27,15 +32,41 @@ public final class ReportSignatureBlock {
             int lastTableRow,
             int checkedByColumn
     ) {
-        org.apache.poi.ss.usermodel.Font font = workbook.createFont();
-        font.setBold(true);
-        font.setFontName("Calibri");
-        font.setFontHeightInPoints((short) 10);
+        addExcelRows(
+                sheet,
+                workbook,
+                lastTableRow,
+                checkedByColumn,
+                DEFAULT_SYSTEM_NAME
+        );
+    }
 
-        CellStyle style = workbook.createCellStyle();
-        style.setFont(font);
-        style.setAlignment(HorizontalAlignment.LEFT);
-        style.setVerticalAlignment(VerticalAlignment.CENTER);
+    public static void addExcelRows(
+            Sheet sheet,
+            Workbook workbook,
+            int lastTableRow,
+            int checkedByColumn,
+            String preparedByName
+    ) {
+        org.apache.poi.ss.usermodel.Font labelFont = workbook.createFont();
+        labelFont.setBold(true);
+        labelFont.setFontName("Calibri");
+        labelFont.setFontHeightInPoints((short) 10);
+
+        org.apache.poi.ss.usermodel.Font valueFont = workbook.createFont();
+        valueFont.setBold(false);
+        valueFont.setFontName("Calibri");
+        valueFont.setFontHeightInPoints((short) 10);
+
+        CellStyle labelStyle = workbook.createCellStyle();
+        labelStyle.setFont(labelFont);
+        labelStyle.setAlignment(HorizontalAlignment.LEFT);
+        labelStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+
+        CellStyle valueStyle = workbook.createCellStyle();
+        valueStyle.setFont(valueFont);
+        valueStyle.setAlignment(HorizontalAlignment.LEFT);
+        valueStyle.setVerticalAlignment(VerticalAlignment.CENTER);
 
         int labelRowIdx = lastTableRow + 2;
         Row labels = sheet.createRow(labelRowIdx);
@@ -43,22 +74,38 @@ public final class ReportSignatureBlock {
 
         Cell prepared = labels.createCell(0);
         prepared.setCellValue(PREPARED_BY);
-        prepared.setCellStyle(style);
+        prepared.setCellStyle(labelStyle);
 
         Cell checked = labels.createCell(checkedByColumn);
         checked.setCellValue(CHECKED_BY);
-        checked.setCellStyle(style);
+        checked.setCellStyle(labelStyle);
 
         Row nameRow = sheet.createRow(labelRowIdx + 1);
         nameRow.setHeightInPoints(24f);
-        nameRow.createCell(0).setCellStyle(style);
-        nameRow.createCell(checkedByColumn).setCellStyle(style);
+
+        Cell preparedName = nameRow.createCell(0);
+        preparedName.setCellValue(resolvePreparedByName(preparedByName));
+        preparedName.setCellStyle(valueStyle);
+
+        Cell checkedName = nameRow.createCell(checkedByColumn);
+        checkedName.setCellValue("");
+        checkedName.setCellStyle(valueStyle);
     }
 
     public static PdfPTable pdfTable(
             com.lowagie.text.Font font,
             float totalWidth,
             float preparedWidth
+    ) throws com.lowagie.text.DocumentException {
+        return pdfTable(font, font, totalWidth, preparedWidth, DEFAULT_SYSTEM_NAME);
+    }
+
+    public static PdfPTable pdfTable(
+            com.lowagie.text.Font labelFont,
+            com.lowagie.text.Font valueFont,
+            float totalWidth,
+            float preparedWidth,
+            String preparedByName
     ) throws com.lowagie.text.DocumentException {
         PdfPTable table = new PdfPTable(2);
         table.setTotalWidth(totalWidth);
@@ -67,29 +114,45 @@ public final class ReportSignatureBlock {
                 preparedWidth,
                 Math.max(40f, totalWidth - preparedWidth)
         });
-        fillSignatureCells(table, font);
+        fillSignatureCells(table, labelFont, valueFont, preparedByName);
         return table;
     }
 
     public static PdfPTable pdfTable(com.lowagie.text.Font font)
             throws com.lowagie.text.DocumentException {
+        return pdfTable(font, DEFAULT_SYSTEM_NAME);
+    }
+
+    public static PdfPTable pdfTable(
+            com.lowagie.text.Font font,
+            String preparedByName
+    ) throws com.lowagie.text.DocumentException {
         PdfPTable table = new PdfPTable(2);
         table.setWidthPercentage(100);
         table.setWidths(new float[]{38f, 62f});
-        fillSignatureCells(table, font);
+        fillSignatureCells(table, font, font, preparedByName);
         return table;
     }
 
     private static void fillSignatureCells(
             PdfPTable table,
-            com.lowagie.text.Font font
+            com.lowagie.text.Font labelFont,
+            com.lowagie.text.Font valueFont,
+            String preparedByName
     ) {
         table.setSpacingBefore(18f);
         table.setSpacingAfter(0f);
-        table.addCell(labelCell(PREPARED_BY, font, 20f));
-        table.addCell(labelCell(CHECKED_BY, font, 20f));
-        table.addCell(labelCell(" ", font, 24f));
-        table.addCell(labelCell(" ", font, 24f));
+        table.addCell(labelCell(PREPARED_BY, labelFont, 20f));
+        table.addCell(labelCell(CHECKED_BY, labelFont, 20f));
+        table.addCell(labelCell(resolvePreparedByName(preparedByName), valueFont, 24f));
+        table.addCell(labelCell(" ", valueFont, 24f));
+    }
+
+    private static String resolvePreparedByName(String preparedByName) {
+        if (preparedByName == null || preparedByName.isBlank()) {
+            return DEFAULT_SYSTEM_NAME;
+        }
+        return preparedByName.trim();
     }
 
     private static PdfPCell labelCell(

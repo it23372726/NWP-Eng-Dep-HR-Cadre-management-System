@@ -1,8 +1,12 @@
 import {
     Box,
     Button,
+    CircularProgress,
     Container,
+    Dialog,
+    DialogContent,
     FormControl,
+    IconButton,
     InputLabel,
     MenuItem,
     Paper,
@@ -13,9 +17,12 @@ import {
     TableCell,
     TableHead,
     TableRow,
+    Tooltip,
     Typography,
-    CircularProgress
 } from "@mui/material";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
+import FullscreenRoundedIcon from "@mui/icons-material/FullscreenRounded";
+import PrintRoundedIcon from "@mui/icons-material/PrintRounded";
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 
@@ -23,15 +30,15 @@ import {
     generateChangesReport,
     downloadChangesReportExcel,
     downloadChangesReportPdf,
+    printPdfBlob,
     triggerDownload
 } from "../services/changesReportService";
 import ResponsiveTableContainer from "../components/ResponsiveTableContainer";
-import ReportSignatureBlock from "../components/ReportSignatureBlock";
-import { formatCadreDate, formatDisplayDate } from "./CadreReportPage";
+import { formatDisplayDate } from "./CadreReportPage";
 import {
     getApiErrorMessage,
+    getPrimaryDepartmentName,
     getReportHeaderSubtitle,
-    getReportHeaderUppercase
 } from "../constants/hrms";
 
 const STORAGE_KEY = "hrms.changesReport.state.v1";
@@ -63,11 +70,20 @@ const COLUMNS = [
 
 const headerCellSx = {
     fontWeight: 700,
+    fontSize: "0.7rem",
+    bgcolor: "grey.200",
+    backgroundClip: "padding-box",
+    border: "0.5px solid #94A3B8",
+    whiteSpace: "nowrap",
+    verticalAlign: "middle",
+    textAlign: "center"
+};
+
+const cellSx = {
     fontSize: "0.75rem",
-    bgcolor: "#C0C0C0",
-    border: "1px solid #000",
-    color: "#000",
-    whiteSpace: "normal"
+    border: "1px solid",
+    borderColor: "divider",
+    whiteSpace: "nowrap"
 };
 
 const YEAR_SELECT_MENU_PROPS = {
@@ -110,12 +126,79 @@ function normalizeYear(value, yearOptions) {
         : new Date().getFullYear();
 }
 
+function ChangesReportTable({ rows }) {
+    return (
+        <Table stickyHeader size="small">
+            <TableHead
+                sx={{
+                    position: "sticky",
+                    top: 0,
+                    zIndex: 3,
+                    bgcolor: "grey.200",
+                    boxShadow: (theme) => `0 1px 0 0 ${theme.palette.divider}`,
+                    "& th": {
+                        position: "static",
+                        bgcolor: "grey.200",
+                        backgroundClip: "padding-box",
+                        border: "0.5px solid #94A3B8 !important"
+                    }
+                }}
+            >
+                <TableRow>
+                    {COLUMNS.map((col) => (
+                        <TableCell
+                            key={col.key}
+                            align={col.align}
+                            sx={headerCellSx}
+                        >
+                            {col.label}
+                        </TableCell>
+                    ))}
+                </TableRow>
+            </TableHead>
+            <TableBody>
+                {rows.length ? (
+                    rows.map((row) => (
+                        <TableRow
+                            key={`${row.serialNo}-${row.nic}-${row.actionDate}`}
+                            sx={{ "& td": cellSx }}
+                        >
+                            {COLUMNS.map((col) => (
+                                <TableCell
+                                    key={col.key}
+                                    align={col.align}
+                                >
+                                    {col.key === "actionDate"
+                                        ? formatDisplayDate(row.actionDate) || "—"
+                                        : row[col.key] ?? "—"}
+                                </TableCell>
+                            ))}
+                        </TableRow>
+                    ))
+                ) : (
+                    <TableRow>
+                        <TableCell
+                            colSpan={COLUMNS.length}
+                            align="center"
+                            sx={{ ...cellSx, py: 4 }}
+                        >
+                            No changes recorded for this period.
+                        </TableCell>
+                    </TableRow>
+                )}
+            </TableBody>
+        </Table>
+    );
+}
+
 export default function ChangesReportPage() {
     const now = new Date();
     const [year, setYear] = useState(now.getFullYear());
     const [month, setMonth] = useState(now.getMonth() + 1);
     const [report, setReport] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [printing, setPrinting] = useState(false);
+    const [fullScreenOpen, setFullScreenOpen] = useState(false);
 
     const yearOptions = useMemo(() => buildYearOptions(), []);
 
@@ -155,6 +238,8 @@ export default function ChangesReportPage() {
         ? `${report.monthLabel} ${report.year}`
         : `${MONTH_OPTIONS.find((item) => item.value === month)?.label ?? ""} ${year}`;
 
+    const reportRows = report?.rows || [];
+
     const handleGenerate = async () => {
         setLoading(true);
 
@@ -190,9 +275,25 @@ export default function ChangesReportPage() {
         }
     };
 
+    const handlePrint = async () => {
+        setPrinting(true);
+        try {
+            const blob = await downloadChangesReportPdf(year, month);
+            await printPdfBlob(blob);
+        } catch (error) {
+            if (error?.code === "POPUP_BLOCKED") {
+                toast.error("Allow pop-ups to print the PDF");
+            } else {
+                toast.error(getApiErrorMessage(error));
+            }
+        } finally {
+            setPrinting(false);
+        }
+    };
+
     return (
         <Container maxWidth={false} className="changes-report-page" sx={{ pb: 4 }}>
-            <Box className="changes-report-header no-print" sx={{ mb: 3 }}>
+            <Box sx={{ mb: 3 }}>
                 <Typography variant="h4" gutterBottom>
                     Changes Report
                 </Typography>
@@ -201,7 +302,7 @@ export default function ChangesReportPage() {
                 </Typography>
             </Box>
 
-            <Paper sx={{ p: 2, mb: 3 }} className="no-print">
+            <Paper sx={{ p: 2, mb: 3 }}>
                 <Stack
                     direction={{ xs: "column", sm: "row" }}
                     spacing={2}
@@ -246,9 +347,8 @@ export default function ChangesReportPage() {
                     <Stack
                         direction="row"
                         spacing={1}
-
                         useFlexGap
-                        sx={{flexWrap: "wrap",  width: { xs: "100%", sm: "auto" } }}
+                        sx={{ flexWrap: "wrap", width: { xs: "100%", sm: "auto" } }}
                     >
                         <Button
                             variant="contained"
@@ -260,23 +360,23 @@ export default function ChangesReportPage() {
                         <Button
                             variant="outlined"
                             onClick={handleExportExcel}
-                            disabled={!report || loading}
+                            disabled={!report || loading || printing}
                         >
                             Export Excel
                         </Button>
                         <Button
                             variant="outlined"
                             onClick={handleExportPdf}
-                            disabled={!report || loading}
+                            disabled={!report || loading || printing}
                         >
                             Export PDF
                         </Button>
                         <Button
                             variant="text"
-                            onClick={() => window.print()}
-                            disabled={!report}
+                            onClick={handlePrint}
+                            disabled={!report || loading || printing}
                         >
-                            Print
+                            {printing ? "Preparing print…" : "Print"}
                         </Button>
                     </Stack>
                 </Stack>
@@ -289,202 +389,191 @@ export default function ChangesReportPage() {
             )}
 
             {report && !loading && (
-                <Paper
-                    sx={{
-                        p: 2,
-                        "@media print": {
-                            p: 0,
-                            boxShadow: "none",
-                            border: "none",
-                            bgcolor: "transparent"
-                        }
-                    }}
-                    className="changes-report-print-area"
-                    id="changes-report-print"
-                >
-                    <Box sx={{ mb: 2 }} className="changes-print-letterhead">
-                        <Typography
-                            align="center"
-                            sx={{
-                                fontWeight: 700,
-                                fontFamily: "Calibri, Carlito, Arial, sans-serif"
-                            }}
-                        >
-                            {getReportHeaderUppercase()}
+                <Paper sx={{ p: 2 }}>
+                    <Box
+                        sx={{
+                            mb: 2,
+                            position: "relative",
+                            pr: { sm: 16 }
+                        }}
+                    >
+                        <Typography variant="h6" align="center">
+                            Changes Report — {getPrimaryDepartmentName()}
                         </Typography>
-                        <Typography
-                            align="center"
-                            sx={{
-                                fontWeight: 700,
-                                fontFamily: "Calibri, Carlito, Arial, sans-serif"
-                            }}
-                        >
-                            CHANGES REPORT
-                        </Typography>
-                        <Typography
-                            align="center"
-                            sx={{
-                                fontWeight: 700,
-                                fontFamily: "Calibri, Carlito, Arial, sans-serif"
-                            }}
-                        >
+                        <Typography variant="body2" align="center">
                             Period: {periodLabel}
                         </Typography>
-                        <Typography
-                            align="center"
+                        <Typography variant="body2" align="center">
+                            Total Changes: {report.totalCount ?? reportRows.length}
+                        </Typography>
+                        <Typography variant="caption" align="center" sx={{ display: "block" }}>
+                            Generated:{" "}
+                            {new Date(report.generatedAt).toLocaleString()}
+                        </Typography>
+                        <Button
+                            variant="outlined"
+                            size="small"
+                            startIcon={<FullscreenRoundedIcon />}
+                            onClick={() => setFullScreenOpen(true)}
                             sx={{
-                                fontWeight: 700,
-                                fontFamily: "Calibri, Carlito, Arial, sans-serif"
+                                mt: { xs: 1.5, sm: 0 },
+                                mx: { xs: "auto", sm: 0 },
+                                display: "flex",
+                                position: { sm: "absolute" },
+                                right: { sm: 0 },
+                                top: { sm: 0 }
                             }}
                         >
-                            Total Changes: {report.totalCount ?? report.rows?.length ?? 0}
-                        </Typography>
-                        <Typography
-                            align="center"
-                            sx={{
-                                fontWeight: 700,
-                                fontFamily: "Calibri, Carlito, Arial, sans-serif"
-                            }}
-                        >
-                            Generated: {formatCadreDate(String(report.generatedAt || "").slice(0, 10))}
-                        </Typography>
+                            Full screen
+                        </Button>
                     </Box>
 
                     <ResponsiveTableContainer
-                        showScrollHint={false}
                         tableMinWidth={1000}
                         sx={{
                             maxHeight: "70vh",
-                            border: "none",
-                            "@media print": {
-                                maxHeight: "none",
-                                overflow: "visible"
-                            }
+                            overflow: "auto",
+                            border: "1px solid",
+                            borderColor: "divider"
                         }}
                     >
-                        <Table stickyHeader size="small" className="changes-print-table">
-                            <TableHead>
-                                <TableRow>
-                                    {COLUMNS.map((col) => (
-                                        <TableCell
-                                            key={col.key}
-                                            align={col.align}
-                                            sx={headerCellSx}
-                                        >
-                                            {col.label}
-                                        </TableCell>
-                                    ))}
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {report.rows?.length ? (
-                                    report.rows.map((row) => (
-                                        <TableRow key={`${row.serialNo}-${row.nic}-${row.actionDate}`}>
-                                            {COLUMNS.map((col) => (
-                                                <TableCell
-                                                    key={col.key}
-                                                    align={col.align}
-                                                    sx={{
-                                                        fontSize: "0.75rem",
-                                                        border: "1px solid #000",
-                                                        color: "#000",
-                                                        whiteSpace: "nowrap"
-                                                    }}
-                                                >
-                                                    {col.key === "actionDate"
-                                                        ? formatDisplayDate(row.actionDate)
-                                                        : row[col.key] ?? "—"}
-                                                </TableCell>
-                                            ))}
-                                        </TableRow>
-                                    ))
-                                ) : (
-                                    <TableRow>
-                                        <TableCell
-                                            colSpan={COLUMNS.length}
-                                            align="center"
-                                            sx={{ py: 4 }}
-                                        >
-                                            No changes recorded for this period.
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
+                        <ChangesReportTable rows={reportRows} />
                     </ResponsiveTableContainer>
-                    <ReportSignatureBlock />
                 </Paper>
             )}
 
             {!report && !loading && (
-                <Paper sx={{ p: 4, textAlign: "center" }} className="no-print">
+                <Paper sx={{ p: 4, textAlign: "center" }}>
                     <Typography color="text.secondary">
                         Select a year and month, then click Generate Report.
                     </Typography>
                 </Paper>
             )}
 
-            <style>{`
-                @media print {
-                    @page {
-                        size: A4 landscape;
-                        margin: 8mm;
+            <Dialog
+                fullScreen
+                open={fullScreenOpen}
+                onClose={() => setFullScreenOpen(false)}
+                aria-labelledby="changes-full-screen-title"
+                slotProps={{
+                    paper: {
+                        sx: {
+                            bgcolor: "grey.50",
+                            backgroundImage: "none"
+                        }
                     }
-                    html, body, #root, #root > div {
-                        background: #fff !important;
-                        height: auto !important;
-                        min-height: 0 !important;
-                        overflow: visible !important;
-                    }
-                    .no-print,
-                    .MuiAppBar-root,
-                    .MuiDrawer-root,
-                    .MuiDrawer-docked,
-                    #_rht_toaster {
-                        display: none !important;
-                    }
-                    .changes-report-print-area {
-                        position: static !important;
-                        width: 100% !important;
-                        box-shadow: none !important;
-                        overflow: visible !important;
-                    }
-                    .changes-report-print-area .MuiTableContainer-root {
-                        overflow: visible !important;
-                        max-height: none !important;
-                    }
-                    .changes-print-letterhead .MuiTypography-root {
-                        font-family: Calibri, Carlito, Arial, sans-serif !important;
-                        color: #000 !important;
-                    }
-                    .changes-print-table {
-                        width: 100% !important;
-                        min-width: 0 !important;
-                        border-collapse: collapse !important;
-                        font-family: Calibri, Carlito, Arial, sans-serif !important;
-                        font-size: 10pt !important;
-                    }
-                    .changes-print-table thead {
-                        display: table-header-group !important;
-                    }
-                    .changes-print-table th {
-                        position: static !important;
-                        background: #C0C0C0 !important;
-                        -webkit-print-color-adjust: exact !important;
-                        print-color-adjust: exact !important;
-                    }
-                    .changes-print-table th,
-                    .changes-print-table td {
-                        border: 0.5pt solid #000 !important;
-                        color: #000 !important;
-                        padding: 2pt 4pt !important;
-                        white-space: normal !important;
-                    }
-                    .report-signature-block {
-                        page-break-inside: avoid !important;
-                    }
-                }
-            `}</style>
+                }}
+            >
+                <Box
+                    component="header"
+                    sx={{
+                        minHeight: 72,
+                        px: { xs: 1.5, sm: 2.5 },
+                        py: 1.25,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 2,
+                        bgcolor: "background.paper",
+                        borderBottom: "1px solid",
+                        borderColor: "divider",
+                        boxShadow: "0 1px 4px rgba(15, 23, 42, 0.08)",
+                        flexShrink: 0,
+                        zIndex: 1
+                    }}
+                >
+                    <Stack
+                        direction="row"
+                        spacing={1.5}
+                        sx={{ alignItems: "center", minWidth: 0 }}
+                    >
+                        <Box
+                            sx={{
+                                width: 40,
+                                height: 40,
+                                display: { xs: "none", sm: "grid" },
+                                placeItems: "center",
+                                borderRadius: 2,
+                                bgcolor: "primary.50",
+                                color: "primary.main",
+                                flexShrink: 0
+                            }}
+                        >
+                            <FullscreenRoundedIcon />
+                        </Box>
+                        <Box sx={{ minWidth: 0 }}>
+                            <Typography
+                                id="changes-full-screen-title"
+                                variant="h6"
+                                noWrap
+                                sx={{ fontWeight: 750, lineHeight: 1.25 }}
+                            >
+                                Changes Report
+                            </Typography>
+                            <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                noWrap
+                                sx={{ display: "block" }}
+                            >
+                                {getPrimaryDepartmentName()} · {periodLabel}
+                            </Typography>
+                        </Box>
+                    </Stack>
+
+                    <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                        <Button
+                            variant="outlined"
+                            size="small"
+                            startIcon={<PrintRoundedIcon />}
+                            onClick={handlePrint}
+                            disabled={printing}
+                            sx={{ display: { xs: "none", sm: "inline-flex" } }}
+                        >
+                            {printing ? "Preparing…" : "Print PDF"}
+                        </Button>
+                        <Tooltip title="Close full screen">
+                            <IconButton
+                                onClick={() => setFullScreenOpen(false)}
+                                aria-label="Close full-screen report"
+                                sx={{
+                                    bgcolor: "action.hover",
+                                    "&:hover": { bgcolor: "action.selected" }
+                                }}
+                            >
+                                <CloseRoundedIcon />
+                            </IconButton>
+                        </Tooltip>
+                    </Stack>
+                </Box>
+
+                <DialogContent
+                    sx={{
+                        p: { xs: 1, sm: 2 },
+                        minHeight: 0,
+                        overflow: "hidden",
+                        display: "flex",
+                        flexDirection: "column"
+                    }}
+                >
+                    <ResponsiveTableContainer
+                        showScrollHint={false}
+                        tableMinWidth={1000}
+                        wrapperSx={{ flex: 1, minHeight: 0 }}
+                        sx={{
+                            height: "100%",
+                            maxHeight: "none",
+                            overflow: "auto",
+                            bgcolor: "background.paper",
+                            border: "1px solid",
+                            borderColor: "divider",
+                            borderRadius: 2
+                        }}
+                    >
+                        <ChangesReportTable rows={reportRows} />
+                    </ResponsiveTableContainer>
+                </DialogContent>
+            </Dialog>
         </Container>
     );
 }

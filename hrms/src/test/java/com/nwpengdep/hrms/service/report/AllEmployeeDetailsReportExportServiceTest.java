@@ -1,6 +1,7 @@
 package com.nwpengdep.hrms.service.report;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
@@ -64,11 +65,7 @@ class AllEmployeeDetailsReportExportServiceTest {
             assertEquals(BorderStyle.THIN,
                     sheet.getRow(6).getCell(0).getCellStyle().getBorderBottom());
             assertTrue(sheet.getRow(6).getHeightInPoints() > 21f);
-
-            assertEquals("Prepared By:",
-                    sheet.getRow(8).getCell(0).getStringCellValue());
-            assertEquals("Checked By:",
-                    sheet.getRow(8).getCell(5).getStringCellValue());
+            assertEquals(6, sheet.getLastRowNum());
         }
     }
 
@@ -94,9 +91,7 @@ class AllEmployeeDetailsReportExportServiceTest {
                     sheet.getRow(2).getCell(0).getStringCellValue());
             assertEquals("Included Employee",
                     sheet.getRow(6).getCell(1).getStringCellValue());
-            assertEquals("Prepared By:",
-                    sheet.getRow(8).getCell(0).getStringCellValue());
-            assertTrue(sheet.getLastRowNum() >= 8);
+            assertEquals(6, sheet.getLastRowNum());
         }
     }
 
@@ -124,8 +119,8 @@ class AllEmployeeDetailsReportExportServiceTest {
         assertTrue(content.contains("Generated: 19-08-2026"));
         assertTrue(content.contains("Name of the Employee"));
         assertTrue(content.contains("Engineer"));
-        assertTrue(content.contains("Prepared By:"));
-        assertTrue(content.contains("Checked By:"));
+        assertFalse(content.contains("Prepared By:"));
+        assertFalse(content.contains("Checked By:"));
     }
 
     private void stubBranding() {

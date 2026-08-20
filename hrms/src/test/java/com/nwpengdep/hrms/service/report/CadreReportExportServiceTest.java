@@ -157,6 +157,11 @@ class CadreReportExportServiceTest {
             assertTrue(hasMergedRegion(sheet, HEADER_FIRST_ROW, HEADER_LAST_ROW, 0, 0));
             assertEquals("Prepared By:", sheet.getRow(10).getCell(0).getStringCellValue());
             assertEquals("Checked By:", sheet.getRow(10).getCell(5).getStringCellValue());
+            assertEquals(
+                    ReportSignatureBlock.DEFAULT_SYSTEM_NAME,
+                    sheet.getRow(11).getCell(0).getStringCellValue()
+            );
+            assertEquals("", sheet.getRow(11).getCell(5).getStringCellValue());
         }
     }
 
@@ -284,6 +289,7 @@ class CadreReportExportServiceTest {
         assertTrue(content.contains("TOTAL"));
         assertTrue(content.contains("Prepared By:"));
         assertTrue(content.contains("Checked By:"));
+        assertTrue(content.contains(ReportSignatureBlock.DEFAULT_SYSTEM_NAME));
     }
 
     @Test

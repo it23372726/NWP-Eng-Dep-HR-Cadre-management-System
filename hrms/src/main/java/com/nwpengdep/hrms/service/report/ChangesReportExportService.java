@@ -1,21 +1,21 @@
 package com.nwpengdep.hrms.service.report;
 
-import com.lowagie.text.Chunk;
 import com.lowagie.text.Document;
 import com.lowagie.text.Element;
-import com.lowagie.text.PageSize;
-import com.lowagie.text.Paragraph;
+import com.lowagie.text.FontFactory;
 import com.lowagie.text.Phrase;
+import com.lowagie.text.Rectangle;
+import com.lowagie.text.pdf.BaseFont;
 import com.lowagie.text.pdf.PdfPCell;
 import com.lowagie.text.pdf.PdfPTable;
 import com.lowagie.text.pdf.PdfWriter;
-import com.lowagie.text.FontFactory;
 import com.nwpengdep.hrms.dto.ChangesReportRequest;
 import com.nwpengdep.hrms.dto.ChangesReportResponse;
 import com.nwpengdep.hrms.dto.ChangesReportRowResponse;
 import com.nwpengdep.hrms.dto.OrganizationSettingsResponse;
 import com.nwpengdep.hrms.service.OrganizationSettingsService;
 import lombok.RequiredArgsConstructor;
+import org.apache.poi.ss.usermodel.BorderExtent;
 import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -27,12 +27,14 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.VerticalAlignment;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.util.CellRangeAddress;
-import org.apache.poi.ss.util.RegionUtil;
+import org.apache.poi.ss.util.PropertyTemplate;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -51,12 +53,43 @@ public class ChangesReportExportService {
             "Date"
     };
 
+    private static final int[] COLUMN_WIDTHS = {
+            1600, 9000, 7000, 3500, 3500, 5000, 3000
+    };
+
+    private static final int TOTAL_COLUMNS = COLUMN_HEADERS.length;
+
+    private static final float EXCEL_DATA_ROW_MIN_HEIGHT = 21f;
+    private static final float EXCEL_DATA_LINE_HEIGHT = 15f;
+    private static final float EXCEL_DATA_PADDING = 6f;
+
+    /**
+     * Matches the Excel Save-as-PDF coordinate system used by Cadre and
+     * All Employee Details so Excel and PDF share the same layout.
+     */
+    private static final float PDF_PAGE_WIDTH = 1871.111f;
+    private static final float PDF_PAGE_HEIGHT = 1322.222f;
+    private static final float PDF_MARGIN_LEFT = 48f;
+    private static final float PDF_MARGIN_RIGHT = 66.111f;
+    private static final float PDF_MARGIN_TOP = 89f;
+    private static final float PDF_MARGIN_BOTTOM = 48f;
+    private static final float PDF_TABLE_WIDTH =
+            PDF_PAGE_WIDTH - PDF_MARGIN_LEFT - PDF_MARGIN_RIGHT;
+    private static final float TITLE_ROW_HEIGHT = 28f;
+    private static final float SUBTITLE_ROW_HEIGHT = 24f;
+    private static final float META_ROW_HEIGHT = 20f;
+    private static final float TITLE_GAP_HEIGHT = 13.57f;
+    private static final float PDF_HEADER_MIN_HEIGHT = 28f;
+    private static final float PDF_DATA_MIN_HEIGHT = EXCEL_DATA_ROW_MIN_HEIGHT;
+    private static final java.awt.Color HEADER_FILL = new java.awt.Color(192, 192, 192);
+
     private final ChangesReportService changesReportService;
     private final OrganizationSettingsService organizationSettingsService;
 
     public byte[] exportExcel(ChangesReportRequest request) {
         ChangesReportResponse report = changesReportService.generateReport(request);
         OrganizationSettingsResponse branding = organizationSettingsService.getSettings();
+        List<ChangesReportRowResponse> rows = reportRows(report);
 
         try (Workbook workbook = new XSSFWorkbook();
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
@@ -74,12 +107,7 @@ public class ChangesReportExportService {
                     styles.title
             );
             createTitleRow(sheet, rowIdx++, "CHANGES REPORT", styles.subtitle);
-            createTitleRow(
-                    sheet,
-                    rowIdx++,
-                    "Period: " + report.getMonthLabel() + " " + report.getYear(),
-                    styles.meta
-            );
+            createTitleRow(sheet, rowIdx++, periodLabel(report), styles.meta);
             createTitleRow(
                     sheet,
                     rowIdx++,
@@ -94,29 +122,20 @@ public class ChangesReportExportService {
             );
             rowIdx++;
 
+            int headerRowIdx = rowIdx;
             org.apache.poi.ss.usermodel.Row headerRow = sheet.createRow(rowIdx++);
             writeExcelHeader(headerRow, styles.header);
-
-            for (ChangesReportRowResponse row : report.getRows()) {
-                writeExcelDataRow(sheet.createRow(rowIdx++), row, styles);
-            }
-
-            if (!report.getRows().isEmpty()) {
-                applyOuterBorder(
-                        sheet,
-                        rowIdx - report.getRows().size() - 1,
-                        rowIdx - 1,
-                        0,
-                        COLUMN_HEADERS.length - 1
-                );
-            }
-
-            ReportSignatureBlock.addExcelRows(
-                    sheet,
-                    workbook,
-                    rowIdx - 1,
-                    5
+            sheet.setRepeatingRows(
+                    new CellRangeAddress(headerRowIdx, headerRowIdx, 0, TOTAL_COLUMNS - 1)
             );
+
+            int lastTableRow = headerRowIdx;
+            for (ChangesReportRowResponse row : rows) {
+                writeExcelDataRow(sheet.createRow(rowIdx++), row, styles);
+                lastTableRow = rowIdx - 1;
+            }
+
+            applyTableGrid(sheet, headerRowIdx, lastTableRow);
 
             workbook.write(out);
             return out.toByteArray();
@@ -128,60 +147,42 @@ public class ChangesReportExportService {
     public byte[] exportPdf(ChangesReportRequest request) {
         ChangesReportResponse report = changesReportService.generateReport(request);
         OrganizationSettingsResponse branding = organizationSettingsService.getSettings();
+        List<ChangesReportRowResponse> rows = reportRows(report);
 
         try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            Document document = new Document(PageSize.A4.rotate(), 36, 36, 54, 36);
+            Document document = new Document(
+                    new Rectangle(PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT),
+                    PDF_MARGIN_LEFT,
+                    PDF_MARGIN_RIGHT,
+                    PDF_MARGIN_TOP,
+                    PDF_MARGIN_BOTTOM
+            );
             PdfWriter.getInstance(document, out);
             document.open();
 
-            com.lowagie.text.Font titleFont =
-                    FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14);
-            com.lowagie.text.Font metaFont =
-                    FontFactory.getFont(FontFactory.HELVETICA, 10);
-            com.lowagie.text.Font headerFont =
-                    FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9);
-            com.lowagie.text.Font cellFont =
-                    FontFactory.getFont(FontFactory.HELVETICA, 9);
+            PdfFonts fonts = createPdfFonts();
+            addPdfTitleBlock(document, report, branding, fonts);
 
-            document.add(new Paragraph(
-                    branding.getReportHeaderSubtitle(),
-                    titleFont
-            ));
-            document.add(new Paragraph("Changes Report", titleFont));
-            document.add(new Paragraph(
-                    "Period: " + report.getMonthLabel() + " " + report.getYear(),
-                    metaFont
-            ));
-            document.add(new Paragraph(
-                    "Total Changes: " + report.getTotalCount(),
-                    metaFont
-            ));
-            document.add(new Paragraph(
-                    "Generated: "
-                            + report.getGeneratedAt().format(
-                                    DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm")
-                            ),
-                    metaFont
-            ));
-            document.add(Chunk.NEWLINE);
-
-            PdfPTable table = new PdfPTable(COLUMN_HEADERS.length);
-            table.setWidthPercentage(100);
+            float[] pdfColumnWidths = createPdfColumnWidths();
+            PdfPTable table = new PdfPTable(TOTAL_COLUMNS);
+            table.setTotalWidth(PDF_TABLE_WIDTH);
+            table.setLockedWidth(true);
+            table.setWidths(pdfColumnWidths);
             table.setHeaderRows(1);
-            table.setWidths(new float[] { 0.6f, 2.2f, 2.0f, 1.4f, 1.4f, 1.8f, 1.0f });
+            table.setSplitLate(false);
+            table.setSplitRows(true);
+            table.setSpacingBefore(0f);
+            table.setSpacingAfter(0f);
 
             for (String header : COLUMN_HEADERS) {
-                table.addCell(headerCell(header, headerFont));
+                table.addCell(headerCell(header, fonts.header));
             }
 
-            for (ChangesReportRowResponse row : report.getRows()) {
-                addPdfRow(table, row, cellFont);
+            for (ChangesReportRowResponse row : rows) {
+                addPdfRow(table, row, fonts.body);
             }
 
             document.add(table);
-            document.add(ReportSignatureBlock.pdfTable(
-                    FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10)
-            ));
             document.close();
             return out.toByteArray();
         } catch (Exception e) {
@@ -189,11 +190,27 @@ public class ChangesReportExportService {
         }
     }
 
+    private List<ChangesReportRowResponse> reportRows(ChangesReportResponse report) {
+        return report.getRows() != null ? report.getRows() : List.of();
+    }
+
+    private String periodLabel(ChangesReportResponse report) {
+        return "Period: " + report.getMonthLabel() + " " + report.getYear();
+    }
+
     private PdfPCell headerCell(String text, com.lowagie.text.Font font) {
         PdfPCell cell = new PdfPCell(new Phrase(text, font));
         cell.setHorizontalAlignment(Element.ALIGN_CENTER);
         cell.setVerticalAlignment(Element.ALIGN_MIDDLE);
-        cell.setBackgroundColor(new java.awt.Color(220, 220, 220));
+        cell.setBackgroundColor(HEADER_FILL);
+        cell.setBorderColor(java.awt.Color.BLACK);
+        cell.setBorderWidth(0.5f);
+        cell.setPaddingTop(2f);
+        cell.setPaddingBottom(2f);
+        cell.setPaddingLeft(1.5f);
+        cell.setPaddingRight(1.5f);
+        cell.setMinimumHeight(PDF_HEADER_MIN_HEIGHT);
+        cell.setNoWrap(false);
         return cell;
     }
 
@@ -214,21 +231,17 @@ public class ChangesReportExportService {
             ChangesReportRowResponse row,
             ExcelStyles styles
     ) {
-        excelRow.setHeightInPoints(21f);
+        String[] values = rowValues(row);
+        excelRow.setHeightInPoints(excelRowHeight(values));
 
-        int col = 0;
-        createTextCell(
-                excelRow,
-                col++,
-                row.getSerialNo() != null ? row.getSerialNo().toString() : "",
-                styles.dataNumeric
-        );
-        createTextCell(excelRow, col++, nvl(row.getFullName()), styles.dataText);
-        createTextCell(excelRow, col++, nvl(row.getDesignation()), styles.dataText);
-        createTextCell(excelRow, col++, nvl(row.getNic()), styles.dataText);
-        createTextCell(excelRow, col++, nvl(row.getEmploymentType()), styles.dataText);
-        createTextCell(excelRow, col++, nvl(row.getAction()), styles.dataText);
-        createTextCell(excelRow, col, formatDate(row.getActionDate()), styles.dataText);
+        for (int col = 0; col < values.length; col++) {
+            createTextCell(
+                    excelRow,
+                    col,
+                    values[col],
+                    col == 0 ? styles.dataNumeric : styles.dataText
+            );
+        }
     }
 
     private void configurePageSetup(Sheet sheet) {
@@ -248,9 +261,8 @@ public class ChangesReportExportService {
     }
 
     private void configureColumnWidths(Sheet sheet) {
-        int[] widths = { 1600, 9000, 7000, 3500, 3500, 5000, 3000 };
-        for (int i = 0; i < widths.length; i++) {
-            sheet.setColumnWidth(i, widths[i]);
+        for (int i = 0; i < COLUMN_WIDTHS.length; i++) {
+            sheet.setColumnWidth(i, COLUMN_WIDTHS[i]);
         }
     }
 
@@ -326,20 +338,20 @@ public class ChangesReportExportService {
         header.setWrapText(true);
         header.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
         header.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-        applyBorders(header, BorderStyle.MEDIUM, BorderStyle.MEDIUM);
+        applyThinBlackBorders(header);
 
         CellStyle dataText = workbook.createCellStyle();
         dataText.setFont(bodyFont);
         dataText.setAlignment(HorizontalAlignment.LEFT);
         dataText.setVerticalAlignment(VerticalAlignment.CENTER);
         dataText.setWrapText(true);
-        applyBorders(dataText, BorderStyle.THIN, BorderStyle.THIN);
+        applyThinBlackBorders(dataText);
 
         CellStyle dataNumeric = workbook.createCellStyle();
         dataNumeric.setFont(bodyFont);
         dataNumeric.setAlignment(HorizontalAlignment.CENTER);
         dataNumeric.setVerticalAlignment(VerticalAlignment.CENTER);
-        applyBorders(dataNumeric, BorderStyle.THIN, BorderStyle.THIN);
+        applyThinBlackBorders(dataNumeric);
 
         return new ExcelStyles(
                 title,
@@ -351,15 +363,16 @@ public class ChangesReportExportService {
         );
     }
 
-    private void applyBorders(
-            CellStyle style,
-            BorderStyle border,
-            BorderStyle borderBetween
-    ) {
-        style.setBorderTop(border);
-        style.setBorderBottom(border);
-        style.setBorderLeft(borderBetween);
-        style.setBorderRight(borderBetween);
+    private void applyThinBlackBorders(CellStyle style) {
+        short black = IndexedColors.BLACK.getIndex();
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        style.setTopBorderColor(black);
+        style.setBottomBorderColor(black);
+        style.setLeftBorderColor(black);
+        style.setRightBorderColor(black);
     }
 
     private void createTextCell(
@@ -373,18 +386,70 @@ public class ChangesReportExportService {
         cell.setCellStyle(style);
     }
 
-    private void applyOuterBorder(
-            Sheet sheet,
-            int firstRow,
-            int lastRow,
-            int firstCol,
-            int lastCol
-    ) {
-        CellRangeAddress range = new CellRangeAddress(firstRow, lastRow, firstCol, lastCol);
-        RegionUtil.setBorderTop(BorderStyle.MEDIUM, range, sheet);
-        RegionUtil.setBorderBottom(BorderStyle.MEDIUM, range, sheet);
-        RegionUtil.setBorderLeft(BorderStyle.MEDIUM, range, sheet);
-        RegionUtil.setBorderRight(BorderStyle.MEDIUM, range, sheet);
+    private void applyTableGrid(Sheet sheet, int headerRow, int lastRow) {
+        PropertyTemplate grid = new PropertyTemplate();
+        grid.drawBorders(
+                new CellRangeAddress(headerRow, lastRow, 0, TOTAL_COLUMNS - 1),
+                BorderStyle.THIN,
+                IndexedColors.BLACK.getIndex(),
+                BorderExtent.ALL
+        );
+        grid.applyBorders(sheet);
+    }
+
+    private String[] rowValues(ChangesReportRowResponse row) {
+        return new String[]{
+                row.getSerialNo() != null ? row.getSerialNo().toString() : "",
+                nvl(row.getFullName()),
+                nvl(row.getDesignation()),
+                nvl(row.getNic()),
+                nvl(row.getEmploymentType()),
+                nvl(row.getAction()),
+                formatDate(row.getActionDate())
+        };
+    }
+
+    private float excelRowHeight(String[] values) {
+        int maxLines = 1;
+        for (int col = 1; col < values.length; col++) {
+            int availableChars = Math.max(4, COLUMN_WIDTHS[col] / 256 - 1);
+            maxLines = Math.max(
+                    maxLines,
+                    wrappedLineCount(values[col], availableChars)
+            );
+        }
+        return Math.max(
+                EXCEL_DATA_ROW_MIN_HEIGHT,
+                maxLines * EXCEL_DATA_LINE_HEIGHT + EXCEL_DATA_PADDING
+        );
+    }
+
+    private int wrappedLineCount(String value, int maxChars) {
+        if (value == null || value.isBlank()) {
+            return 1;
+        }
+
+        int lines = 1;
+        int used = 0;
+        for (String word : value.trim().split("\\s+")) {
+            if (word.length() > maxChars) {
+                if (used > 0) {
+                    lines++;
+                }
+                lines += (word.length() - 1) / maxChars;
+                used = word.length() % maxChars;
+                continue;
+            }
+
+            int extra = used == 0 ? word.length() : word.length() + 1;
+            if (used + extra <= maxChars) {
+                used += extra;
+            } else {
+                lines++;
+                used = word.length();
+            }
+        }
+        return lines;
     }
 
     private record ExcelStyles(
@@ -402,19 +467,153 @@ public class ChangesReportExportService {
             ChangesReportRowResponse row,
             com.lowagie.text.Font font
     ) {
-        table.addCell(cell(row.getSerialNo() != null ? row.getSerialNo().toString() : "", font));
-        table.addCell(cell(nvl(row.getFullName()), font));
-        table.addCell(cell(nvl(row.getDesignation()), font));
-        table.addCell(cell(nvl(row.getNic()), font));
-        table.addCell(cell(nvl(row.getEmploymentType()), font));
-        table.addCell(cell(nvl(row.getAction()), font));
-        table.addCell(cell(formatDate(row.getActionDate()), font));
+        String[] values = rowValues(row);
+        for (int col = 0; col < values.length; col++) {
+            table.addCell(bodyCell(
+                    values[col],
+                    font,
+                    col == 0 ? Element.ALIGN_CENTER : Element.ALIGN_LEFT
+            ));
+        }
     }
 
-    private PdfPCell cell(String text, com.lowagie.text.Font font) {
+    private PdfPCell bodyCell(
+            String text,
+            com.lowagie.text.Font font,
+            int alignment
+    ) {
         PdfPCell cell = new PdfPCell(new Phrase(text, font));
-        cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+        cell.setHorizontalAlignment(alignment);
+        cell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+        cell.setBorderColor(java.awt.Color.BLACK);
+        cell.setBorderWidth(0.5f);
+        cell.setPaddingTop(2f);
+        cell.setPaddingBottom(2f);
+        cell.setPaddingLeft(alignment == Element.ALIGN_LEFT ? 3f : 1.5f);
+        cell.setPaddingRight(1.5f);
+        cell.setLeading(12f, 0f);
+        cell.setMinimumHeight(PDF_DATA_MIN_HEIGHT);
+        cell.setNoWrap(false);
         return cell;
+    }
+
+    private void addPdfTitleBlock(
+            Document document,
+            ChangesReportResponse report,
+            OrganizationSettingsResponse branding,
+            PdfFonts fonts
+    ) throws com.lowagie.text.DocumentException {
+        PdfPTable titles = new PdfPTable(1);
+        titles.setTotalWidth(PDF_TABLE_WIDTH);
+        titles.setLockedWidth(true);
+        titles.setSpacingBefore(0f);
+        titles.setSpacingAfter(0f);
+        titles.addCell(pdfTitleCell(
+                nvl(branding.getReportHeaderUppercase()),
+                fonts.title,
+                TITLE_ROW_HEIGHT
+        ));
+        titles.addCell(pdfTitleCell(
+                "CHANGES REPORT",
+                fonts.subtitle,
+                SUBTITLE_ROW_HEIGHT
+        ));
+        titles.addCell(pdfTitleCell(
+                periodLabel(report),
+                fonts.meta,
+                META_ROW_HEIGHT
+        ));
+        titles.addCell(pdfTitleCell(
+                "Total Changes: " + report.getTotalCount(),
+                fonts.meta,
+                META_ROW_HEIGHT
+        ));
+        titles.addCell(pdfTitleCell(
+                "Generated: " + report.getGeneratedAt().format(DATE_FMT),
+                fonts.meta,
+                META_ROW_HEIGHT
+        ));
+
+        PdfPCell gap = new PdfPCell(new Phrase(""));
+        gap.setBorder(Rectangle.NO_BORDER);
+        gap.setFixedHeight(TITLE_GAP_HEIGHT);
+        titles.addCell(gap);
+        document.add(titles);
+    }
+
+    private PdfPCell pdfTitleCell(
+            String text,
+            com.lowagie.text.Font font,
+            float height
+    ) {
+        PdfPCell cell = new PdfPCell(new Phrase(text, font));
+        cell.setBorder(Rectangle.NO_BORDER);
+        cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+        cell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+        cell.setFixedHeight(height);
+        cell.setPadding(0f);
+        return cell;
+    }
+
+    private PdfFonts createPdfFonts() {
+        return new PdfFonts(
+                loadCarlitoFont(true, 16f),
+                loadCarlitoFont(true, 12f),
+                loadCarlitoFont(true, 11f),
+                loadCarlitoFont(true, 10f),
+                loadCarlitoFont(false, 10f)
+        );
+    }
+
+    private com.lowagie.text.Font loadCarlitoFont(boolean bold, float size) {
+        String resource = bold
+                ? "/fonts/Carlito-Bold.ttf"
+                : "/fonts/Carlito-Regular.ttf";
+        try (InputStream in =
+                     ChangesReportExportService.class.getResourceAsStream(resource)) {
+            if (in == null) {
+                return FontFactory.getFont(
+                        bold ? FontFactory.HELVETICA_BOLD : FontFactory.HELVETICA,
+                        size
+                );
+            }
+            BaseFont baseFont = BaseFont.createFont(
+                    resource,
+                    BaseFont.IDENTITY_H,
+                    BaseFont.EMBEDDED,
+                    true,
+                    in.readAllBytes(),
+                    null
+            );
+            return new com.lowagie.text.Font(baseFont, size);
+        } catch (Exception e) {
+            return FontFactory.getFont(
+                    bold ? FontFactory.HELVETICA_BOLD : FontFactory.HELVETICA,
+                    size
+            );
+        }
+    }
+
+    private float[] createPdfColumnWidths() {
+        float totalExcelWidth = 0f;
+        for (int width : COLUMN_WIDTHS) {
+            totalExcelWidth += width;
+        }
+
+        float[] widths = new float[COLUMN_WIDTHS.length];
+        for (int i = 0; i < COLUMN_WIDTHS.length; i++) {
+            widths[i] = PDF_TABLE_WIDTH * COLUMN_WIDTHS[i] / totalExcelWidth;
+        }
+        return widths;
+    }
+
+    private record PdfFonts(
+            com.lowagie.text.Font title,
+            com.lowagie.text.Font subtitle,
+            com.lowagie.text.Font meta,
+            com.lowagie.text.Font header,
+            com.lowagie.text.Font body
+    ) {
     }
 
     private String nvl(String value) {

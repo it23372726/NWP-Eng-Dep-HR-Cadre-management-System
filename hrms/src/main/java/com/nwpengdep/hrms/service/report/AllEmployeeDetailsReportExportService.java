@@ -160,7 +160,6 @@ public class AllEmployeeDetailsReportExportService {
             }
 
             applyTableGrid(sheet, headerRowIdx, lastTableRow);
-            ReportSignatureBlock.addExcelRows(sheet, workbook, lastTableRow, 5);
 
             workbook.write(out);
             return out.toByteArray();
@@ -211,11 +210,6 @@ public class AllEmployeeDetailsReportExportService {
             }
 
             document.add(table);
-            document.add(ReportSignatureBlock.pdfTable(
-                    fonts.signature,
-                    PDF_TABLE_WIDTH,
-                    sumWidths(pdfColumnWidths, 0, 5)
-            ));
             document.close();
             return out.toByteArray();
         } catch (Exception e) {
@@ -657,8 +651,7 @@ public class AllEmployeeDetailsReportExportService {
                 loadCarlitoFont(true, 12f * PDF_EXCEL_SCALE),
                 loadCarlitoFont(true, 11f * PDF_EXCEL_SCALE),
                 loadCarlitoFont(true, 10f * PDF_EXCEL_SCALE),
-                loadCarlitoFont(false, 10f * PDF_EXCEL_SCALE),
-                loadCarlitoFont(true, 10f * PDF_EXCEL_SCALE)
+                loadCarlitoFont(false, 10f * PDF_EXCEL_SCALE)
         );
     }
 
@@ -704,21 +697,12 @@ public class AllEmployeeDetailsReportExportService {
         return widths;
     }
 
-    private float sumWidths(float[] widths, int startInclusive, int endExclusive) {
-        float sum = 0f;
-        for (int i = startInclusive; i < endExclusive; i++) {
-            sum += widths[i];
-        }
-        return sum;
-    }
-
     private record PdfFonts(
             com.lowagie.text.Font title,
             com.lowagie.text.Font subtitle,
             com.lowagie.text.Font meta,
             com.lowagie.text.Font header,
-            com.lowagie.text.Font body,
-            com.lowagie.text.Font signature
+            com.lowagie.text.Font body
     ) {
     }
 

@@ -194,7 +194,13 @@ public class CadreReportExportService {
             }
 
             applyTableGrid(sheet, headerRow1Idx, lastTableRow);
-            ReportSignatureBlock.addExcelRows(sheet, workbook, lastTableRow, 5);
+            ReportSignatureBlock.addExcelRows(
+                    sheet,
+                    workbook,
+                    lastTableRow,
+                    5,
+                    ReportSignatureBlock.DEFAULT_SYSTEM_NAME
+            );
 
             workbook.write(out);
             return out.toByteArray();
@@ -267,12 +273,14 @@ public class CadreReportExportService {
             document.add(table);
             document.add(ReportSignatureBlock.pdfTable(
                     fonts.total,
+                    fonts.body,
                     pdfTableWidth(),
                     PDF_COLUMN_WIDTHS[0]
                             + PDF_COLUMN_WIDTHS[1]
                             + PDF_COLUMN_WIDTHS[2]
                             + PDF_COLUMN_WIDTHS[3]
-                            + PDF_COLUMN_WIDTHS[4]
+                            + PDF_COLUMN_WIDTHS[4],
+                    ReportSignatureBlock.DEFAULT_SYSTEM_NAME
             ));
             document.close();
             return out.toByteArray();

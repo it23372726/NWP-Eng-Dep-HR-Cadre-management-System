@@ -24,7 +24,6 @@ import {
     downloadVacancyReportPdf
 } from "../services/cadreService";
 import ResponsiveTableContainer from "../components/ResponsiveTableContainer";
-import ReportSignatureBlock from "../components/ReportSignatureBlock";
 
 const triggerDownload = (blob, filename) => {
     const url = window.URL.createObjectURL(blob);
@@ -210,7 +209,6 @@ export default function VacancyReportPage() {
                 </Table>
 
             </ResponsiveTableContainer>
-            <ReportSignatureBlock />
 
         </Container>
     );

@@ -1,7 +1,7 @@
 import api from "../api/axios";
-import { triggerDownload } from "./cadreReportService";
+import { printPdfBlob, triggerDownload } from "./cadreReportService";
 
-export { triggerDownload };
+export { printPdfBlob, triggerDownload };
 
 export const generateChangesReport = async (year, month) => {
     const response = await api.post("/reports/changes", {
