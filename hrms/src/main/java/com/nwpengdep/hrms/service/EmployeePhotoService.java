@@ -51,9 +51,10 @@ public class EmployeePhotoService {
         deletePhotoFile(employee.getProfilePhotoPath());
 
         String fileName = employeeId + "." + extension;
-        Path targetPath = Paths.get(photosDir, fileName);
+        Path targetPath = UploadStoragePaths.resolveInsideDirectory(photosDir, fileName);
 
         try {
+            Files.createDirectories(targetPath.getParent());
             Files.write(targetPath, file.getBytes());
         } catch (IOException e) {
             throw new RuntimeException("Failed to save employee photo", e);
@@ -71,7 +72,15 @@ public class EmployeePhotoService {
             return Optional.empty();
         }
 
-        Path photoPath = Paths.get(photosDir, employee.getProfilePhotoPath());
+        Path photoPath;
+        try {
+            photoPath = UploadStoragePaths.resolveInsideDirectory(
+                    photosDir,
+                    employee.getProfilePhotoPath()
+            );
+        } catch (IllegalArgumentException e) {
+            return Optional.empty();
+        }
         if (!Files.exists(photoPath)) {
             return Optional.empty();
         }
@@ -132,7 +141,9 @@ public class EmployeePhotoService {
         }
 
         try {
-            Files.deleteIfExists(Paths.get(photosDir, profilePhotoPath));
+            Files.deleteIfExists(
+                    UploadStoragePaths.resolveInsideDirectory(photosDir, profilePhotoPath)
+            );
         } catch (IOException e) {
             throw new RuntimeException("Failed to delete employee photo", e);
         }

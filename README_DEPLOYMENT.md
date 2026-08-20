@@ -40,6 +40,53 @@ The image serves the Vite SPA on port `8080` with React Router fallback to `inde
 
 An OpenShift GitHub webhook can trigger a new BuildConfig build whenever a commit is pushed to `main`, producing a new ImageStream image for the Deployment rollout. The BuildConfig, ImageStream, Deployment, Service, Route, and webhook are configured in OpenShift separately; this repository does not contain cluster credentials or cluster-specific secrets.
 
+### Persist employee photos and the organization logo
+
+The API stores photos as files, not in MySQL. On OpenShift those files must live on a PersistentVolume, or they disappear when the backend pod is replaced.
+
+Production paths (Spring `prod` profile and the backend Dockerfile):
+
+| File | Directory |
+|------|-----------|
+| Employee photos | `/data/uploads/employee-photos` |
+| Organization logo | `/data/uploads/organization-logo` |
+
+1. Create the claim (adjust `storageClassName` if the cluster requires one):
+
+```bash
+oc apply -n north-western-province-council-production-2 \
+  -f deploy/openshift/hrms-uploads-pvc.yaml
+```
+
+2. If the current pod already has photos under `/app/uploads`, copy them out **before** switching the mount:
+
+```bash
+oc rsync -n north-western-province-council-production-2 \
+  <backend-pod>:/app/uploads/ ./uploads-backup/
+```
+
+3. Mount the claim on the backend Deployment (replace `hrms-backend` if the Deployment name differs) and keep **one replica** while the claim is `ReadWriteOnce`:
+
+```bash
+oc set volume deployment/hrms-backend \
+  --add --name=uploads \
+  --type pvc --claim-name=hrms-uploads \
+  --mount-path=/data/uploads \
+  --overwrite \
+  -n north-western-province-council-production-2
+```
+
+4. After the new pod is running, restore any backup into the volume:
+
+```bash
+oc rsync -n north-western-province-council-production-2 \
+  ./uploads-backup/ <backend-pod>:/data/uploads/
+```
+
+5. Confirm a photo still loads after a backend rollout. If the app cannot write to `/data/uploads`, set `spec.template.spec.securityContext.fsGroup` on the Deployment (OpenShift restricted SCC often uses group `0`).
+
+Local development still uses `./uploads/...` unless you set `HRMS_EMPLOYEE_PHOTOS_DIR` / `HRMS_ORGANIZATION_LOGO_DIR`.
+
 ---
 
 ## Security warnings (read first)
@@ -48,7 +95,7 @@ An OpenShift GitHub webhook can trigger a new BuildConfig build whenever a commi
 - **Do not upload real NIC numbers, dependent details, or real HR records** during testing. Use fictional sample data only.
 - Real production data should later be moved to the **official NWP server** or other properly secured production hosting (HTTPS, backups, access control, and data-protection policies).
 - Never commit `.env` files or real database/JWT credentials to GitHub.
-- Employee photo uploads are stored on the Render filesystem (`./uploads/...`) and are **ephemeral** (lost on redeploy/restart). That is acceptable for testing only.
+- Employee photo uploads on **Render** are stored on the container filesystem (`./uploads/...`) and are **ephemeral** (lost on redeploy/restart). That is acceptable for testing only. **OpenShift production** must mount `hrms-uploads` at `/data/uploads` (see the OpenShift section above).
 - Change the bootstrap `superadmin` password immediately after first login.
 
 ---
@@ -301,6 +348,7 @@ java -jar target/hrms-0.0.1-SNAPSHOT.jar   # needs MySQL; for prod profile, expo
 cd hrms
 docker build -t hrms-backend .
 docker run --rm -p 8080:8080 \
+  -v hrms-uploads:/data/uploads \
   -e SPRING_PROFILES_ACTIVE=prod \
   -e PORT=8080 \
   -e DB_HOST=... -e DB_PORT=... -e DB_NAME=... \
