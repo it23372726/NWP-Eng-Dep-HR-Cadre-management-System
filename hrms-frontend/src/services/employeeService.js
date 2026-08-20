@@ -47,8 +47,12 @@ export const deleteEmployeePhoto = async (id) => {
 export const fetchEmployeePhotoBlob = async (id, cacheKey = "") => {
     const response = await api.get(`/employees/${id}/photo`, {
         params: cacheKey ? { v: cacheKey } : undefined,
-        responseType: "blob"
+        responseType: "blob",
+        validateStatus: (status) => status === 200 || status === 404
     });
+    if (response.status === 404) {
+        return null;
+    }
     return response.data;
 };
 

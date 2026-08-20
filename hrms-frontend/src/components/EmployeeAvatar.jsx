@@ -41,7 +41,7 @@ export default function EmployeeAvatar({ employee, size = EMPLOYEE_PHOTO_SIZE })
             try {
                 const cacheKey = employee.updatedAt || employee.profilePhotoPath;
                 const blob = await fetchEmployeePhotoBlob(employee.id, cacheKey);
-                if (cancelled) {
+                if (cancelled || !blob) {
                     return;
                 }
                 const url = URL.createObjectURL(blob);

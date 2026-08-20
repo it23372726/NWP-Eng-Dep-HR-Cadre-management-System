@@ -33,13 +33,11 @@ public class OrganizationSettingsController {
     private final OrganizationLogoService organizationLogoService;
 
     @GetMapping("/branding")
-    @PreAuthorize("permitAll()")
     public OrganizationBrandingResponse getBranding() {
         return organizationSettingsService.getBranding();
     }
 
     @GetMapping("/logo")
-    @PreAuthorize("permitAll()")
     public ResponseEntity<org.springframework.core.io.Resource> getLogo() {
         return organizationLogoService.getLogoResource()
                 .map(logo -> ResponseEntity.ok()

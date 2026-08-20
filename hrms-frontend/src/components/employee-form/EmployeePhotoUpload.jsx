@@ -118,7 +118,7 @@ export default function EmployeePhotoUpload({
             setLoadingExisting(true);
             try {
                 const blob = await fetchEmployeePhotoBlob(employeeId);
-                if (cancelled) {
+                if (cancelled || !blob) {
                     return;
                 }
                 setLocalPreviewUrl(URL.createObjectURL(blob));

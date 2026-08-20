@@ -9,7 +9,9 @@ const api = axios.create({
 
 // Public endpoints that should not have Authorization header
 const publicEndpoints = [
-    "/auth/login"
+    "/auth/login",
+    "/organization-settings/branding",
+    "/organization-settings/logo"
 ];
 
 api.interceptors.request.use(
