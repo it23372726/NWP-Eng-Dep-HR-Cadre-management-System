@@ -113,6 +113,8 @@ class EmployeeServicePrivateVehicleTest {
                     }
                     return employee.getCareerProgression();
                 });
+        lenient().when(employeeActionRepository.existsActiveActionsByEmployeeId(anyLong()))
+                .thenReturn(true);
         lenient().when(employeeRepository.save(any())).thenAnswer(invocation -> {
             Employee employee = invocation.getArgument(0);
             employee.setId(1L);

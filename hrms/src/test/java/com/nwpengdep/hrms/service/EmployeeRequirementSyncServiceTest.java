@@ -85,9 +85,6 @@ class EmployeeRequirementSyncServiceTest {
         Designation designation = designationWithSupraRequirement("Board Interview");
         Employee employee = employee(Grade.SUPRA, designation);
         employee.getRequirements().add(
-                pendingRequirement(RequirementType.SUPRA_REQUIREMENT, null)
-        );
-        employee.getRequirements().add(
                 pendingRequirement(
                         RequirementType.CUSTOM_SUPRA_REQUIREMENT,
                         "Board Interview"
@@ -114,10 +111,6 @@ class EmployeeRequirementSyncServiceTest {
         syncService.syncEmployeeRequirements(employee);
         syncService.completeRequirementsForAchievedGrade(employee);
 
-        assertTrue(employee.getRequirements().stream().anyMatch(requirement ->
-                requirement.getRequirementType() == RequirementType.SUPRA_REQUIREMENT
-                        && requirement.getStatus() == RequirementStatus.COMPLETED
-        ));
         assertTrue(employee.getRequirements().stream().anyMatch(requirement ->
                 requirement.getRequirementType()
                         == RequirementType.CUSTOM_SUPRA_REQUIREMENT

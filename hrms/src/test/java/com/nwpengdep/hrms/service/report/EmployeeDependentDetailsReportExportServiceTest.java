@@ -14,13 +14,18 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.nwpengdep.hrms.dto.EmployeeDependentDetailsReportResponse;
+import com.nwpengdep.hrms.dto.OrganizationSettingsResponse;
 import com.nwpengdep.hrms.entity.ChildRelationship;
+import com.nwpengdep.hrms.service.OrganizationSettingsService;
 
 @ExtendWith(MockitoExtension.class)
 class EmployeeDependentDetailsReportExportServiceTest {
 
     @Mock
     private EmployeeDependentDetailsReportService reportService;
+
+    @Mock
+    private OrganizationSettingsService organizationSettingsService;
 
     @InjectMocks
     private EmployeeDependentDetailsReportExportService exportService;
@@ -55,6 +60,12 @@ class EmployeeDependentDetailsReportExportServiceTest {
                         .generatedAt(LocalDateTime.of(2026, 6, 25, 10, 0))
                         .build();
 
+        when(organizationSettingsService.getSettings()).thenReturn(
+                OrganizationSettingsResponse.builder()
+                        .reportHeaderSubtitle("NWP Engineering Department")
+                        .reportHeaderUppercase("NWP ENGINEERING DEPARTMENT")
+                        .build()
+        );
         when(reportService.generateReport(7L)).thenReturn(report);
 
         byte[] pdf = exportService.exportPdf(7L);

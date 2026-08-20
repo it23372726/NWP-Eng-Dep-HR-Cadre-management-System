@@ -9,6 +9,7 @@ import static org.mockito.Mockito.mock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -27,6 +28,7 @@ import com.nwpengdep.hrms.entity.EmploymentType;
 import com.nwpengdep.hrms.entity.Grade;
 import com.nwpengdep.hrms.entity.RequirementStatus;
 import com.nwpengdep.hrms.entity.RequirementType;
+import com.nwpengdep.hrms.entity.ServiceGrade1Requirement;
 import com.nwpengdep.hrms.entity.ServiceLevel;
 import com.nwpengdep.hrms.entity.ServicePermanentRequirement;
 import com.nwpengdep.hrms.entity.ServiceType;
@@ -38,11 +40,16 @@ import com.nwpengdep.hrms.repository.ServiceTypeRepository;
 
 class EmployeeServiceRequirementUpdateTest {
 
+    private static final String EB_GRADE_3_NAME = "EB Grade III Passed";
+    private static final String LANGUAGE_NAME = "Government Language Qualification Passed";
+    private static final String EB_GRADE_1_NAME = "EB Grade I Passed";
+
     private EmployeeRepository employeeRepository;
     private DesignationRepository designationRepository;
     private EmployeeService employeeService;
     private Employee savedEmployee;
     private Designation designation;
+    private ServiceType service;
 
     @BeforeEach
     void setUp() {
@@ -88,7 +95,7 @@ class EmployeeServiceRequirementUpdateTest {
                 mock(TrainingGraduationService.class)
         );
 
-        ServiceType service = new ServiceType();
+        service = new ServiceType();
         service.setId(1L);
         service.setServiceCode("SLEgS");
         service.setAllowedGrades(EnumSet.of(
@@ -98,6 +105,13 @@ class EmployeeServiceRequirementUpdateTest {
                 Grade.SUPRA,
                 Grade.SPECIAL
         ));
+        service.setPermanentRequirements(new HashSet<>(Set.of(
+                permanentRequirement(EB_GRADE_3_NAME),
+                permanentRequirement(LANGUAGE_NAME)
+        )));
+        service.setGrade1Requirements(new HashSet<>(Set.of(
+                grade1Requirement(EB_GRADE_1_NAME)
+        )));
 
         designation = new Designation();
         designation.setId(1L);
@@ -130,6 +144,8 @@ class EmployeeServiceRequirementUpdateTest {
                     }
                     return employee.getCareerProgression();
                 });
+        lenient().when(employeeActionRepository.existsActiveActionsByEmployeeId(anyLong()))
+                .thenReturn(true);
         lenient().when(employeeRepository.save(any())).thenAnswer(invocation -> {
             Employee employee = invocation.getArgument(0);
             employee.setId(1L);
@@ -144,14 +160,16 @@ class EmployeeServiceRequirementUpdateTest {
 
     @Test
     void allowsGradeThreeProbationEmployeeToUnsetCompletedPermanentRequirement() {
-        savedEmployee.getRequirements().add(completedRequirement(
-                RequirementType.EB_GRADE_3
+        savedEmployee.getRequirements().add(completedNamedRequirement(
+                RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                EB_GRADE_3_NAME
         ));
 
         EmployeeUpdateRequest request = baseUpdateRequest();
         request.setRequirements(List.of(
-                requirementRequest(
-                        RequirementType.EB_GRADE_3,
+                namedRequirementRequest(
+                        RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                        EB_GRADE_3_NAME,
                         RequirementStatus.PENDING
                 )
         ));
@@ -160,7 +178,11 @@ class EmployeeServiceRequirementUpdateTest {
 
         assertEquals(
                 RequirementStatus.PENDING,
-                findRequirement(result, RequirementType.EB_GRADE_3).getStatus()
+                findNamedRequirement(
+                        result,
+                        RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                        EB_GRADE_3_NAME
+                ).getStatus()
         );
     }
 
@@ -169,14 +191,16 @@ class EmployeeServiceRequirementUpdateTest {
         savedEmployee.getCareerProgression().setPermanentConfirmationDate(
                 LocalDate.parse("2018-01-01")
         );
-        savedEmployee.getRequirements().add(completedRequirement(
-                RequirementType.EB_GRADE_3
+        savedEmployee.getRequirements().add(completedNamedRequirement(
+                RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                EB_GRADE_3_NAME
         ));
 
         EmployeeUpdateRequest request = baseUpdateRequest();
         request.setRequirements(List.of(
-                requirementRequest(
-                        RequirementType.EB_GRADE_3,
+                namedRequirementRequest(
+                        RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                        EB_GRADE_3_NAME,
                         RequirementStatus.PENDING
                 )
         ));
@@ -185,20 +209,26 @@ class EmployeeServiceRequirementUpdateTest {
 
         assertEquals(
                 RequirementStatus.COMPLETED,
-                findRequirement(result, RequirementType.EB_GRADE_3).getStatus()
+                findNamedRequirement(
+                        result,
+                        RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                        EB_GRADE_3_NAME
+                ).getStatus()
         );
     }
 
     @Test
     void allowsPendingRequirementToBecomeCompleted() {
-        savedEmployee.getRequirements().add(pendingRequirement(
-                RequirementType.EB_GRADE_3
+        savedEmployee.getRequirements().add(pendingNamedRequirement(
+                RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                EB_GRADE_3_NAME
         ));
 
         EmployeeUpdateRequest request = baseUpdateRequest();
         request.setRequirements(List.of(
-                requirementRequest(
-                        RequirementType.EB_GRADE_3,
+                namedRequirementRequest(
+                        RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                        EB_GRADE_3_NAME,
                         RequirementStatus.COMPLETED
                 )
         ));
@@ -207,30 +237,38 @@ class EmployeeServiceRequirementUpdateTest {
 
         assertEquals(
                 RequirementStatus.COMPLETED,
-                findRequirement(result, RequirementType.EB_GRADE_3).getStatus()
+                findNamedRequirement(
+                        result,
+                        RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                        EB_GRADE_3_NAME
+                ).getStatus()
         );
     }
 
     @Test
     void qualificationUpdateOnlySkipsGradeDerivedAutoCompletion() {
         savedEmployee.setGrade(Grade.II);
-        savedEmployee.getRequirements().add(completedRequirement(
-                RequirementType.EB_GRADE_3
+        savedEmployee.getRequirements().add(completedNamedRequirement(
+                RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                EB_GRADE_3_NAME
         ));
-        savedEmployee.getRequirements().add(pendingRequirement(
-                RequirementType.GOVERNMENT_LANGUAGE_QUALIFICATION
+        savedEmployee.getRequirements().add(pendingNamedRequirement(
+                RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                LANGUAGE_NAME
         ));
 
         EmployeeUpdateRequest request = baseUpdateRequest();
         request.setGrade(Grade.II);
         request.setQualificationUpdateOnly(true);
         request.setRequirements(List.of(
-                requirementRequest(
-                        RequirementType.EB_GRADE_3,
+                namedRequirementRequest(
+                        RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                        EB_GRADE_3_NAME,
                         RequirementStatus.COMPLETED
                 ),
-                requirementRequest(
-                        RequirementType.GOVERNMENT_LANGUAGE_QUALIFICATION,
+                namedRequirementRequest(
+                        RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                        LANGUAGE_NAME,
                         RequirementStatus.PENDING
                 )
         ));
@@ -239,9 +277,10 @@ class EmployeeServiceRequirementUpdateTest {
 
         assertEquals(
                 RequirementStatus.PENDING,
-                findRequirement(
+                findNamedRequirement(
                         result,
-                        RequirementType.GOVERNMENT_LANGUAGE_QUALIFICATION
+                        RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                        LANGUAGE_NAME
                 ).getStatus()
         );
     }
@@ -249,15 +288,17 @@ class EmployeeServiceRequirementUpdateTest {
     @Test
     void allowsGradeTwoEmployeeToUnsetCompletedGradeOneRequirement() {
         savedEmployee.setGrade(Grade.II);
-        savedEmployee.getRequirements().add(completedRequirement(
-                RequirementType.EB_GRADE_1
+        savedEmployee.getRequirements().add(completedNamedRequirement(
+                RequirementType.CUSTOM_GRADE_1_REQUIREMENT,
+                EB_GRADE_1_NAME
         ));
 
         EmployeeUpdateRequest request = baseUpdateRequest();
         request.setGrade(Grade.II);
         request.setRequirements(List.of(
-                requirementRequest(
-                        RequirementType.EB_GRADE_1,
+                namedRequirementRequest(
+                        RequirementType.CUSTOM_GRADE_1_REQUIREMENT,
+                        EB_GRADE_1_NAME,
                         RequirementStatus.PENDING
                 )
         ));
@@ -266,22 +307,28 @@ class EmployeeServiceRequirementUpdateTest {
 
         assertEquals(
                 RequirementStatus.PENDING,
-                findRequirement(result, RequirementType.EB_GRADE_1).getStatus()
+                findNamedRequirement(
+                        result,
+                        RequirementType.CUSTOM_GRADE_1_REQUIREMENT,
+                        EB_GRADE_1_NAME
+                ).getStatus()
         );
     }
 
     @Test
     void preservesCompletedPermanentRequirementForGradeTwoEmployee() {
         savedEmployee.setGrade(Grade.II);
-        savedEmployee.getRequirements().add(completedRequirement(
-                RequirementType.EB_GRADE_3
+        savedEmployee.getRequirements().add(completedNamedRequirement(
+                RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                EB_GRADE_3_NAME
         ));
 
         EmployeeUpdateRequest request = baseUpdateRequest();
         request.setGrade(Grade.II);
         request.setRequirements(List.of(
-                requirementRequest(
-                        RequirementType.EB_GRADE_3,
+                namedRequirementRequest(
+                        RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                        EB_GRADE_3_NAME,
                         RequirementStatus.PENDING
                 )
         ));
@@ -290,23 +337,29 @@ class EmployeeServiceRequirementUpdateTest {
 
         assertEquals(
                 RequirementStatus.COMPLETED,
-                findRequirement(result, RequirementType.EB_GRADE_3).getStatus()
+                findNamedRequirement(
+                        result,
+                        RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                        EB_GRADE_3_NAME
+                ).getStatus()
         );
     }
 
     @Test
     void preservesGradeOneRequirementsForGradeOneEmployee() {
         savedEmployee.setGrade(Grade.I);
-        savedEmployee.getRequirements().add(completedRequirement(
-                RequirementType.EB_GRADE_1
+        savedEmployee.getRequirements().add(completedNamedRequirement(
+                RequirementType.CUSTOM_GRADE_1_REQUIREMENT,
+                EB_GRADE_1_NAME
         ));
 
         EmployeeUpdateRequest request = baseUpdateRequest();
         request.setGrade(Grade.I);
         request.setQualificationUpdateOnly(true);
         request.setRequirements(List.of(
-                requirementRequest(
-                        RequirementType.EB_GRADE_1,
+                namedRequirementRequest(
+                        RequirementType.CUSTOM_GRADE_1_REQUIREMENT,
+                        EB_GRADE_1_NAME,
                         RequirementStatus.PENDING
                 )
         ));
@@ -315,26 +368,31 @@ class EmployeeServiceRequirementUpdateTest {
 
         assertEquals(
                 RequirementStatus.COMPLETED,
-                findRequirement(result, RequirementType.EB_GRADE_1).getStatus()
+                findNamedRequirement(
+                        result,
+                        RequirementType.CUSTOM_GRADE_1_REQUIREMENT,
+                        EB_GRADE_1_NAME
+                ).getStatus()
         );
     }
 
     @Test
     void qualificationUpdateOnlyWorksForOtherDesignationEmployeeWithoutCatalogDesignation() {
-        ServiceType service = designation.getService();
         savedEmployee.setDesignation(null);
         savedEmployee.setService(service);
         savedEmployee.setRecordedDesignationName("Test Designation");
-        savedEmployee.getRequirements().add(pendingRequirement(
-                RequirementType.EB_GRADE_3
+        savedEmployee.getRequirements().add(pendingNamedRequirement(
+                RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                EB_GRADE_3_NAME
         ));
 
         EmployeeUpdateRequest request = baseUpdateRequest();
         request.setDesignationId(null);
         request.setQualificationUpdateOnly(true);
         request.setRequirements(List.of(
-                requirementRequest(
-                        RequirementType.EB_GRADE_3,
+                namedRequirementRequest(
+                        RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                        EB_GRADE_3_NAME,
                         RequirementStatus.COMPLETED
                 )
         ));
@@ -343,16 +401,19 @@ class EmployeeServiceRequirementUpdateTest {
 
         assertEquals(
                 RequirementStatus.COMPLETED,
-                findRequirement(result, RequirementType.EB_GRADE_3).getStatus()
+                findNamedRequirement(
+                        result,
+                        RequirementType.CUSTOM_PERMANENT_REQUIREMENT,
+                        EB_GRADE_3_NAME
+                ).getStatus()
         );
     }
 
     @Test
     void qualificationUpdateOnlyUpdatesCustomPermanentRequirementForOtherEmployee() {
-        ServiceType service = designation.getService();
         ServicePermanentRequirement customRequirement = new ServicePermanentRequirement();
         customRequirement.setRequirementName("Professional Registration");
-        service.setPermanentRequirements(new java.util.HashSet<>(Set.of(customRequirement)));
+        service.setPermanentRequirements(new HashSet<>(Set.of(customRequirement)));
 
         savedEmployee.setDesignation(null);
         savedEmployee.setService(service);
@@ -403,33 +464,32 @@ class EmployeeServiceRequirementUpdateTest {
         return employee;
     }
 
-    private EmployeeRequirement completedRequirement(RequirementType type) {
+    private ServicePermanentRequirement permanentRequirement(String name) {
+        ServicePermanentRequirement requirement = new ServicePermanentRequirement();
+        requirement.setService(service);
+        requirement.setRequirementName(name);
+        return requirement;
+    }
+
+    private ServiceGrade1Requirement grade1Requirement(String name) {
+        ServiceGrade1Requirement requirement = new ServiceGrade1Requirement();
+        requirement.setService(service);
+        requirement.setRequirementName(name);
+        return requirement;
+    }
+
+    private EmployeeRequirement completedNamedRequirement(
+            RequirementType type,
+            String name
+    ) {
         EmployeeRequirement requirement = new EmployeeRequirement();
         requirement.setId(1L);
         requirement.setEmployee(savedEmployee);
         requirement.setRequirementType(type);
+        requirement.setRequirementName(name);
         requirement.setStatus(RequirementStatus.COMPLETED);
         requirement.setCompletedDate(LocalDate.parse("2020-01-01"));
         return requirement;
-    }
-
-    private EmployeeRequirement pendingRequirement(RequirementType type) {
-        EmployeeRequirement requirement = new EmployeeRequirement();
-        requirement.setId(2L);
-        requirement.setEmployee(savedEmployee);
-        requirement.setRequirementType(type);
-        requirement.setStatus(RequirementStatus.PENDING);
-        return requirement;
-    }
-
-    private EmployeeRequirementRequest requirementRequest(
-            RequirementType type,
-            RequirementStatus status
-    ) {
-        EmployeeRequirementRequest request = new EmployeeRequirementRequest();
-        request.setRequirementType(type);
-        request.setStatus(status);
-        return request;
     }
 
     private EmployeeRequirement pendingNamedRequirement(
@@ -437,7 +497,7 @@ class EmployeeServiceRequirementUpdateTest {
             String name
     ) {
         EmployeeRequirement requirement = new EmployeeRequirement();
-        requirement.setId(3L);
+        requirement.setId(2L);
         requirement.setEmployee(savedEmployee);
         requirement.setRequirementType(type);
         requirement.setRequirementName(name);
@@ -467,17 +527,6 @@ class EmployeeServiceRequirementUpdateTest {
                 .filter(requirement -> requirement.getRequirementType() == type)
                 .filter(requirement ->
                         name.equalsIgnoreCase(requirement.getRequirementName()))
-                .findFirst()
-                .orElseThrow();
-    }
-
-    private EmployeeRequirement findRequirement(
-            Employee employee,
-            RequirementType type
-    ) {
-        return employee.getRequirements()
-                .stream()
-                .filter(requirement -> requirement.getRequirementType() == type)
                 .findFirst()
                 .orElseThrow();
     }

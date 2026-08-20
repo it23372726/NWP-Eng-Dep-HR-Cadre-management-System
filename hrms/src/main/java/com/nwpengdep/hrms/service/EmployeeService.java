@@ -79,6 +79,14 @@ public class EmployeeService {
 
         validateUniqueEmployeeIdentifiers(request.getEmployeeNo(), request.getNic(), null);
 
+        if (request.getCareerHistory() != null
+                && !request.getCareerHistory().isEmpty()
+                && request.getEmploymentType() != EmploymentType.PERMANENT) {
+            throw new RuntimeException(
+                    "Career history entry is only supported for permanent employees"
+            );
+        }
+
         if (request.getEmploymentType() == EmploymentType.PERMANENT) {
             if (request.getCareerHistory() != null
                     && !request.getCareerHistory().isEmpty()) {

@@ -10,6 +10,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,7 +32,7 @@ import com.nwpengdep.hrms.repository.EmployeeRepository;
 @ExtendWith(MockitoExtension.class)
 class EmployeeActionServiceNwpCouncilDateTest {
 
-    private static final String NWP = DepartmentConstants.NWP_ENGINEERING;
+    private static final String NWP = "NWP Engineering Department";
     private static final String OTHER = "Other Department";
 
     @Mock
@@ -68,6 +69,8 @@ class EmployeeActionServiceNwpCouncilDateTest {
 
     @BeforeEach
     void setUp() {
+        DepartmentConstants.setPrimaryDepartmentName(NWP);
+
         employee = Employee.builder()
                 .id(1L)
                 .build();
@@ -85,6 +88,11 @@ class EmployeeActionServiceNwpCouncilDateTest {
                 });
         when(employeeRepository.save(any(Employee.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    @AfterEach
+    void clearPrimaryDepartment() {
+        DepartmentConstants.setPrimaryDepartmentName("");
     }
 
     @Test

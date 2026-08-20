@@ -282,12 +282,12 @@ class SalaryIncrementServiceTest {
     @Test
     void caughtUpThroughPriorYearShowsNextDueNotCompleted() {
         LocalDate today = LocalDate.now();
-        LocalDate incrementDueThisYear = LocalDate.of(today.getYear(), 9, 9);
-        if (!today.isBefore(incrementDueThisYear)) {
+        LocalDate incrementDueThisYear = today.plusDays(45);
+        if (incrementDueThisYear.getYear() != today.getYear()) {
             return;
         }
 
-        employee.setIncremantDate("09-09");
+        employee.setIncremantDate(formatMonthDay(incrementDueThisYear));
         employee.setSalaryIncrementLastDueYear(today.getYear() - 1);
         employee.setSalaryIncrementDoneDate(today);
 

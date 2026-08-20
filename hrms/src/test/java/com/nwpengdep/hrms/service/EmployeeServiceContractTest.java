@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import java.time.LocalDate;
 import java.util.Optional;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -28,6 +29,8 @@ import com.nwpengdep.hrms.repository.ServiceTypeRepository;
 
 class EmployeeServiceContractTest {
 
+    private static final String PRIMARY_DEPARTMENT = "NWP Engineering Department";
+
     private EmployeeRepository employeeRepository;
     private DesignationRepository designationRepository;
     private OfficeService officeService;
@@ -35,6 +38,8 @@ class EmployeeServiceContractTest {
 
     @BeforeEach
     void setUp() {
+        DepartmentConstants.setPrimaryDepartmentName(PRIMARY_DEPARTMENT);
+
         employeeRepository = mock(EmployeeRepository.class);
         designationRepository = mock(DesignationRepository.class);
         EmployeeActionRepository employeeActionRepository =
@@ -84,6 +89,11 @@ class EmployeeServiceContractTest {
         });
     }
 
+    @AfterEach
+    void clearPrimaryDepartment() {
+        DepartmentConstants.setPrimaryDepartmentName("");
+    }
+
     @Test
     void createContractEmployeeStoresContractFieldsWithoutServiceLevel() {
         Employee created = employeeService.createEmployee(validContractRequest());
@@ -95,7 +105,7 @@ class EmployeeServiceContractTest {
         assertEquals(LocalDate.of(2026, 1, 1), created.getContractStartDate());
         assertEquals(LocalDate.of(2026, 12, 31), created.getContractEndDate());
         assertEquals(
-                DepartmentConstants.NWP_ENGINEERING,
+                PRIMARY_DEPARTMENT,
                 created.getCurrentDepartment()
         );
         assertEquals("Main Office", created.getCurrentOffice());
@@ -126,7 +136,7 @@ class EmployeeServiceContractTest {
         request.setMaritalStatus("Single");
         request.setReportedDateToPresentWorkingPlace(LocalDate.of(2026, 1, 15));
         request.setCurrentWorkingPlace("Main Office");
-        request.setCurrentDepartment(DepartmentConstants.NWP_ENGINEERING);
+        request.setCurrentDepartment(PRIMARY_DEPARTMENT);
         request.setCurrentDistrictOfWorking("Kurunegala");
         request.setEnteredDateToNWPCouncil(LocalDate.of(2026, 1, 10));
         request.setContractStartDate(LocalDate.of(2026, 1, 1));

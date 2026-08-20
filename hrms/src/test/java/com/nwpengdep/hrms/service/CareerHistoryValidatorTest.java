@@ -13,6 +13,7 @@ import java.util.Set;
 import java.util.List;
 import java.util.Optional;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -28,6 +29,8 @@ import com.nwpengdep.hrms.repository.ServiceTypeRepository;
 
 class CareerHistoryValidatorTest {
 
+    private static final String PRIMARY_DEPARTMENT = "NWP Engineering Department";
+
     private DesignationRepository designationRepository;
     private ServiceTypeRepository serviceTypeRepository;
     private OfficeService officeService;
@@ -40,6 +43,8 @@ class CareerHistoryValidatorTest {
 
     @BeforeEach
     void setUp() {
+        DepartmentConstants.setPrimaryDepartmentName(PRIMARY_DEPARTMENT);
+
         designationRepository = mock(DesignationRepository.class);
         serviceTypeRepository = mock(ServiceTypeRepository.class);
         officeService = mock(OfficeService.class);
@@ -74,6 +79,11 @@ class CareerHistoryValidatorTest {
                 .thenReturn(Optional.of(serviceA));
         lenient().when(serviceTypeRepository.findById(2L))
                 .thenReturn(Optional.of(serviceB));
+    }
+
+    @AfterEach
+    void clearPrimaryDepartment() {
+        DepartmentConstants.setPrimaryDepartmentName("");
     }
 
     @Test
@@ -474,7 +484,7 @@ class CareerHistoryValidatorTest {
         event.setActionType(type);
         event.setActionDate(LocalDate.parse(date));
         if (type != EmployeeActionType.TRANSFER_OUT) {
-            event.setDepartment(DepartmentConstants.NWP_ENGINEERING);
+            event.setDepartment(PRIMARY_DEPARTMENT);
             event.setOffice("Main Office");
             event.setDistrict("Kurunegala");
         }

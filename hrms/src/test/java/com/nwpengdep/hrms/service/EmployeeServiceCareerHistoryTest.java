@@ -17,6 +17,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
@@ -43,6 +44,8 @@ import com.nwpengdep.hrms.repository.ServiceTypeRepository;
 
 class EmployeeServiceCareerHistoryTest {
 
+    private static final String PRIMARY_DEPARTMENT = "NWP Engineering Department";
+
     private EmployeeRepository employeeRepository;
     private DesignationRepository designationRepository;
     private ServiceTypeRepository serviceTypeRepository;
@@ -59,6 +62,8 @@ class EmployeeServiceCareerHistoryTest {
 
     @BeforeEach
     void setUp() {
+        DepartmentConstants.setPrimaryDepartmentName(PRIMARY_DEPARTMENT);
+
         employeeRepository = mock(EmployeeRepository.class);
         designationRepository = mock(DesignationRepository.class);
         serviceTypeRepository = mock(ServiceTypeRepository.class);
@@ -168,6 +173,11 @@ class EmployeeServiceCareerHistoryTest {
         savedEmployee = activePermanentEmployee();
     }
 
+    @AfterEach
+    void clearPrimaryDepartment() {
+        DepartmentConstants.setPrimaryDepartmentName("");
+    }
+
     private Employee activePermanentEmployee() {
         Employee employee = new Employee();
         employee.setId(1L);
@@ -206,6 +216,7 @@ class EmployeeServiceCareerHistoryTest {
                 eq(engineer),
                 isNull(),
                 isNull(),
+                isNull(),
                 eq(Grade.III),
                 isNull(),
                 isNull(),
@@ -232,6 +243,7 @@ class EmployeeServiceCareerHistoryTest {
                 eq(engineer),
                 eq(engineer),
                 isNull(),
+                isNull(),
                 eq(Grade.III),
                 eq(Grade.II),
                 isNull(),
@@ -246,6 +258,7 @@ class EmployeeServiceCareerHistoryTest {
                 eq(LocalDate.parse("2020-01-01")),
                 eq(engineer),
                 eq(seniorEngineer),
+                isNull(),
                 isNull(),
                 eq(Grade.II),
                 eq(Grade.II),
@@ -315,6 +328,7 @@ class EmployeeServiceCareerHistoryTest {
                 eq(LocalDate.parse("2015-01-01")),
                 isNull(),
                 eq(engineer),
+                isNull(),
                 isNull(),
                 isNull(),
                 eq(Grade.III),
@@ -444,7 +458,7 @@ class EmployeeServiceCareerHistoryTest {
         event.setActionType(type);
         event.setActionDate(LocalDate.parse(date));
         if (type != EmployeeActionType.TRANSFER_OUT) {
-            event.setDepartment(DepartmentConstants.NWP_ENGINEERING);
+            event.setDepartment(PRIMARY_DEPARTMENT);
             event.setOffice("Main Office");
             event.setDistrict("Kurunegala");
         }
