@@ -1,0 +1,41 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: hrms-mysql-image-probe-20260902
+  namespace: north-western-province-council-production-2
+  labels:
+    app.kubernetes.io/name: hrms-mysql
+    app.kubernetes.io/component: image-probe
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: hrms-mysql
+        app.kubernetes.io/component: image-probe
+    spec:
+      restartPolicy: Never
+      nodeSelector:
+        kubernetes.io/hostname: worker-3
+      containers:
+        - name: mysql-version
+          image: image-registry.openshift-image-registry.svc:5000/north-western-province-council-production-2/hrms-mysql@sha256:62fb722c78b24245ddff1796a0fcee4a49cc5b87e0aaaf20c92d1da9e0a2497b
+          imagePullPolicy: Always
+          command:
+            - mysql
+            - --version
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault

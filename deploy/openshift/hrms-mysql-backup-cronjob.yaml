@@ -1,0 +1,106 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hrms-mysql-backup
+  namespace: north-western-province-council-production-2
+  labels:
+    app.kubernetes.io/name: hrms-mysql
+    app.kubernetes.io/component: scheduled-backup
+spec:
+  schedule: "30 2 * * *"
+  timeZone: Asia/Colombo
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 1800
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: hrms-mysql
+            app.kubernetes.io/component: scheduled-backup
+        spec:
+          restartPolicy: Never
+          # Co-location means the exact database client image is already
+          # cached wherever the StatefulSet is running, and keeps the RWO
+          # backup volume attachment on the database node.
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels:
+                      app: hrms-mysql-v2
+                  topologyKey: kubernetes.io/hostname
+          containers:
+            - name: mysqldump
+              image: image-registry.openshift-image-registry.svc:5000/north-western-province-council-production-2/hrms-mysql@sha256:62fb722c78b24245ddff1796a0fcee4a49cc5b87e0aaaf20c92d1da9e0a2497b
+              imagePullPolicy: IfNotPresent
+              command:
+                - /bin/bash
+                - -euo
+                - pipefail
+                - -c
+              args:
+                - |
+                  umask 007
+                  timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+                  backup="/backup/hrms-${timestamp}.sql.gz"
+                  temporary="${backup}.partial"
+
+                  if [[ -e "${backup}" || -e "${temporary}" ]]; then
+                    echo "Refusing to overwrite an existing scheduled backup." >&2
+                    exit 1
+                  fi
+
+                  MYSQL_PWD="${MYSQL_ROOT_PASSWORD}" mysqldump \
+                    --host=mysql-service \
+                    --port=3306 \
+                    --user=root \
+                    --single-transaction \
+                    --quick \
+                    --routines \
+                    --triggers \
+                    --events \
+                    --hex-blob \
+                    --set-gtid-purged=OFF \
+                    --no-tablespaces \
+                    --add-drop-database \
+                    --databases "${MYSQL_DATABASE}" \
+                    | gzip -9 > "${temporary}"
+
+                  gzip -t "${temporary}"
+                  mv "${temporary}" "${backup}"
+                  cd /backup
+                  sha256sum "$(basename "${backup}")" > "$(basename "${backup}").sha256"
+                  chmod 0660 "${backup}" "${backup}.sha256"
+                  sync
+                  echo "Scheduled backup completed and checksum recorded."
+              envFrom:
+                - secretRef:
+                    name: hrms-mysql-credentials
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  cpu: 300m
+                  memory: 512Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                runAsNonRoot: true
+                seccompProfile:
+                  type: RuntimeDefault
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+          volumes:
+            - name: backup
+              persistentVolumeClaim:
+                claimName: hrms-mysql-backups

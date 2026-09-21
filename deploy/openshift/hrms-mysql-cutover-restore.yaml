@@ -1,0 +1,87 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: hrms-mysql-cutover-restore-20260902
+  namespace: north-western-province-council-production-2
+  labels:
+    app.kubernetes.io/name: hrms-mysql
+    app.kubernetes.io/component: cutover-restore
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: hrms-mysql
+        app.kubernetes.io/component: cutover-restore
+    spec:
+      restartPolicy: Never
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: hrms-mysql-v2
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: restore
+          image: image-registry.openshift-image-registry.svc:5000/north-western-province-council-production-2/hrms-mysql@sha256:62fb722c78b24245ddff1796a0fcee4a49cc5b87e0aaaf20c92d1da9e0a2497b
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -euo
+            - pipefail
+            - -c
+          args:
+            - |
+              cd /backup
+              backup="hrms-final-cutover-2026-09-02.sql.gz"
+              sha256sum -c "${backup}.sha256"
+              gzip -t "${backup}"
+
+              gzip -dc "${backup}" \
+                | MYSQL_PWD="${MYSQL_ROOT_PASSWORD}" mysql \
+                    --host=hrms-mysql-v2 \
+                    --port=3306 \
+                    --user=root
+
+              restored_tables="$(MYSQL_PWD="${MYSQL_ROOT_PASSWORD}" mysql \
+                --host=hrms-mysql-v2 \
+                --port=3306 \
+                --user=root \
+                --database="${MYSQL_DATABASE}" \
+                --batch \
+                --skip-column-names \
+                --execute='SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')"
+
+              if [[ "${restored_tables}" == "0" ]]; then
+                echo "Final restore completed without application tables." >&2
+                exit 1
+              fi
+
+              echo "Final restore completed; application_tables=${restored_tables}."
+          envFrom:
+            - secretRef:
+                name: hrms-mysql-credentials
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 300m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+      volumes:
+        - name: backup
+          persistentVolumeClaim:
+            claimName: hrms-mysql-backups
