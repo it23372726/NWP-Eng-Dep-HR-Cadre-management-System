@@ -76,7 +76,7 @@ export default function RecordSalaryIncrementDialog({
 
     const isCatchUp = !isEdit && recordMode === "catchUp";
     const minDate = isEdit
-        ? getMinSalaryIncrementEditDate(salaryIncrementStatus, employee)
+        ? getMinSalaryIncrementEditDate(salaryIncrementStatus)
         : isCatchUp
             ? getMinSalaryIncrementCatchUpDate(salaryIncrementStatus)
             : getMinSalaryIncrementRecordDate(salaryIncrementStatus);
@@ -85,7 +85,7 @@ export default function RecordSalaryIncrementDialog({
     const maxDayjs = dayjs(maxDate);
     const validationError = useMemo(() => {
         if (isEdit) {
-            return validateSalaryIncrementEditDate(doneDate, salaryIncrementStatus, employee);
+            return validateSalaryIncrementEditDate(doneDate, salaryIncrementStatus);
         }
 
         if (isCatchUp) {
@@ -93,7 +93,7 @@ export default function RecordSalaryIncrementDialog({
         }
 
         return validateSalaryIncrementRecordDate(doneDate, salaryIncrementStatus);
-    }, [doneDate, salaryIncrementStatus, employee, isEdit, isCatchUp]);
+    }, [doneDate, salaryIncrementStatus, isEdit, isCatchUp]);
     const helperMode = isEdit ? "edit" : isCatchUp ? "catchUp" : "record";
     const canSubmit = Boolean(doneDate) && !validationError;
 
@@ -193,8 +193,7 @@ export default function RecordSalaryIncrementDialog({
                             error: Boolean(doneDate && validationError),
                             helperText: getSalaryIncrementRecordHelperText(
                                 salaryIncrementStatus,
-                                helperMode,
-                                employee
+                                helperMode
                             )
                         }
                     }}

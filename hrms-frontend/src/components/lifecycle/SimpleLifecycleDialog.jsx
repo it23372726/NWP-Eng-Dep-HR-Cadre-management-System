@@ -24,8 +24,12 @@ export default function SimpleLifecycleDialog({
     confirmColor = "primary",
     requireReason = false,
     previousEventDate,
-    hideDateField = false
+    maxDate = null,
+    maxDateHelperText = null,
+    hideDateField = false,
+    initialAction = null
 }) {
+    const isEdit = Boolean(initialAction);
     const [form, setForm] = useState({
         actionDate: "",
         reason: "",
@@ -33,10 +37,19 @@ export default function SimpleLifecycleDialog({
     });
 
     useEffect(() => {
-        if (open) {
-            setForm({ actionDate: "", reason: "", remarks: "" });
+        if (!open) {
+            return;
         }
-    }, [open]);
+        if (initialAction) {
+            setForm({
+                actionDate: initialAction.actionDate || "",
+                reason: initialAction.reason || "",
+                remarks: initialAction.remarks || ""
+            });
+            return;
+        }
+        setForm({ actionDate: "", reason: "", remarks: "" });
+    }, [open, initialAction]);
 
     const handleChange = (e) => {
         setForm({ ...form, [e.target.name]: e.target.value });
@@ -48,6 +61,11 @@ export default function SimpleLifecycleDialog({
         previousEventDate
         && form.actionDate
         && form.actionDate < previousEventDate
+    );
+    const dateAfterMaximum = Boolean(
+        maxDate
+        && form.actionDate
+        && form.actionDate > maxDate
     );
 
     const submit = () => {
@@ -63,7 +81,15 @@ export default function SimpleLifecycleDialog({
 
     const valid = (hideDateField || form.actionDate)
         && (!requireReason || form.reason.trim())
-        && !dateBeforeMinimum;
+        && !dateBeforeMinimum
+        && !dateAfterMaximum;
+
+    const dateHelper = dateBeforeMinimum
+        ? timelineMinDateHelperText(previousEventDate, { tooEarly: true })
+        : dateAfterMaximum
+            ? (maxDateHelperText
+                || `Cannot be later than ${maxDate}.`)
+            : (maxDateHelperText || timelineMinDateHelperText(previousEventDate));
 
     return (
         <Dialog
@@ -92,19 +118,13 @@ export default function SimpleLifecycleDialog({
                             value={form.actionDate}
                             required
                             slotProps={{
-                                htmlInput: previousEventDate
-                                    ? { min: previousEventDate }
-                                    : undefined
+                                htmlInput: {
+                                    ...(previousEventDate ? { min: previousEventDate } : {}),
+                                    ...(maxDate ? { max: maxDate } : {})
+                                }
                             }}
-                            error={dateBeforeMinimum}
-                            helperText={
-                                dateBeforeMinimum
-                                    ? timelineMinDateHelperText(
-                                        previousEventDate,
-                                        { tooEarly: true }
-                                    )
-                                    : timelineMinDateHelperText(previousEventDate)
-                            }
+                            error={dateBeforeMinimum || dateAfterMaximum}
+                            helperText={dateHelper}
                         />
                     </Grid>
                     )}
@@ -139,7 +159,7 @@ export default function SimpleLifecycleDialog({
                     onClick={submit}
                     disabled={!valid}
                 >
-                    {confirmLabel}
+                    {isEdit ? "Save changes" : confirmLabel}
                 </Button>
             </DialogActions>
         </Dialog>

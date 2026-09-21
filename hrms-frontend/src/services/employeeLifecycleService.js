@@ -90,7 +90,14 @@ export const updateEmployeeAction = async (actionId, data) => {
     return response.data;
 };
 
-export const deleteEmployeeAction = async (actionId) => {
-    const response = await api.delete(`/lifecycle-actions/${actionId}`);
+export const deleteEmployeeAction = async (actionId, expectedHistoryRevision) => {
+    const response = await api.delete(`/lifecycle-actions/${actionId}`, {
+        params: { expectedHistoryRevision }
+    });
+    return response.data;
+};
+
+export const appointToAnotherService = async (employeeId, data) => {
+    const response = await api.post(`/employees/${employeeId}/service-appointment`, data);
     return response.data;
 };

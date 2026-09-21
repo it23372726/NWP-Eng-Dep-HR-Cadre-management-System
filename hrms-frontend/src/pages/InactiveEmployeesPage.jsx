@@ -13,7 +13,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
 import FilterListOffIcon from "@mui/icons-material/FilterListOff";
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import { getApiErrorMessage } from "../constants/hrms";
@@ -30,6 +30,7 @@ import {
     hasInactiveEmployeeFilters,
     sortEmployeesBySerialNo
 } from "../utils/employeeListFilters";
+import { captureEmployeeListOrigin } from "../utils/employeeListReturnNavigation";
 
 export default function InactiveEmployeesPage() {
     const [allEmployees, setAllEmployees] = useState([]);
@@ -37,6 +38,7 @@ export default function InactiveEmployeesPage() {
     const [loadError, setLoadError] = useState("");
     const [searchKeyword, setSearchKeyword] = useState("");
     const navigate = useNavigate();
+    const location = useLocation();
 
     const employees = sortEmployeesBySerialNo(
         filterInactiveEmployees(allEmployees, searchKeyword)
@@ -68,7 +70,11 @@ export default function InactiveEmployeesPage() {
         if (!employee?.id) {
             return;
         }
-        navigate(`/employees/${employee.id}`);
+        navigate(`/employees/${employee.id}`, {
+            state: {
+                employeeListOrigin: captureEmployeeListOrigin(location)
+            }
+        });
     };
 
     const renderListContent = () => {

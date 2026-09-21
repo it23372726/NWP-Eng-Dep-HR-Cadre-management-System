@@ -24,6 +24,7 @@ import { renderDesignationSelectValue } from "../../utils/designationDisplay";
 import DepartmentOfficeFields, {
     DEPARTMENT_OPTIONS,
     ReadonlyWorkplaceFields,
+    parseDepartmentValue,
     resolveDepartmentValue
 } from "../workplace/DepartmentOfficeFields";
 import {
@@ -33,6 +34,12 @@ import {
     validateCustomDesignationAssignment,
     validateDesignationAssignment
 } from "../../constants/hrms";
+
+function parseDestination(action) {
+    return parseDepartmentValue(
+        action?.toDepartment || action?.department || ""
+    );
+}
 
 function ChangePreview({ label, fromValue, toValue }) {
     const changed = fromValue !== toValue;
@@ -97,8 +104,12 @@ export default function TransferOutDialog({
     currentDepartment,
     currentOffice,
     currentDistrictOfWorking,
-    previousEventDate
+    previousEventDate,
+    initialAction = null,
+    maxDate = null,
+    maxDateHelperText = null
 }) {
+    const isEdit = Boolean(initialAction);
     const [designations, setDesignations] = useState([]);
     const [serviceLevels, setServiceLevels] = useState([]);
     const [form, setForm] = useState({
@@ -114,6 +125,13 @@ export default function TransferOutDialog({
         remarks: ""
     });
     const [assignmentError, setAssignmentError] = useState("");
+
+    const fromDepartment = isEdit
+        ? (initialAction.fromDepartment || currentDepartment)
+        : currentDepartment;
+    const fromOffice = isEdit
+        ? (initialAction.fromOffice || currentOffice)
+        : currentOffice;
 
     const validateFormAssignment = (nextForm, designationData, levelData) => {
         if (!employee) {
@@ -171,6 +189,41 @@ export default function TransferOutDialog({
             setDesignations(designationData);
             setServiceLevels(levelData);
 
+            if (initialAction) {
+                const destination = parseDestination(initialAction);
+                let editForm = {
+                    transferDate: initialAction.actionDate || "",
+                    newDesignationId: initialAction.recordedDesignationName
+                        ? OTHER_DESIGNATION_VALUE
+                        : String(initialAction.newDesignationId || ""),
+                    recordedDesignationName: initialAction.recordedDesignationName || "",
+                    specialDesignationName: initialAction.recordedDesignationName
+                        ? ""
+                        : initialAction.specialDesignationName || "",
+                    serviceLevelId: initialAction.serviceLevelId
+                        ? String(initialAction.serviceLevelId)
+                        : String(employee.serviceLevel?.id ?? ""),
+                    toDepartmentType: destination.departmentType,
+                    toOtherDepartmentName: destination.otherDepartmentName,
+                    toDistrict: initialAction.district || "",
+                    toOffice: initialAction.toOffice || initialAction.office || "",
+                    remarks: initialAction.remarks || ""
+                };
+                if (!isOtherDesignation(editForm.newDesignationId)
+                        && !editForm.serviceLevelId) {
+                    editForm = applyRequiredServiceLevel(
+                        editForm,
+                        editForm.newDesignationId,
+                        designationData
+                    );
+                }
+                setForm(editForm);
+                setAssignmentError(
+                    validateFormAssignment(editForm, designationData, levelData)
+                );
+                return;
+            }
+
             const initialDesignationId = employee.recordedDesignationName
                 ? OTHER_DESIGNATION_VALUE
                 : String(employee.designation?.id ?? "");
@@ -203,7 +256,7 @@ export default function TransferOutDialog({
                 validateFormAssignment(initialForm, designationData, levelData)
             );
         });
-    }, [open, employee]);
+    }, [open, employee, initialAction]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -237,13 +290,18 @@ export default function TransferOutDialog({
         : designations.find(
             (item) => item.id === Number(form.newDesignationId)
         );
-    const currentDesignationName = resolveEmployeeDesignationName(employee);
+    const currentDesignationName = isEdit
+        ? (initialAction.oldDesignationName
+            || resolveEmployeeDesignationName(employee))
+        : resolveEmployeeDesignationName(employee);
     const destinationDesignationName = isOtherTransfer
         ? form.recordedDesignationName?.trim() || null
         : form.specialDesignationName?.trim()
             || selectedDesignation?.designationName
             || null;
-    const currentServiceLevelName = employee?.serviceLevel?.levelName ?? null;
+    const currentServiceLevelName = isEdit
+        ? null
+        : (employee?.serviceLevel?.levelName ?? null);
     const destinationServiceLevelName = serviceLevels.find(
         (level) => level.id === Number(form.serviceLevelId)
     )?.levelName ?? null;
@@ -253,14 +311,19 @@ export default function TransferOutDialog({
         form.toOtherDepartmentName
     );
 
-    const sameDepartment = currentDepartment
+    const sameDepartment = fromDepartment
         && toDepartment
-        && currentDepartment.toLowerCase() === toDepartment.toLowerCase();
+        && fromDepartment.toLowerCase() === toDepartment.toLowerCase();
 
     const dateBeforeMinimum = Boolean(
         previousEventDate
         && form.transferDate
         && form.transferDate < previousEventDate
+    );
+    const dateAfterMaximum = Boolean(
+        maxDate
+        && form.transferDate
+        && form.transferDate > maxDate
     );
 
     const assignmentReady = Boolean(form.serviceLevelId) && !assignmentError;
@@ -297,21 +360,29 @@ export default function TransferOutDialog({
                 document.activeElement?.blur();
             }}
         >
-            <DialogTitle>Transfer Out</DialogTitle>
+            <DialogTitle>
+                {isEdit ? "Edit Transfer Out" : "Transfer Out"}
+            </DialogTitle>
             <DialogContent dividers>
                 <Alert severity="info" sx={{ mb: 2 }}>
-                    {employeeName} will transfer out from their current department.
-                    A paired transfer-in will be recorded automatically. Set the
-                    designation and service level for the new department.
-                    If this move is a <strong>promotion</strong> leaving N.W.P.
-                    Engineering, use <strong>Promote / Update Assignment</strong>
-                    instead and choose &quot;Transfers out of department&quot;.
+                    {isEdit ? (
+                        <>Revise the transfer-out for {employeeName}. The paired transfer-in is updated automatically.</>
+                    ) : (
+                        <>
+                            {employeeName} will transfer out from their current department.
+                            A paired transfer-in will be recorded automatically. Set the
+                            designation and service level for the new department.
+                            If this move is a <strong>promotion</strong> leaving N.W.P.
+                            Engineering, use <strong>Promote / Update Assignment</strong>
+                            instead and choose &quot;Transfers out of department&quot;.
+                        </>
+                    )}
                 </Alert>
                 <Grid container spacing={2}>
                     <ReadonlyWorkplaceFields
-                        department={currentDepartment}
-                        office={currentOffice}
-                        district={currentDistrictOfWorking}
+                        department={fromDepartment}
+                        office={fromOffice}
+                        district={isEdit ? null : currentDistrictOfWorking}
                     />
                     <Grid size={{ xs: 12 }}>
                         <DateInput
@@ -321,18 +392,22 @@ export default function TransferOutDialog({
                             value={form.transferDate}
                             required
                             slotProps={{
-                                htmlInput: previousEventDate
-                                    ? { min: previousEventDate }
-                                    : undefined
+                                htmlInput: {
+                                    ...(previousEventDate ? { min: previousEventDate } : {}),
+                                    ...(maxDate ? { max: maxDate } : {})
+                                }
                             }}
-                            error={dateBeforeMinimum}
+                            error={dateBeforeMinimum || dateAfterMaximum}
                             helperText={
                                 dateBeforeMinimum
                                     ? timelineMinDateHelperText(
                                         previousEventDate,
                                         { tooEarly: true }
                                     )
-                                    : timelineMinDateHelperText(previousEventDate)
+                                    : dateAfterMaximum
+                                        ? (maxDateHelperText || `Cannot be later than ${maxDate}.`)
+                                        : (maxDateHelperText
+                                            || timelineMinDateHelperText(previousEventDate))
                             }
                         />
                     </Grid>
@@ -503,6 +578,7 @@ export default function TransferOutDialog({
                     disabled={
                         !form.transferDate
                         || dateBeforeMinimum
+                        || dateAfterMaximum
                         || !form.toOffice.trim()
                         || !toDepartment
                         || !assignmentReady
@@ -513,7 +589,7 @@ export default function TransferOutDialog({
                         || sameDepartment
                     }
                 >
-                    Confirm Transfer Out
+                    {isEdit ? "Save changes" : "Confirm Transfer Out"}
                 </Button>
             </DialogActions>
         </Dialog>

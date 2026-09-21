@@ -19,24 +19,41 @@ export default function MakePermanentDialog({
     employeeName,
     minDate,
     previousEventDate,
-    onSubmit
+    maxDate = null,
+    maxDateHelperText = null,
+    onSubmit,
+    initialAction = null
 }) {
+    const isEdit = Boolean(initialAction);
     const [form, setForm] = useState({
         confirmationDate: "",
         remarks: ""
     });
 
     useEffect(() => {
-        if (open) {
-            setForm({ confirmationDate: "", remarks: "" });
+        if (!open) {
+            return;
         }
-    }, [open]);
+        if (initialAction) {
+            setForm({
+                confirmationDate: initialAction.actionDate || "",
+                remarks: initialAction.remarks || ""
+            });
+            return;
+        }
+        setForm({ confirmationDate: "", remarks: "" });
+    }, [open, initialAction]);
 
     const effectiveMinDate = combineMinDates(minDate, previousEventDate);
     const dateBeforeMinimum = Boolean(
         effectiveMinDate
         && form.confirmationDate
         && form.confirmationDate < effectiveMinDate
+    );
+    const dateAfterMaximum = Boolean(
+        maxDate
+        && form.confirmationDate
+        && form.confirmationDate > maxDate
     );
 
     const handleChange = (e) => {
@@ -54,9 +71,12 @@ export default function MakePermanentDialog({
 
     const helperText = dateBeforeMinimum
         ? timelineMinDateHelperText(effectiveMinDate, { tooEarly: true })
-        : effectiveMinDate
-            ? timelineMinDateHelperText(effectiveMinDate)
-            : undefined;
+        : dateAfterMaximum
+            ? (maxDateHelperText || `Cannot be later than ${maxDate}.`)
+            : maxDateHelperText
+                || (effectiveMinDate
+                    ? timelineMinDateHelperText(effectiveMinDate)
+                    : undefined);
 
     return (
         <Dialog
@@ -68,10 +88,14 @@ export default function MakePermanentDialog({
                 document.activeElement?.blur();
             }}
         >
-            <DialogTitle>Make Permanent</DialogTitle>
+            <DialogTitle>
+                {isEdit ? "Edit Permanent Confirmation" : "Make Permanent"}
+            </DialogTitle>
             <DialogContent dividers>
                 <Alert severity="info" sx={{ mb: 2 }}>
-                    Confirm permanent status for {employeeName}. The confirmation date must be entered by HR.
+                    {isEdit
+                        ? `Revise the permanent confirmation for ${employeeName}.`
+                        : `Confirm permanent status for ${employeeName}. The confirmation date must be entered by HR.`}
                 </Alert>
                 <Grid container spacing={2}>
                     <Grid size={{ xs: 12 }}>
@@ -82,11 +106,12 @@ export default function MakePermanentDialog({
                             value={form.confirmationDate}
                             required
                             slotProps={{
-                                htmlInput: effectiveMinDate
-                                    ? { min: effectiveMinDate }
-                                    : undefined
+                                htmlInput: {
+                                    ...(effectiveMinDate ? { min: effectiveMinDate } : {}),
+                                    ...(maxDate ? { max: maxDate } : {})
+                                }
                             }}
-                            error={dateBeforeMinimum}
+                            error={dateBeforeMinimum || dateAfterMaximum}
                             helperText={helperText}
                         />
                     </Grid>
@@ -107,9 +132,9 @@ export default function MakePermanentDialog({
                 <Button
                     variant="contained"
                     onClick={submit}
-                    disabled={!form.confirmationDate || dateBeforeMinimum}
+                    disabled={!form.confirmationDate || dateBeforeMinimum || dateAfterMaximum}
                 >
-                    Confirm Permanent Status
+                    {isEdit ? "Save changes" : "Confirm Permanent Status"}
                 </Button>
             </DialogActions>
         </Dialog>

@@ -692,9 +692,11 @@ export default function EmployeeProfilePersonalTab({
                         ) : (
                             <>
                                 <InfoField
-                                    label="Date of First Appointment"
+                                    label={employee.currentServiceAppointmentKey ? "First Appointment in Current Service" : "Date of First Appointment"}
                                     value={formatDate(employee.dateOfFirstAppointment)}
                                 />
+                                {employee.originalFirstAppointmentDate && <InfoField label="Original Career Appointment"
+                                    value={formatDate(employee.originalFirstAppointmentDate)} />}
                                 <InfoField
                                     label="Entered All Island Service"
                                     value={formatDate(employee.enteredDateToAllIslandService)}

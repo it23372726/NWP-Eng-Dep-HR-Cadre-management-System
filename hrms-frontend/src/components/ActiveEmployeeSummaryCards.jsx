@@ -6,6 +6,7 @@ import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import EventIcon from "@mui/icons-material/Event";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import { KPI_COLORS } from "../constants/dashboardTheme";
+import { RETIREMENT_WATCH_MONTHS } from "../utils/employeeRetirement";
 
 function SummaryCard({
     icon: Icon,
@@ -145,9 +146,9 @@ export default function ActiveEmployeeSummaryCards({
             icon: EventIcon,
             title: "Near Retirement",
             value: stats?.nearRetirement ?? 0,
-            subtitle: "Within 24 months",
+            subtitle: "Within 12 months",
             color: KPI_COLORS.retirement,
-            filter: { retiringWithinMonths: "24" }
+            filter: { retiringWithinMonths: String(RETIREMENT_WATCH_MONTHS) }
         }
     ];
 

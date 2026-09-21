@@ -1,4 +1,9 @@
-import { calculateRetirementDate } from "./employeeRetirement";
+import {
+    calculateRetirementDate,
+    isRetirementDateWithinMonths,
+    isRetiringThisCalendarYear,
+    RETIREMENT_THIS_YEAR
+} from "./employeeRetirement";
 import { hasCompletedProbationYears } from "./gradeAchievementDates";
 import { matchesIncrementStatus } from "./salaryIncrement";
 import { matchesPrivateVehicleFilter, findPrivateVehicleFilterLabel } from "./privateVehicle";
@@ -64,30 +69,24 @@ export function isQualifiedForGradePromotion(employee, filterValue) {
     return true;
 }
 
-export function matchesRetiringWithin(employee, months) {
-    if (!months) {
+export function matchesRetiringWithin(employee, period) {
+    if (!period) {
         return true;
     }
 
-    const parsedMonths = Number(months);
+    if (String(period).toUpperCase() === RETIREMENT_THIS_YEAR) {
+        return isRetiringThisCalendarYear(employee?.dateOfBirth);
+    }
+
+    const parsedMonths = Number(period);
     if (!Number.isFinite(parsedMonths) || parsedMonths < 0) {
         return true;
     }
 
-    const retirementDate = calculateRetirementDate(employee?.dateOfBirth);
-    if (!retirementDate) {
-        return false;
-    }
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const monthsRemaining = (
-        (retirementDate.getFullYear() - today.getFullYear()) * 12
-        + (retirementDate.getMonth() - today.getMonth())
+    return isRetirementDateWithinMonths(
+        calculateRetirementDate(employee?.dateOfBirth),
+        parsedMonths
     );
-
-    return monthsRemaining >= 0 && monthsRemaining <= parsedMonths;
 }
 
 export function matchesDistrictFilter(employee, district) {

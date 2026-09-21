@@ -15,6 +15,10 @@ import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import { useNavigate } from "react-router-dom";
 import { buildEmployeeListUrl } from "../utils/dashboardNavigation";
 import { KPI_COLORS } from "../constants/dashboardTheme";
+import {
+    RETIREMENT_THIS_YEAR,
+    RETIREMENT_WATCH_MONTHS
+} from "../utils/employeeRetirement";
 
 const RETIREMENT_AGE = 60;
 
@@ -192,7 +196,7 @@ export default function RetirementForecastCard({ data, loading }) {
 
     const maxCount = Math.max(
         data?.retiringThisYear ?? 0,
-        data?.retiringWithinTwoYears ?? 0,
+        data?.retiringWithinOneYear ?? 0,
         data?.retiringWithinFiveYears ?? 0,
         1
     );
@@ -206,17 +210,17 @@ export default function RetirementForecastCard({ data, loading }) {
             count: data?.retiringThisYear,
             color: "#B42318",
             icon: WarningAmberIcon,
-            months: 12
+            retiringWithin: RETIREMENT_THIS_YEAR
         },
         {
             step: "2",
-            title: "Next 2 Years",
-            description: "Retiring within the next 24 months",
+            title: "Next 1 Year",
+            description: "Retiring within the next 12 months",
             urgencyLabel: "Near-term",
-            count: data?.retiringWithinTwoYears,
+            count: data?.retiringWithinOneYear,
             color: "#B45309",
             icon: CalendarMonthIcon,
-            months: 24
+            retiringWithin: RETIREMENT_WATCH_MONTHS
         },
         {
             step: "3",
@@ -226,7 +230,7 @@ export default function RetirementForecastCard({ data, loading }) {
             count: data?.retiringWithinFiveYears,
             color: KPI_COLORS.retirement,
             icon: TimelineIcon,
-            months: 60
+            retiringWithin: 60
         }
     ];
 
@@ -249,7 +253,7 @@ export default function RetirementForecastCard({ data, loading }) {
                         loading={loading}
                         maxCount={maxCount}
                         onClick={() => navigate(buildEmployeeListUrl({
-                            retiringWithin: horizon.months
+                            retiringWithin: horizon.retiringWithin
                         }))}
                     />
                 ))}

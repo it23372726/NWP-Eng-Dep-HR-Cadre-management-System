@@ -1,6 +1,7 @@
 import { matchesRetiringWithin } from "./employeeListFilters";
 import { isPermanentEmployee } from "../constants/hrms";
 import { getDistricts, normalizeDistrictLabel } from "./organizationSettingsStore";
+import { RETIREMENT_WATCH_MONTHS } from "./employeeRetirement";
 
 export function computeActiveEmployeeStats(employees = []) {
     const list = Array.isArray(employees) ? employees : [];
@@ -41,7 +42,7 @@ export function computeActiveEmployeeStats(employees = []) {
     });
 
     list.forEach((employee) => {
-        if (matchesRetiringWithin(employee, 24)) {
+        if (matchesRetiringWithin(employee, RETIREMENT_WATCH_MONTHS)) {
             nearRetirement += 1;
         }
 

@@ -30,6 +30,7 @@ import {
 import {
     formatIncrementDay,
     formatSalaryIncrementDate,
+    formatSalaryIncrementDoneDate,
     getSalaryIncrementStatusColor,
     getSalaryIncrementStatusLabel
 } from "../utils/salaryIncrement";
@@ -73,7 +74,9 @@ export default function EmployeeProfileBenefitsTab({
         && employee.incremantDate
         && !showSalaryIncrementSection;
     const hasSalaryIncrementRecord = Boolean(
-        salaryIncrementStatus?.lastDoneDate ?? employee.salaryIncrementDoneDate
+        salaryIncrementStatus?.canEdit
+        || salaryIncrementStatus?.canUndo
+        || salaryIncrementStatus?.hasRecordedIncrement
     );
 
     if (!showPrivateVehicleSection && !showVehiclePermitSection
@@ -249,7 +252,7 @@ export default function EmployeeProfileBenefitsTab({
                                         Record increment
                                     </Button>
                                 )}
-                                {hasSalaryIncrementRecord && onEditSalaryIncrement && (
+                                {salaryIncrementStatus?.canEdit && onEditSalaryIncrement && (
                                     <Button
                                         variant="outlined"
                                         size="small"
@@ -258,7 +261,7 @@ export default function EmployeeProfileBenefitsTab({
                                         Edit date
                                     </Button>
                                 )}
-                                {hasSalaryIncrementRecord && onUndoSalaryIncrement && (
+                                {salaryIncrementStatus?.canUndo && onUndoSalaryIncrement && (
                                     <Button
                                         variant="outlined"
                                         color="warning"
@@ -273,8 +276,9 @@ export default function EmployeeProfileBenefitsTab({
                     }
                 >
                     <Grid container spacing={1.25}>
-                        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                        <Grid size={{ xs: 12 }}>
                             <Chip
+                                size="small"
                                 color={getSalaryIncrementStatusColor(salaryIncrementStatus)}
                                 label={getSalaryIncrementStatusLabel(salaryIncrementStatus)}
                             />
@@ -297,9 +301,13 @@ export default function EmployeeProfileBenefitsTab({
                         />
                         <InfoField
                             label="Last completed"
-                            value={formatSalaryIncrementDate(
-                                salaryIncrementStatus.lastDoneDate
-                                    ?? employee.salaryIncrementDoneDate
+                            value={formatSalaryIncrementDoneDate(
+                                salaryIncrementStatus.lastDoneDate,
+                                {
+                                    legacyImported:
+                                        salaryIncrementStatus.lastOperationType === "LEGACY_IMPORT"
+                                        && !salaryIncrementStatus.lastDoneDate
+                                }
                             )}
                         />
                     </Grid>

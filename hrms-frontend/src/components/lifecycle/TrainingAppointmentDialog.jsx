@@ -39,8 +39,12 @@ export default function TrainingAppointmentDialog({
     onSubmit,
     employee,
     previousEventDate,
-    canAppoint = true
+    canAppoint = true,
+    initialAction = null,
+    maxDate = null,
+    maxDateHelperText = null
 }) {
+    const isEdit = Boolean(initialAction);
     const [form, setForm] = useState({
         appointmentDate: "",
         serviceLevelId: "",
@@ -50,7 +54,7 @@ export default function TrainingAppointmentDialog({
     const [serviceLevels, setServiceLevels] = useState([]);
 
     const reportedDate = employee?.reportedDateToPresentWorkingPlace ?? null;
-    const minimumDate = [previousEventDate, reportedDate]
+    const minimumDate = [previousEventDate, isEdit ? null : reportedDate]
         .filter(Boolean)
         .sort()
         .at(-1) ?? null;
@@ -69,6 +73,22 @@ export default function TrainingAppointmentDialog({
             .then(setServiceLevels)
             .catch(() => setServiceLevels([]));
 
+        if (initialAction) {
+            const parsed = parseDepartmentValue(initialAction.department);
+            setForm({
+                appointmentDate: initialAction.actionDate || "",
+                serviceLevelId: initialAction.serviceLevelId
+                    ? String(initialAction.serviceLevelId)
+                    : String(employee?.serviceLevel?.id ?? ""),
+                remarks: initialAction.remarks || "",
+                departmentType: parsed.departmentType,
+                otherDepartmentName: parsed.otherDepartmentName,
+                district: initialAction.district || "",
+                office: initialAction.office || ""
+            });
+            return;
+        }
+
         const parsed = parseDepartmentValue(employee?.currentDepartment);
         const defaultServiceLevelId = employee?.designation?.serviceLevel?.id ?? "";
 
@@ -83,7 +103,7 @@ export default function TrainingAppointmentDialog({
                 ?? "",
             office: employee?.currentOffice || ""
         });
-    }, [open, employee]);
+    }, [open, employee, initialAction]);
 
     const handleChange = (e) => {
         setForm({ ...form, [e.target.name]: e.target.value });
@@ -112,7 +132,7 @@ export default function TrainingAppointmentDialog({
     );
 
     const graduationBlockReason = getTrainingGraduationBlockReason(employee);
-    const appointmentPeriodBlocked = Boolean(
+    const appointmentPeriodBlocked = !isEdit && Boolean(
         form.appointmentDate
         && employee
         && !hasTrainingPeriodCompleted(employee, form.appointmentDate)
@@ -122,6 +142,11 @@ export default function TrainingAppointmentDialog({
         minimumDate
         && form.appointmentDate
         && form.appointmentDate < minimumDate
+    );
+    const dateAfterMaximum = Boolean(
+        maxDate
+        && form.appointmentDate
+        && form.appointmentDate > maxDate
     );
 
     const submit = () => {
@@ -139,6 +164,7 @@ export default function TrainingAppointmentDialog({
 
     const valid = form.appointmentDate
         && !dateBeforeMinimum
+        && !dateAfterMaximum
         && !appointmentPeriodBlocked
         && form.serviceLevelId
         && !assignmentError
@@ -147,7 +173,7 @@ export default function TrainingAppointmentDialog({
         && (form.departmentType !== DEPARTMENT_OPTIONS.OTHER
             || form.otherDepartmentName.trim())
         && (form.departmentType !== DEPARTMENT_OPTIONS.NWP || form.district)
-        && canAppoint;
+        && (isEdit || canAppoint);
 
     return (
         <Dialog
@@ -159,23 +185,25 @@ export default function TrainingAppointmentDialog({
                 document.activeElement?.blur();
             }}
         >
-            <DialogTitle>Appoint as Permanent</DialogTitle>
+            <DialogTitle>
+                {isEdit ? "Edit Training Appointment" : "Appoint as Permanent"}
+            </DialogTitle>
             <DialogContent dividers>
-                {!canAppoint && graduationBlockReason && (
+                {!isEdit && !canAppoint && graduationBlockReason && (
                     <Alert severity="warning" sx={{ mb: 2 }}>
                         {graduationBlockReason}
                     </Alert>
                 )}
-                {canAppoint && appointmentPeriodBlocked && (
+                {!isEdit && canAppoint && appointmentPeriodBlocked && (
                     <Alert severity="warning" sx={{ mb: 2 }}>
                         The selected effective date is before the training period
                         end date.
                     </Alert>
                 )}
                 <Alert severity="success" sx={{ mb: 2 }}>
-                    {employee?.fullName} will be appointed as a permanent employee
-                    on probation. The first appointment date will be set to the
-                    effective date.
+                    {isEdit
+                        ? `Revise the training-to-permanent appointment for ${employee?.fullName}.`
+                        : `${employee?.fullName} will be appointed as a permanent employee on probation. The first appointment date will be set to the effective date.`}
                 </Alert>
                 <Grid container spacing={2}>
                     <Grid size={{ xs: 12 }}>
@@ -186,18 +214,22 @@ export default function TrainingAppointmentDialog({
                             value={form.appointmentDate}
                             required
                             slotProps={{
-                                htmlInput: minimumDate
-                                    ? { min: minimumDate }
-                                    : undefined
+                                htmlInput: {
+                                    ...(minimumDate ? { min: minimumDate } : {}),
+                                    ...(maxDate ? { max: maxDate } : {})
+                                }
                             }}
-                            error={dateBeforeMinimum}
+                            error={dateBeforeMinimum || dateAfterMaximum}
                             helperText={
                                 dateBeforeMinimum
                                     ? timelineMinDateHelperText(
                                         minimumDate,
                                         { tooEarly: true }
                                     )
-                                    : timelineMinDateHelperText(minimumDate)
+                                    : dateAfterMaximum
+                                        ? (maxDateHelperText || `Cannot be later than ${maxDate}.`)
+                                        : (maxDateHelperText
+                                            || timelineMinDateHelperText(minimumDate))
                             }
                         />
                     </Grid>
@@ -266,7 +298,7 @@ export default function TrainingAppointmentDialog({
                     onClick={submit}
                     disabled={!valid}
                 >
-                    Confirm Appointment
+                    {isEdit ? "Save changes" : "Confirm Appointment"}
                 </Button>
             </DialogActions>
         </Dialog>

@@ -33,8 +33,12 @@ export default function NewAppointmentDialog({
     defaultDepartment,
     defaultOffice,
     defaultDistrict,
-    previousEventDate
+    previousEventDate,
+    initialAction = null,
+    maxDate = null,
+    maxDateHelperText = null
 }) {
+    const isEdit = Boolean(initialAction);
     const [form, setForm] = useState({
         appointmentDate: "",
         remarks: "",
@@ -42,18 +46,31 @@ export default function NewAppointmentDialog({
     });
 
     useEffect(() => {
-        if (open) {
-            const parsed = parseDepartmentValue(defaultDepartment);
+        if (!open) {
+            return;
+        }
+        if (initialAction) {
+            const parsed = parseDepartmentValue(initialAction.department);
             setForm({
-                appointmentDate: "",
-                remarks: "",
+                appointmentDate: initialAction.actionDate || "",
+                remarks: initialAction.remarks || "",
                 departmentType: parsed.departmentType,
                 otherDepartmentName: parsed.otherDepartmentName,
-                district: defaultDistrict?.label ?? defaultDistrict ?? "",
-                office: defaultOffice || ""
+                district: initialAction.district || "",
+                office: initialAction.office || ""
             });
+            return;
         }
-    }, [open, defaultDepartment, defaultOffice, defaultDistrict]);
+        const parsed = parseDepartmentValue(defaultDepartment);
+        setForm({
+            appointmentDate: "",
+            remarks: "",
+            departmentType: parsed.departmentType,
+            otherDepartmentName: parsed.otherDepartmentName,
+            district: defaultDistrict?.label ?? defaultDistrict ?? "",
+            office: defaultOffice || ""
+        });
+    }, [open, initialAction, defaultDepartment, defaultOffice, defaultDistrict]);
 
     const handleChange = (e) => {
         setForm({ ...form, [e.target.name]: e.target.value });
@@ -71,6 +88,11 @@ export default function NewAppointmentDialog({
         && form.appointmentDate
         && form.appointmentDate < previousEventDate
     );
+    const dateAfterMaximum = Boolean(
+        maxDate
+        && form.appointmentDate
+        && form.appointmentDate > maxDate
+    );
 
     const submit = () => {
         onSubmit({
@@ -86,6 +108,7 @@ export default function NewAppointmentDialog({
 
     const valid = form.appointmentDate
         && !dateBeforeMinimum
+        && !dateAfterMaximum
         && form.office.trim()
         && department
         && (form.departmentType !== DEPARTMENT_OPTIONS.OTHER
@@ -102,10 +125,14 @@ export default function NewAppointmentDialog({
                 document.activeElement?.blur();
             }}
         >
-            <DialogTitle>New Appointment</DialogTitle>
+            <DialogTitle>
+                {isEdit ? "Edit New Appointment" : "New Appointment"}
+            </DialogTitle>
             <DialogContent dividers>
                 <Alert severity="success" sx={{ mb: 2 }}>
-                    {employeeName} will be newly appointed. Employee becomes active.
+                    {isEdit
+                        ? `Revise the new appointment for ${employeeName}.`
+                        : `${employeeName} will be newly appointed. Employee becomes active.`}
                 </Alert>
                 <Grid container spacing={2}>
                     <Grid size={{ xs: 12 }}>
@@ -116,18 +143,22 @@ export default function NewAppointmentDialog({
                             value={form.appointmentDate}
                             required
                             slotProps={{
-                                htmlInput: previousEventDate
-                                    ? { min: previousEventDate }
-                                    : undefined
+                                htmlInput: {
+                                    ...(previousEventDate ? { min: previousEventDate } : {}),
+                                    ...(maxDate ? { max: maxDate } : {})
+                                }
                             }}
-                            error={dateBeforeMinimum}
+                            error={dateBeforeMinimum || dateAfterMaximum}
                             helperText={
                                 dateBeforeMinimum
                                     ? timelineMinDateHelperText(
                                         previousEventDate,
                                         { tooEarly: true }
                                     )
-                                    : timelineMinDateHelperText(previousEventDate)
+                                    : dateAfterMaximum
+                                        ? (maxDateHelperText || `Cannot be later than ${maxDate}.`)
+                                        : (maxDateHelperText
+                                            || timelineMinDateHelperText(previousEventDate))
                             }
                         />
                     </Grid>
@@ -174,7 +205,7 @@ export default function NewAppointmentDialog({
                     onClick={submit}
                     disabled={!valid}
                 >
-                    Confirm Appointment
+                    {isEdit ? "Save changes" : "Confirm Appointment"}
                 </Button>
             </DialogActions>
         </Dialog>

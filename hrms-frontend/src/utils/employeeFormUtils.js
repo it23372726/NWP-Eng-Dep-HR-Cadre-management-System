@@ -971,6 +971,12 @@ const mapActionToCareerEvent = (action, designations, serviceLevelFallback, empl
         employee?.service?.id ?? employee?.designation?.service?.id ?? null;
 
     switch (action.actionType) {
+        case "SERVICE_APPOINTMENT":
+            return { ...base, actionType: action.actionType, designationId: action.newDesignationId,
+                serviceId: action.serviceId, serviceLevelId: action.serviceLevelId, grade: "III",
+                department: action.department, office: action.office, district: districtValue(action.district),
+                serviceAppointmentKey: action.serviceAppointmentKey, appointmentBasis: action.appointmentBasis,
+                incrementDate: action.incrementDate, firstIncrementDueDate: action.firstIncrementDueDate };
         case "NEW_APPOINTMENT":
             if (action.recordedDesignationName) {
                 return {
@@ -1106,7 +1112,9 @@ const mapActionToCareerEvent = (action, designations, serviceLevelFallback, empl
                 actionType: "OFFICE_CHANGE",
                 department: action.department ?? "",
                 office: action.office ?? "",
-                district: districtValue(action.district)
+                district: districtValue(action.district),
+                specialDesignationName: action.specialDesignationName ?? "",
+                specialDesignationUpdated: action.specialDesignationUpdated ?? false
             };
 
         case "RETIREMENT_OR_RESIGNATION":
@@ -1341,6 +1349,7 @@ export const buildPermanentUpdatePayload = (
 
     return {
         ...payload,
+        expectedHistoryRevision: employee?.lifecycleHistoryRevision,
         careerHistory: prepareCareerHistoryForSave(historyEvents)
     };
 };
@@ -1436,7 +1445,7 @@ export const validateCareerHistoryEventAssignment = ({
 };
 
 const ASSIGNMENT_VALIDATION_EVENTS = new Set([
-    "NEW_APPOINTMENT",
+    "NEW_APPOINTMENT", "SERVICE_APPOINTMENT",
     "PROMOTION",
     "ASSIGNMENT_GRADE_UPDATE"
 ]);
@@ -1497,6 +1506,14 @@ const applyEventToTimelineState = (state, event) => {
     const next = { ...state };
 
     switch (event.actionType) {
+        case "SERVICE_APPOINTMENT":
+            next.designationId = event.designationId; next.recordedDesignationName = null; next.specialDesignationName = null;
+            next.serviceId = event.serviceId; next.grade = "III"; next.firstAppointmentDate = event.actionDate;
+            next.permanentConfirmed = false; next.permanentConfirmationDate = null;
+            next.grade2AchievedDate = null; next.grade1AchievedDate = null;
+            next.currentDepartment = event.department; next.currentOffice = event.office;
+            next.currentDistrictOfWorking = districtValue(event.district); next.active = true;
+            break;
         case "NEW_APPOINTMENT":
             if (event.recordedDesignationName) {
                 next.recordedDesignationName = event.recordedDesignationName;
@@ -1628,6 +1645,9 @@ const applyEventToTimelineState = (state, event) => {
             }
             if (event.district) {
                 next.currentDistrictOfWorking = districtValue(event.district);
+            }
+            if (event.specialDesignationUpdated && !next.recordedDesignationName) {
+                next.specialDesignationName = event.specialDesignationName?.trim() || null;
             }
             break;
         case "RETIREMENT_OR_RESIGNATION":

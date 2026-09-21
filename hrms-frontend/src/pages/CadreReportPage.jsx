@@ -79,7 +79,9 @@ const CHANGES_COLUMNS = [
     { key: "promotionsIn", label: "Promotion", numeric: true },
     { key: "newAppointments", label: "New Appointment", numeric: true },
     { key: "dismissals", label: "Dismissals", numeric: true },
-    { key: "vacationOfPost", label: "Vacation of Post", numeric: true }
+    { key: "vacationOfPost", label: "Vacation of Post", numeric: true },
+    { key: "serviceAppointmentsOut", label: "Service Appointment OUT", numeric: true },
+    { key: "serviceAppointmentsIn", label: "Service Appointment IN", numeric: true },
 ];
 
 const SUFFIX_COLUMNS = [

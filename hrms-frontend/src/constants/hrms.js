@@ -199,6 +199,7 @@ export const GRADE_PROMOTION_FILTER_OPTIONS = [
 
 export const RETIREMENT_FILTER_OPTIONS = [
     { value: "", label: "All" },
+    { value: "THIS_YEAR", label: "Retiring this calendar year" },
     { value: "6", label: "Retiring within 6 months" },
     { value: "12", label: "Retiring within 12 months" },
     { value: "24", label: "Retiring within 24 months" },
@@ -226,6 +227,7 @@ export const EMPLOYEE_ENTRY_TYPES = [
 
 export const ACTION_TYPE_LABELS = {
     NEW_APPOINTMENT: "New Appointment",
+    SERVICE_APPOINTMENT: "Appointment to Another Service",
     TRANSFER_IN: "Transfer In",
     TRANSFER_OUT: "Transfer Out",
     PROMOTION: "Promotion",
@@ -452,6 +454,16 @@ export function getActionDetailLines(action) {
 
     const lines = [];
     const type = action.actionType;
+    if (type === "SERVICE_APPOINTMENT") {
+        return [
+            { label: "Service", value: `${action.oldServiceCode || "Previous service"} → ${action.newServiceCode || "New service"}` },
+            { label: "Designation", value: `${action.oldDesignationName || "Previous designation"} → ${action.newDesignationName || "—"}` },
+            { label: "Entry grade", value: "Grade III — fresh three-year probation" },
+            { label: "Examination passed", value: action.appointmentBasis || "—" },
+            { label: "First increment due", value: action.firstIncrementDueDate || "—" },
+            { label: "Workplace", value: [action.department, action.office].filter(Boolean).join(" — ") }
+        ];
+    }
 
     if (type === "PROMOTION" || type === "ASSIGNMENT_GRADE_UPDATE") {
         const newName = resolveDisplayDesignationName(action);
@@ -540,6 +552,12 @@ export function getActionDetailLines(action) {
         }
         if (district) {
             lines.push({ label: "District", value: district });
+        }
+        if (action.specialDesignationUpdated) {
+            lines.push({
+                label: "Special designation",
+                value: action.specialDesignationName || "Cleared"
+            });
         }
     } else if (type === "NEW_APPOINTMENT" || type === "TRANSFER_IN") {
         const designationName = resolveDisplayDesignationName(action);

@@ -11,13 +11,19 @@ import {
 import { useEffect, useState } from "react";
 import { createFormFieldProps, dialogActionsSx } from "../../utils/formLayout";
 import DateInput from "../DateInput";
+import { timelineMinDateHelperText } from "../../utils/timelineDates";
 
 export default function TransferInDialog({
     open,
     onClose,
     onSubmit,
-    employeeName
+    employeeName,
+    previousEventDate,
+    initialAction = null,
+    maxDate = null,
+    maxDateHelperText = null
 }) {
+    const isEdit = Boolean(initialAction);
     const [form, setForm] = useState({
         effectiveDate: "",
         transferredFrom: "",
@@ -25,16 +31,36 @@ export default function TransferInDialog({
     });
 
     useEffect(() => {
-        if (open) {
-            setForm({ effectiveDate: "", transferredFrom: "", remarks: "" });
+        if (!open) {
+            return;
         }
-    }, [open]);
+        if (initialAction) {
+            setForm({
+                effectiveDate: initialAction.actionDate || "",
+                transferredFrom: initialAction.transferredFrom || "",
+                remarks: initialAction.remarks || ""
+            });
+            return;
+        }
+        setForm({ effectiveDate: "", transferredFrom: "", remarks: "" });
+    }, [open, initialAction]);
 
     const handleChange = (e) => {
         setForm({ ...form, [e.target.name]: e.target.value });
     };
 
     const { fieldProps } = createFormFieldProps(handleChange);
+
+    const dateBeforeMinimum = Boolean(
+        previousEventDate
+        && form.effectiveDate
+        && form.effectiveDate < previousEventDate
+    );
+    const dateAfterMaximum = Boolean(
+        maxDate
+        && form.effectiveDate
+        && form.effectiveDate > maxDate
+    );
 
     const submit = () => {
         onSubmit({
@@ -54,11 +80,14 @@ export default function TransferInDialog({
                 document.activeElement?.blur();
             }}
         >
-            <DialogTitle>Transfer In</DialogTitle>
+            <DialogTitle>
+                {isEdit ? "Edit Transfer In" : "Transfer In"}
+            </DialogTitle>
             <DialogContent dividers>
                 <Alert severity="info" sx={{ mb: 2 }}>
-                    {employeeName} will join the N.W.P. Engineering Department.
-                    Designation stays unchanged; employee becomes active.
+                    {isEdit
+                        ? `Revise the transfer-in record for ${employeeName}.`
+                        : `${employeeName} will join the N.W.P. Engineering Department. Designation stays unchanged; employee becomes active.`}
                 </Alert>
                 <Grid container spacing={2}>
                     <Grid size={{ xs: 12 }}>
@@ -68,6 +97,24 @@ export default function TransferInDialog({
                             name="effectiveDate"
                             value={form.effectiveDate}
                             required
+                            slotProps={{
+                                htmlInput: {
+                                    ...(previousEventDate ? { min: previousEventDate } : {}),
+                                    ...(maxDate ? { max: maxDate } : {})
+                                }
+                            }}
+                            error={dateBeforeMinimum || dateAfterMaximum}
+                            helperText={
+                                dateBeforeMinimum
+                                    ? timelineMinDateHelperText(
+                                        previousEventDate,
+                                        { tooEarly: true }
+                                    )
+                                    : dateAfterMaximum
+                                        ? (maxDateHelperText || `Cannot be later than ${maxDate}.`)
+                                        : (maxDateHelperText
+                                            || timelineMinDateHelperText(previousEventDate))
+                            }
                         />
                     </Grid>
                     <Grid size={{ xs: 12 }}>
@@ -77,6 +124,7 @@ export default function TransferInDialog({
                             name="transferredFrom"
                             value={form.transferredFrom}
                             placeholder="e.g. Irrigation Department"
+                            required
                         />
                     </Grid>
                     <Grid size={{ xs: 12 }}>
@@ -97,9 +145,14 @@ export default function TransferInDialog({
                     variant="contained"
                     color="primary"
                     onClick={submit}
-                    disabled={!form.effectiveDate || !form.transferredFrom.trim()}
+                    disabled={
+                        !form.effectiveDate
+                        || !form.transferredFrom.trim()
+                        || dateBeforeMinimum
+                        || dateAfterMaximum
+                    }
                 >
-                    Confirm Transfer In
+                    {isEdit ? "Save changes" : "Confirm Transfer In"}
                 </Button>
             </DialogActions>
         </Dialog>

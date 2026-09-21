@@ -21,7 +21,8 @@ import { getServiceColor } from "../constants/dashboardTheme";
 import { formatEmployeeWorkplace } from "../utils/employeeListFilters";
 import {
     calculateRetirementDate,
-    formatEmployeeDate
+    formatEmployeeDate,
+    isNearRetirement
 } from "../utils/employeeRetirement";
 
 const GRADE_CHIP_COLORS = {
@@ -95,7 +96,7 @@ export default function ActiveEmployeeCard({ employee, onClick }) {
     const positionLine = [designation, serviceLevel].filter(Boolean).join(" · ");
     const monthsToRetire = monthsUntilRetirement(employee.dateOfBirth);
     const showRetirement = monthsToRetire !== null && monthsToRetire >= 0 && monthsToRetire <= 60;
-    const retirementHighlight = monthsToRetire !== null && monthsToRetire <= 24;
+    const retirementHighlight = isNearRetirement(employee.dateOfBirth);
 
     return (
         <Paper

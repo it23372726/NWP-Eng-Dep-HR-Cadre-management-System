@@ -3,10 +3,10 @@ const addYears = (date, years) => {
         return null;
     }
 
-    const normalizedYears = years == null || years === "" ? 0 : Number(years);
-    const next = new Date(`${date}T00:00:00`);
-    next.setFullYear(next.getFullYear() + normalizedYears);
-    return next.toISOString().split("T")[0];
+    const [year, month, day] = date.split("-").map(Number);
+    const targetYear = year + Number(years || 0);
+    const lastDay = new Date(Date.UTC(targetYear, month, 0)).getUTCDate();
+    return `${targetYear}-${String(month).padStart(2, "0")}-${String(Math.min(day, lastDay)).padStart(2, "0")}`;
 };
 
 export const normalizeRequiredYears = (years) =>

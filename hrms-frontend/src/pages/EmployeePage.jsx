@@ -18,7 +18,7 @@ import GridViewIcon from "@mui/icons-material/GridView";
 import ViewListIcon from "@mui/icons-material/ViewList";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import { getApiErrorMessage, getPrimaryDepartmentName } from "../constants/hrms";
 import { canEditEmployees } from "../constants/permissions";
@@ -46,10 +46,12 @@ import {
     sortEmployeesBySerialNo
 } from "../utils/employeeListFilters";
 import { computeActiveEmployeeStats } from "../utils/activeEmployeeStats";
+import { RETIREMENT_WATCH_MONTHS } from "../utils/employeeRetirement";
 import {
     employeeFiltersToSearchParams,
     parseEmployeeListSearchParams
 } from "../utils/dashboardNavigation";
+import { captureEmployeeListOrigin } from "../utils/employeeListReturnNavigation";
 
 const VIEW_MODE_STORAGE_KEY = "hrms.activeEmployees.viewMode";
 
@@ -90,7 +92,7 @@ function resolveActiveShortcut(filterState) {
         || filterState.gradePromotionFilter === "QUALIFIED_GRADE_1_TO_SPECIAL") {
         return "promotion";
     }
-    if (filterState.retiringWithinMonths === "24") {
+    if (filterState.retiringWithinMonths === String(RETIREMENT_WATCH_MONTHS)) {
         return "retirement";
     }
     if (filterState.privateVehicleFilter === "HAS_PRIVATE_VEHICLE") {
@@ -131,10 +133,13 @@ export default function EmployeePage() {
     const [qualificationFilter, setQualificationFilter] = useState("");
     const [incrementStatusFilter, setIncrementStatusFilter] = useState("");
     const [privateVehicleFilter, setPrivateVehicleFilter] = useState("");
-    const [departmentScope, setDepartmentScope] = useState("NWP");
+    const [departmentScope, setDepartmentScope] = useState(
+        () => parseEmployeeListSearchParams(searchParams).departmentScope
+    );
     const [viewMode, setViewMode] = useState(loadViewMode);
 
     const navigate = useNavigate();
+    const location = useLocation();
 
     useEffect(() => {
         const parsed = parseEmployeeListSearchParams(searchParams);
@@ -325,7 +330,11 @@ export default function EmployeePage() {
         if (!employee?.id) {
             return;
         }
-        navigate(`/employees/${employee.id}`);
+        navigate(`/employees/${employee.id}`, {
+            state: {
+                employeeListOrigin: captureEmployeeListOrigin(location)
+            }
+        });
     };
 
     const resultSummary = loading

@@ -39,7 +39,7 @@ import {
 } from "@mui/icons-material";
 
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import { getEmployeeById, saveEmployeePhoto, updateEmployee, getVehiclePermitStatus, recordVehiclePermitCollection, updateVehiclePermitCollection, undoVehiclePermitCollection, downloadEmployeeSummaryPdf, downloadEmployeeDependentDetailsPdf } from "../services/employeeService";
@@ -50,6 +50,7 @@ import {
     transferOutEmployee,
     officeChangeEmployee,
     promoteEmployee,
+    appointToAnotherService,
     retireEmployee,
     markEmployeeDeath,
     dismissEmployee,
@@ -74,6 +75,7 @@ import TransferOutDialog from "../components/lifecycle/TransferOutDialog";
 import OfficeChangeDialog from "../components/lifecycle/OfficeChangeDialog";
 import NewAppointmentDialog from "../components/lifecycle/NewAppointmentDialog";
 import TrainingAppointmentDialog from "../components/lifecycle/TrainingAppointmentDialog";
+import ServiceAppointmentDialog from "../components/lifecycle/ServiceAppointmentDialog";
 import PromotionDialog from "../components/lifecycle/PromotionDialog";
 import SimpleLifecycleDialog from "../components/lifecycle/SimpleLifecycleDialog";
 import MakePermanentDialog from "../components/lifecycle/MakePermanentDialog";
@@ -110,6 +112,7 @@ import {
     updateSalaryIncrement,
     undoSalaryIncrement
 } from "../services/salaryIncrementService";
+import { resolveEmployeeListReturnTo } from "../utils/employeeListReturnNavigation";
 
 const getThreeYearRequirementDate = (dateOfFirstAppointment) => {
     if (!dateOfFirstAppointment) {
@@ -184,6 +187,10 @@ function ProfileQuickFact({ icon, label, value }) {
 export default function EmployeeProfilePage() {
     const { id } = useParams();
     const navigate = useNavigate();
+    const location = useLocation();
+    const employeeReturnTo = resolveEmployeeListReturnTo(
+        location.state?.employeeListOrigin
+    );
     const canEdit = canEditEmployees(getStoredUser());
 
     const [employee, setEmployee] = useState(null);
@@ -194,6 +201,7 @@ export default function EmployeeProfilePage() {
     const [openNewAppointment, setOpenNewAppointment] = useState(false);
     const [openTrainingAppointment, setOpenTrainingAppointment] = useState(false);
     const [openRevertTraining, setOpenRevertTraining] = useState(false);
+    const [openServiceAppointment, setOpenServiceAppointment] = useState(false);
     const [openPromote, setOpenPromote] = useState(false);
     const [openRetire, setOpenRetire] = useState(false);
     const [openDeath, setOpenDeath] = useState(false);
@@ -217,6 +225,7 @@ export default function EmployeeProfilePage() {
     const [recordingSalaryIncrement, setRecordingSalaryIncrement] = useState(false);
     const [undoingSalaryIncrement, setUndoingSalaryIncrement] = useState(false);
     const [vehiclePermitStatus, setVehiclePermitStatus] = useState(null);
+    const [salaryAppointmentKey, setSalaryAppointmentKey] = useState("");
     const [salaryIncrementStatus, setSalaryIncrementStatus] = useState(null);
     const [anchorEl, setAnchorEl] = useState(null);
     const [activeTab, setActiveTab] = useState(0);
@@ -263,7 +272,9 @@ export default function EmployeeProfilePage() {
 
             if (!isContractEmployee(selectedEmployee.employmentType)
                 && selectedEmployee.incremantDate) {
-                const incrementStatus = await getSalaryIncrementStatus(id);
+                const validKey = selectedEmployee.serviceAppointments?.some(p => !p.superseded && p.appointmentKey === salaryAppointmentKey) ? salaryAppointmentKey : "";
+                if (validKey !== salaryAppointmentKey) setSalaryAppointmentKey(validKey);
+                const incrementStatus = await getSalaryIncrementStatus(id, validKey || undefined);
                 setSalaryIncrementStatus(incrementStatus);
             } else {
                 setSalaryIncrementStatus(null);
@@ -437,7 +448,9 @@ export default function EmployeeProfilePage() {
         setRecordingSalaryIncrement(true);
         try {
             const status = await recordSalaryIncrement(employee.id, doneDate, {
-                catchUpToCurrentYear
+                catchUpToCurrentYear,
+                expectedLastOperationId: salaryIncrementStatus?.lastOperationId,
+                serviceAppointmentKey: salaryAppointmentKey || undefined
             });
             setSalaryIncrementStatus(status);
             toast.success(
@@ -461,7 +474,10 @@ export default function EmployeeProfilePage() {
 
         setRecordingSalaryIncrement(true);
         try {
-            const status = await updateSalaryIncrement(employee.id, doneDate);
+            const status = await updateSalaryIncrement(employee.id, doneDate, {
+                expectedLastOperationId: salaryIncrementStatus?.lastOperationId,
+                serviceAppointmentKey: salaryAppointmentKey || undefined
+            });
             setSalaryIncrementStatus(status);
             toast.success("Salary increment date updated");
             setOpenEditSalaryIncrement(false);
@@ -480,7 +496,10 @@ export default function EmployeeProfilePage() {
 
         setUndoingSalaryIncrement(true);
         try {
-            const status = await undoSalaryIncrement(employee.id);
+            const status = await undoSalaryIncrement(employee.id, {
+                expectedLastOperationId: salaryIncrementStatus?.lastOperationId,
+                serviceAppointmentKey: salaryAppointmentKey || undefined
+            });
             setSalaryIncrementStatus(status);
             toast.success("Salary increment undone");
             setOpenUndoSalaryIncrement(false);
@@ -525,6 +544,9 @@ export default function EmployeeProfilePage() {
         employee.dateOfFirstAppointment
     );
     const previousEventDate = getLatestEventDate(actionHistory);
+    const salaryPeriod = employee.serviceAppointments?.find(p => p.appointmentKey === salaryAppointmentKey);
+    const salaryEmployee = salaryPeriod ? { ...employee, incremantDate: salaryPeriod.incrementDate,
+        dateOfFirstAppointment: salaryPeriod.startDate, firstIncrementDueDate: salaryPeriod.firstIncrementDueDate } : employee;
     const qualificationContext = getQualificationUpdateContext(employee);
     const canUpdateQualifications =
         isActive && qualificationContext.canUpdate;
@@ -537,7 +559,7 @@ export default function EmployeeProfilePage() {
             <Button
                 size="small"
                 startIcon={<ArrowBackIcon />}
-                onClick={() => navigate("/employees")}
+                onClick={() => navigate(employeeReturnTo)}
                 sx={{ mb: 1.25, color: "text.secondary" }}
             >
                 Back to employees
@@ -817,6 +839,11 @@ export default function EmployeeProfilePage() {
                                 <ListItemIcon sx={{ color: "success.main" }}><PromoteIcon fontSize="small" /></ListItemIcon>
                                 <ListItemText>Promote / Update Assignment</ListItemText>
                             </MenuItem>
+                            {employee.canAppointToAnotherService && <MenuItem onClick={() => {
+                                setOpenServiceAppointment(true); setAnchorEl(null);
+                            }}><ListItemIcon sx={{ color: "info.main" }}><ConfirmIcon fontSize="small" /></ListItemIcon>
+                                <ListItemText>Appointment to Another Service</ListItemText>
+                            </MenuItem>}
                             {canMakePermanent && (
                                 <MenuItem
                                     onClick={() => {
@@ -992,9 +1019,26 @@ export default function EmployeeProfilePage() {
                 />
             )}
 
+            {!isSystemPending && activeTab === 1 && employee.serviceAppointments?.length > 0 && (
+                <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+                    <Typography variant="body2" sx={{ mb: 1 }}>Salary increment appointment period</Typography>
+                    <select aria-label="Salary increment appointment period" value={salaryAppointmentKey} style={{ padding: 10, maxWidth: "100%" }}
+                        onChange={async e => {
+                            const key = e.target.value;
+                            try { const status = await getSalaryIncrementStatus(employee.id, key || undefined);
+                                setSalaryAppointmentKey(key); setSalaryIncrementStatus(status);
+                            } catch (error) { toast.error(getApiErrorMessage(error)); }
+                        }}>
+                        <option value="">Current appointment</option>
+                        {employee.serviceAppointments.filter(p => !p.superseded && !p.currentAppointment).map(p =>
+                            <option key={p.appointmentKey} value={p.appointmentKey}>{p.serviceCode} — {p.startDate} to {p.endDate}</option>)}
+                    </select>
+                    <Typography variant="caption" display="block" sx={{ mt: 1 }}>Previous schedules remain available for recording outstanding increments and reviewing their history.</Typography>
+                </Paper>
+            )}
             {!isSystemPending && activeTab === 1 && (
                 <EmployeeProfileBenefitsTab
-                    employee={employee}
+                    employee={salaryEmployee}
                     onRevokePrivateVehicle={
                         canEdit && isActive && employee.privateVehicleUsedForGovWork
                             ? () => setOpenRevokePrivateVehicle(true)
@@ -1025,14 +1069,12 @@ export default function EmployeeProfilePage() {
                             : null
                     }
                     onEditSalaryIncrement={
-                        canEdit && isActive && (salaryIncrementStatus?.lastDoneDate
-                            ?? employee.salaryIncrementDoneDate)
+                        canEdit && isActive && salaryIncrementStatus?.canEdit
                             ? () => setOpenEditSalaryIncrement(true)
                             : null
                     }
                     onUndoSalaryIncrement={
-                        canEdit && isActive && (salaryIncrementStatus?.lastDoneDate
-                            ?? employee.salaryIncrementDoneDate)
+                        canEdit && isActive && salaryIncrementStatus?.canUndo
                             ? () => setOpenUndoSalaryIncrement(true)
                             : null
                     }
@@ -1090,6 +1132,8 @@ export default function EmployeeProfilePage() {
                 currentOffice={employee.currentOffice}
                 currentDistrictOfWorking={employee.currentDistrictOfWorking}
                 previousEventDate={previousEventDate}
+                hasCatalogDesignation={Boolean(employee.designation?.id)}
+                currentSpecialDesignationName={employee.specialDesignationName || ""}
                 onSubmit={(data) =>
                     handleLifecycle(
                         async () => {
@@ -1101,6 +1145,11 @@ export default function EmployeeProfilePage() {
                 }
             />
 
+            <ServiceAppointmentDialog open={openServiceAppointment} onClose={() => setOpenServiceAppointment(false)}
+                employee={employee} previousEventDate={previousEventDate} onSubmit={async data => {
+                    await appointToAnotherService(employee.id, data);
+                    toast.success("Appointment to another service recorded"); await loadProfile();
+                }} />
             <PromotionDialog
                 open={openPromote}
                 onClose={() => setOpenPromote(false)}
@@ -1349,7 +1398,7 @@ export default function EmployeeProfilePage() {
                 onClose={() => setOpenRecordSalaryIncrement(false)}
                 onConfirm={handleRecordSalaryIncrement}
                 salaryIncrementStatus={salaryIncrementStatus}
-                employee={employee}
+                employee={salaryEmployee}
                 saving={recordingSalaryIncrement}
             />
 
@@ -1358,7 +1407,7 @@ export default function EmployeeProfilePage() {
                 onClose={() => setOpenEditSalaryIncrement(false)}
                 onConfirm={handleEditSalaryIncrement}
                 salaryIncrementStatus={salaryIncrementStatus}
-                employee={employee}
+                employee={salaryEmployee}
                 saving={recordingSalaryIncrement}
                 mode="edit"
             />
@@ -1367,14 +1416,6 @@ export default function EmployeeProfilePage() {
                 open={openUndoSalaryIncrement}
                 onClose={() => setOpenUndoSalaryIncrement(false)}
                 onConfirm={handleUndoSalaryIncrement}
-                lastDoneDate={
-                    salaryIncrementStatus?.lastDoneDate
-                    ?? employee.salaryIncrementDoneDate
-                }
-                lastDueYear={
-                    salaryIncrementStatus?.lastDueYear
-                    ?? employee.salaryIncrementLastDueYear
-                }
                 salaryIncrementStatus={salaryIncrementStatus}
                 saving={undoingSalaryIncrement}
             />

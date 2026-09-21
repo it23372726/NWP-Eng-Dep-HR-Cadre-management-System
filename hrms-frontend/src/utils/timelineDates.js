@@ -1,5 +1,17 @@
-const formatTimelineDate = (date) =>
+export const formatTimelineDate = (date) =>
     date ? new Date(`${date}T00:00:00`).toLocaleDateString("en-GB") : "—";
+
+export const todayIsoDate = () => new Date().toLocaleDateString("en-CA");
+
+export const minIsoDate = (left, right) => {
+    if (!left) {
+        return right ?? null;
+    }
+    if (!right) {
+        return left;
+    }
+    return left <= right ? left : right;
+};
 
 export const maxIsoDate = (left, right) => {
     if (!left) {
@@ -66,6 +78,29 @@ export const getPreviousEventDateForEdit = (events, actionId) => {
     }
 
     return sorted[index - 1]?.actionDate ?? null;
+};
+
+export const getNextEventDateForEdit = (events, actionId) => {
+    if (!actionId) {
+        return null;
+    }
+
+    const sorted = [...filterTimelineEvents(events, { excludeAutoCreated: false })]
+        .sort(compareTimelineEvents);
+    const index = sorted.findIndex((event) => event.id === actionId);
+
+    if (index < 0 || index >= sorted.length - 1) {
+        return null;
+    }
+
+    for (let cursor = index + 1; cursor < sorted.length; cursor += 1) {
+        const candidate = sorted[cursor];
+        if (!candidate.autoCreated) {
+            return candidate.actionDate;
+        }
+    }
+
+    return sorted[index + 1]?.actionDate ?? null;
 };
 
 export const validateTimelineDate = (actionDate, previousDate) => {

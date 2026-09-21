@@ -53,6 +53,7 @@ import {
 import { combineMinDates, timelineMinDateHelperText } from "../../utils/timelineDates";
 import DepartmentOfficeFields, {
     DEPARTMENT_OPTIONS,
+    parseDepartmentValue,
     resolveDepartmentValue
 } from "../workplace/DepartmentOfficeFields";
 
@@ -259,8 +260,12 @@ export default function PromotionDialog({
     onClose,
     onSubmit,
     employee,
-    previousEventDate
+    previousEventDate,
+    initialAction = null,
+    maxDate = null,
+    maxDateHelperText = null
 }) {
+    const isEdit = Boolean(initialAction);
     const [designations, setDesignations] = useState([]);
     const [serviceLevels, setServiceLevels] = useState([]);
     const [form, setForm] = useState({
@@ -298,6 +303,64 @@ export default function PromotionDialog({
         ]).then(([designationData, levelData]) => {
             setDesignations(designationData);
             setServiceLevels(levelData);
+
+            if (initialAction) {
+                const transferringOut = Boolean(
+                    isPrimaryDepartment(initialAction.fromDepartment)
+                    && initialAction.department
+                    && !isPrimaryDepartment(initialAction.department)
+                );
+                const destination = transferringOut
+                    ? parseDepartmentValue(initialAction.department)
+                    : parseDepartmentValue("");
+
+                const editForm = {
+                    newDesignationId: initialAction.recordedDesignationName
+                        ? OTHER_DESIGNATION_VALUE
+                        : String(initialAction.newDesignationId || ""),
+                    recordedDesignationName: initialAction.recordedDesignationName || "",
+                    specialDesignationName: initialAction.recordedDesignationName
+                        ? ""
+                        : initialAction.specialDesignationName || "",
+                    grade: initialAction.newGrade || "",
+                    serviceLevelId: initialAction.serviceLevelId
+                        ? String(initialAction.serviceLevelId)
+                        : String(employee.serviceLevel?.id ?? ""),
+                    promotionDate: initialAction.actionDate || "",
+                    remarks: initialAction.remarks || "",
+                    promotionOutcome: transferringOut
+                        ? PROMOTION_OUTCOME.TRANSFERRING_OUT
+                        : PROMOTION_OUTCOME.STAYING,
+                    toDepartmentType: destination.departmentType,
+                    toOtherDepartmentName: destination.otherDepartmentName,
+                    toOffice: transferringOut
+                        ? (initialAction.office || initialAction.toOffice || "")
+                        : "",
+                    toDistrict: transferringOut ? (initialAction.district || "") : ""
+                };
+                setForm(editForm);
+
+                const designation = designationData.find(
+                    (item) => item.id === Number(editForm.newDesignationId)
+                );
+                setError(
+                    isOtherDesignation(editForm.newDesignationId)
+                        ? validateCustomDesignationAssignment({
+                            grade: editForm.grade,
+                            serviceLevelId: editForm.serviceLevelId,
+                            service: employee.designation?.service ?? employee.service
+                        }) || ""
+                        : validateDesignationAssignment(
+                            buildValidationTarget(
+                                editForm.grade,
+                                editForm.serviceLevelId,
+                                levelData
+                            ),
+                            designation
+                        ) || ""
+                );
+                return;
+            }
 
             const initialDesignationId = employee.recordedDesignationName
                 ? OTHER_DESIGNATION_VALUE
@@ -369,7 +432,7 @@ export default function PromotionDialog({
                 ) || ""
             );
         });
-    }, [open, employee]);
+    }, [open, employee, initialAction]);
 
     const isOtherPromotion = isOtherDesignation(form.newDesignationId);
     const employeeService = employee?.designation?.service ?? employee?.service;
@@ -384,31 +447,51 @@ export default function PromotionDialog({
         (level) => level.id === Number(form.serviceLevelId)
     );
 
+    const baselineDesignationId = isEdit
+        ? initialAction.oldDesignationId
+        : employee?.designation?.id;
+    const baselineDesignationName = isEdit
+        ? (initialAction.oldDesignationName || "")
+        : (employee?.recordedDesignationName || "");
+    const baselineGrade = isEdit
+        ? (initialAction.oldGrade || employee?.grade)
+        : employee?.grade;
+    const baselineSpecialDesignation = isEdit
+        ? ""
+        : (employee?.specialDesignationName || "");
+    const baselineServiceLevelId = isEdit
+        ? null
+        : employee?.serviceLevel?.id;
+
     const isPromotion = isOtherPromotion
         ? Boolean(form.recordedDesignationName?.trim())
             && form.recordedDesignationName.trim().toLowerCase()
-                !== (employee?.recordedDesignationName || "").trim().toLowerCase()
-        : employee?.designation?.id
-            && Number(form.newDesignationId) !== employee.designation.id;
+                !== baselineDesignationName.trim().toLowerCase()
+        : Boolean(baselineDesignationId)
+            && Number(form.newDesignationId) !== Number(baselineDesignationId);
     const isGrade2Promotion =
-        employee?.grade === "III" && form.grade === "II";
+        !isEdit && baselineGrade === "III" && form.grade === "II";
     const isGrade1Promotion =
-        employee?.grade === "II" && form.grade === "I";
+        !isEdit && baselineGrade === "II" && form.grade === "I";
     const isSupraPromotion =
-        employee?.grade === "I" && form.grade === "Supra";
+        !isEdit && baselineGrade === "I" && form.grade === "Supra";
     const isSpecialPromotion =
-        employee?.grade === "I" && form.grade === "Special";
-    const gradeChanged = employee?.grade !== form.grade;
-    const serviceLevelChanged =
-        employee?.serviceLevel?.id !== Number(form.serviceLevelId);
+        !isEdit && baselineGrade === "I" && form.grade === "Special";
+    const gradeChanged = baselineGrade !== form.grade;
+    const serviceLevelChanged = baselineServiceLevelId == null
+        ? Boolean(form.serviceLevelId)
+        : baselineServiceLevelId !== Number(form.serviceLevelId);
     const specialDesignationChanged = !isOtherPromotion
         && (form.specialDesignationName?.trim() || "").toLowerCase()
-            !== (employee?.specialDesignationName || "").trim().toLowerCase();
-    const hasAssignmentChange =
-        isPromotion || gradeChanged || serviceLevelChanged || specialDesignationChanged;
+            !== baselineSpecialDesignation.trim().toLowerCase();
+    const hasAssignmentChange = isEdit
+        || isPromotion
+        || gradeChanged
+        || serviceLevelChanged
+        || specialDesignationChanged;
 
     const selectableGrades = getSelectableGrades(
-        employee?.grade,
+        baselineGrade,
         isOtherPromotion
             ? employeeService?.allowedGrades
             : selectedDesignation?.allowedGrades,
@@ -529,6 +612,11 @@ export default function PromotionDialog({
         minEffectiveDate
         && form.promotionDate
         && form.promotionDate < minEffectiveDate
+    );
+    const effectiveDateTooLate = Boolean(
+        maxDate
+        && form.promotionDate
+        && form.promotionDate > maxDate
     );
 
     const grade2RequirementItems = [
@@ -704,7 +792,9 @@ export default function PromotionDialog({
     const supraQualified = isSupraPromotionQualified(form, rulesSource);
     const specialQualified = isSpecialPromotionQualified(form, rulesSource);
 
-    const inNwpDepartment = isPrimaryDepartment(employee?.currentDepartment);
+    const inNwpDepartment = isEdit
+        ? isPrimaryDepartment(initialAction.fromDepartment)
+        : isPrimaryDepartment(employee?.currentDepartment);
     const transferringOut = form.promotionOutcome === PROMOTION_OUTCOME.TRANSFERRING_OUT;
     const showPromotionOutcome = isPromotion && inNwpDepartment;
     const toDepartment = resolveDepartmentValue(
@@ -995,22 +1085,22 @@ export default function PromotionDialog({
             return;
         }
 
-        if (isGrade2Promotion && !grade2Qualified) {
+        if (!isEdit && isGrade2Promotion && !grade2Qualified) {
             setError("Employee is not qualified for Grade II promotion");
             return;
         }
 
-        if (isGrade1Promotion && !grade1Qualified) {
+        if (!isEdit && isGrade1Promotion && !grade1Qualified) {
             setError("Employee is not qualified for Grade I promotion");
             return;
         }
 
-        if (isSupraPromotion && !supraQualified) {
+        if (!isEdit && isSupraPromotion && !supraQualified) {
             setError("Employee is not qualified for Supra promotion");
             return;
         }
 
-        if (isSpecialPromotion && !specialQualified) {
+        if (!isEdit && isSpecialPromotion && !specialQualified) {
             setError("Employee is not qualified for Special promotion");
             return;
         }
@@ -1031,19 +1121,21 @@ export default function PromotionDialog({
                 }),
             grade: form.grade,
             serviceLevelId: Number(form.serviceLevelId),
-            requirements: buildSubmittedRequirements(),
+            requirements: isEdit ? [] : buildSubmittedRequirements(),
             grade2RequiredYears: null,
             promotionDate: form.promotionDate,
             remarks: form.remarks?.trim() || null
         };
 
-        if (showPromotionOutcome && transferringOut) {
-            payload.transferringOut = true;
-            payload.toDepartment = toDepartment;
-            payload.toOffice = form.toOffice.trim();
-            payload.toDistrict = form.toDepartmentType === DEPARTMENT_OPTIONS.NWP
-                ? form.toDistrict
-                : null;
+        if (showPromotionOutcome) {
+            payload.transferringOut = transferringOut;
+            if (transferringOut) {
+                payload.toDepartment = toDepartment;
+                payload.toOffice = form.toOffice.trim();
+                payload.toDistrict = form.toDepartmentType === DEPARTMENT_OPTIONS.NWP
+                    ? form.toDistrict
+                    : null;
+            }
         }
 
         onSubmit(payload);
@@ -1057,6 +1149,7 @@ export default function PromotionDialog({
         && (!isOtherPromotion || form.recordedDesignationName?.trim())
         && !error
         && !effectiveDateTooEarly
+        && !effectiveDateTooLate
         && hasAssignmentChange
         && (!showPromotionOutcome || !transferringOut || !destinationIncomplete);
 
@@ -1076,7 +1169,11 @@ export default function PromotionDialog({
             }}
         >
             <DialogTitle sx={{ pb: 1 }}>
-                {isPromotion ? "Promote Employee" : "Update Grade & Service Level"}
+                {isEdit
+                    ? `Edit ${isPromotion ? "Promotion" : "Assignment / Grade Update"}`
+                    : isPromotion
+                        ? "Promote Employee"
+                        : "Update Grade & Service Level"}
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                     {employee?.fullName}
                     {" · "}
@@ -1103,11 +1200,18 @@ export default function PromotionDialog({
                         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                             <InfoField
                                 label="Designation"
-                                value={resolveEmployeeDesignationName(employee) || "—"}
+                                value={
+                                    isEdit
+                                        ? (initialAction.oldDesignationName || "—")
+                                        : (resolveEmployeeDesignationName(employee) || "—")
+                                }
                             />
                         </Grid>
                         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                            <InfoField label="Grade" value={employee?.grade} />
+                            <InfoField
+                                label="Grade"
+                                value={isEdit ? (initialAction.oldGrade || "—") : employee?.grade}
+                            />
                         </Grid>
                         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                             <InfoField
@@ -1115,6 +1219,8 @@ export default function PromotionDialog({
                                 value={employee?.serviceLevel?.levelName}
                             />
                         </Grid>
+                        {!isEdit && (
+                            <>
                         <Grid size={{ xs: 12, sm: 6 }}>
                             <InfoField
                                 label="Present Class / Grade Date"
@@ -1140,6 +1246,8 @@ export default function PromotionDialog({
                                     )}
                                 />
                             </Grid>
+                        )}
+                            </>
                         )}
                     </Grid>
                 </FormSection>
@@ -1351,22 +1459,26 @@ export default function PromotionDialog({
                                 value={form.promotionDate}
                                 required
                                 slotProps={{
-                                    htmlInput: minEffectiveDate
-                                        ? { min: minEffectiveDate }
-                                        : undefined
+                                    htmlInput: {
+                                        ...(minEffectiveDate ? { min: minEffectiveDate } : {}),
+                                        ...(maxDate ? { max: maxDate } : {})
+                                    }
                                 }}
-                                error={effectiveDateTooEarly}
+                                error={effectiveDateTooEarly || effectiveDateTooLate}
                                 helperText={
                                     effectiveDateTooEarly
                                         ? timelineMinDateHelperText(
                                             minEffectiveDate,
                                             { tooEarly: true }
                                         )
-                                        : minEffectiveDate
-                                            ? `${timelineMinDateHelperText(minEffectiveDate)} Becomes the new present class / grade date.`
-                                            : gradeChanged
-                                                ? "Becomes the new present class / grade date."
-                                                : "Date this assignment change takes effect."
+                                        : effectiveDateTooLate
+                                            ? (maxDateHelperText || `Cannot be later than ${maxDate}.`)
+                                            : maxDateHelperText
+                                                || (minEffectiveDate
+                                                    ? `${timelineMinDateHelperText(minEffectiveDate)} Becomes the new present class / grade date.`
+                                                    : gradeChanged
+                                                        ? "Becomes the new present class / grade date."
+                                                        : "Date this assignment change takes effect.")
                                 }
                             />
                         </Grid>
@@ -1426,7 +1538,11 @@ export default function PromotionDialog({
                             <Grid size={{ xs: 12, md: 4 }}>
                                 <ChangePreview
                                     label="Designation"
-                                    fromValue={resolveEmployeeDesignationName(employee)}
+                                    fromValue={
+                                        isEdit
+                                            ? initialAction.oldDesignationName
+                                            : resolveEmployeeDesignationName(employee)
+                                    }
                                     toValue={
                                         isOtherPromotion
                                             ? form.recordedDesignationName
@@ -1437,14 +1553,18 @@ export default function PromotionDialog({
                             <Grid size={{ xs: 12, md: 4 }}>
                                 <ChangePreview
                                     label="Grade"
-                                    fromValue={employee?.grade}
+                                    fromValue={baselineGrade}
                                     toValue={form.grade}
                                 />
                             </Grid>
                             <Grid size={{ xs: 12, md: 4 }}>
                                 <ChangePreview
                                     label="Service Level"
-                                    fromValue={employee?.serviceLevel?.levelName}
+                                    fromValue={
+                                        isEdit
+                                            ? null
+                                            : employee?.serviceLevel?.levelName
+                                    }
                                     toValue={selectedServiceLevel?.levelName}
                                 />
                             </Grid>
@@ -1556,7 +1676,7 @@ export default function PromotionDialog({
                     </FormSection>
                 )}
 
-                {!hasAssignmentChange && (
+                {!isEdit && !hasAssignmentChange && (
                     <Alert severity="info">
                         Change the designation, grade, or service level to update
                         this employee&apos;s assignment.
@@ -1578,9 +1698,11 @@ export default function PromotionDialog({
                     onClick={submit}
                     disabled={!canSubmit}
                 >
-                    {isPromotion
-                        ? "Confirm Promotion"
-                        : "Update Assignment"}
+                    {isEdit
+                        ? "Save changes"
+                        : isPromotion
+                            ? "Confirm Promotion"
+                            : "Update Assignment"}
                 </Button>
             </DialogActions>
         </Dialog>

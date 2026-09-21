@@ -50,7 +50,7 @@ export default function RetirementWatchListTable({ data, loading }) {
     return (
         <Paper sx={{ p: 3, borderRadius: 2 }}>
             <Typography variant="h6" sx={{ mb: 3, fontWeight: 700 }}>
-                Employees Retiring Within 24 Months
+                Employees Retiring Within 12 Months
             </Typography>
             <ResponsiveTableContainer tableMinWidth={800}>
                 <Table>

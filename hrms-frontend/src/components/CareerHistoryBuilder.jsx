@@ -18,6 +18,9 @@ import {
     FormLabel,
     FormControlLabel
 } from "@mui/material";
+import { getLifecycleCapabilities } from "../services/employeeService";
+import ServiceAppointmentDialog from "./lifecycle/ServiceAppointmentDialog";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import { useEffect, useState } from "react";
 
@@ -174,6 +177,19 @@ export const deriveTimelineState = (events) => {
 
     events.forEach((event) => {
         switch (event.actionType) {
+            case "SERVICE_APPOINTMENT": {
+                const workplaceChanged = currentDepartment !== event.department || currentOffice !== event.office
+                    || currentDistrictOfWorking !== eventDistrictLabel(event.district);
+                designationId = event.designationId; recordedDesignationName = null; specialDesignationName = null;
+                serviceId = event.serviceId; grade = "III"; firstAppointmentDate = event.actionDate;
+                permanentConfirmed = false; permanentConfirmationDate = null;
+                grade2AchievedDate = null; grade1AchievedDate = null;
+                currentDepartment = event.department; currentOffice = event.office;
+                currentDistrictOfWorking = eventDistrictLabel(event.district);
+                if (workplaceChanged) reportedDateToPresentWorkingPlace = event.actionDate;
+                if (!enteredDateToNWPCouncil && isPrimaryDepartment(event.department)) enteredDateToNWPCouncil = event.actionDate;
+                break;
+            }
             case "NEW_APPOINTMENT":
                 if (event.recordedDesignationName) {
                     recordedDesignationName = event.recordedDesignationName;
@@ -280,6 +296,9 @@ export const deriveTimelineState = (events) => {
                 active = true;
                 break;
             case "OFFICE_CHANGE":
+                if (event.specialDesignationUpdated && !recordedDesignationName) {
+                    specialDesignationName = event.specialDesignationName?.trim() || null;
+                }
                 if (event.office) {
                     currentOffice = event.office;
                 }
@@ -452,6 +471,13 @@ export default function CareerHistoryBuilder({
     const [eventDraft, setEventDraft] = useState(emptyEventDraft);
     const [error, setError] = useState("");
     const [services, setServices] = useState([]);
+    const [appointmentIndex, setAppointmentIndex] = useState(null);
+    const [serviceAppointmentsEnabled, setServiceAppointmentsEnabled] = useState(false);
+    useEffect(() => {
+        let cancelled = false;
+        getLifecycleCapabilities().then(data => { if (!cancelled) setServiceAppointmentsEnabled(data.serviceAppointmentsEnabled); }).catch(() => {});
+        return () => { cancelled = true; };
+    }, []);
 
     useEffect(() => {
         getServices().then(setServices).catch(() => setServices([]));
@@ -637,6 +663,12 @@ export default function CareerHistoryBuilder({
                     actionType: value,
                     actionDate: prev.actionDate
                 };
+                if (value === "OFFICE_CHANGE") {
+                    const timeline = deriveTimelineState(events);
+                    if (timeline.designationId && !timeline.recordedDesignationName) {
+                        next.specialDesignationName = timeline.specialDesignationName ?? "";
+                    }
+                }
                 if (value === "TRANSFER_OUT") {
                     const timeline = deriveTimelineState(events);
                     if (timeline.recordedDesignationName) {
@@ -950,7 +982,9 @@ export default function CareerHistoryBuilder({
                     office: eventDraft.office.trim(),
                     district: isPrimaryDepartment(state.currentDepartment)
                         ? eventDraft.district
-                        : null
+                        : null,
+                    specialDesignationUpdated: Boolean(state.designationId)
+                        && !state.recordedDesignationName
                 }
                 : {}),
             ...(eventDraft.actionType === "TRANSFER_OUT"
@@ -1061,8 +1095,24 @@ export default function CareerHistoryBuilder({
     const showOfficeChangeField = draftType === "OFFICE_CHANGE";
     const showReason = draftType === "DISMISSAL" || draftType === "VACATION_OF_POST";
 
+    const appointmentPrefix = appointmentIndex == null ? [] : events.slice(0, appointmentIndex);
+    const appointmentState = deriveTimelineState(appointmentPrefix);
+    const appointmentEmployee = {
+        designation: designations.find(d => d.id === Number(appointmentState.designationId)),
+        service: services.find(s => s.id === Number(appointmentState.serviceId)),
+        recordedDesignationName: appointmentState.recordedDesignationName,
+        currentDepartment: appointmentState.currentDepartment, currentOffice: appointmentState.currentOffice,
+        currentDistrictOfWorking: appointmentState.currentDistrictOfWorking
+    };
     return (
         <Box>
+            {appointmentIndex != null && <ServiceAppointmentDialog open onClose={() => setAppointmentIndex(null)}
+                employee={appointmentEmployee} initialAction={events[appointmentIndex] || null}
+                previousEventDate={appointmentPrefix.at(-1)?.actionDate} nextEventDate={events[appointmentIndex + 1]?.actionDate}
+                onSubmit={async data => {
+                    const event = { ...data, actionType: "SERVICE_APPOINTMENT", actionDate: data.appointmentDate, designationId: data.newDesignationId };
+                    const next = [...events]; next[appointmentIndex] = event; onChange(next);
+                }} />}
             {/* Timeline cards */}
             {events.length > 0 && (
                 <Stack spacing={1.5} sx={{ mb: 2 }}>
@@ -1112,6 +1162,9 @@ export default function CareerHistoryBuilder({
                                     ) || event.remarks || "—"}
                                 </Typography>
                             </Box>
+                            {event.actionType === "SERVICE_APPOINTMENT" && <Tooltip title="Revise this service appointment">
+                                <IconButton size="small" onClick={() => setAppointmentIndex(index)} aria-label="Revise service appointment"><EditOutlinedIcon fontSize="small" /></IconButton>
+                            </Tooltip>}
                             {index === lastRemovableIndex && lastRemovableIndex >= 0 && (
                                 <Tooltip title="Remove this event">
                                     <IconButton
@@ -1301,6 +1354,7 @@ export default function CareerHistoryBuilder({
             {hasFirstAppointment && availableActionTypes.length > 0 && (
                 <Box>
                     <Divider sx={{ mb: 2 }} />
+                    {serviceAppointmentsEnabled && <Button variant="outlined" sx={{ mb: 2 }} onClick={() => setAppointmentIndex(events.length)}>Appointment to Another Service</Button>}
                     <Typography variant="body2" sx={{fontWeight: 600,  mb: 1.5 }}>
                         Add Career Event
                     </Typography>
@@ -1594,6 +1648,18 @@ export default function CareerHistoryBuilder({
                                     showDepartment={isPrimaryDepartment(state.currentDepartment)}
                                     officeLabel="New Office"
                                 />
+                                {Boolean(state.designationId) && !state.recordedDesignationName && (
+                                    <Grid size={{ xs: 12 }}>
+                                        <TextField
+                                            {...fieldProps}
+                                            onChange={handleEventDraftChange}
+                                            label="Special designation at the new office (optional)"
+                                            name="specialDesignationName"
+                                            value={eventDraft.specialDesignationName}
+                                            helperText="Local title for the same designation, service and grade. Leave empty to use the declared designation."
+                                        />
+                                    </Grid>
+                                )}
                             </>
                         )}
                         {showReason && (

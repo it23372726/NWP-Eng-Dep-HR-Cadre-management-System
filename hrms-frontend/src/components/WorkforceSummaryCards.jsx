@@ -9,6 +9,7 @@ import { useNavigate } from "react-router-dom";
 import { KPI_COLORS } from "../constants/dashboardTheme";
 import { useOrganizationSettings } from "../context/OrganizationSettingsContext";
 import { buildEmployeeListUrl, buildVacancyReportUrl } from "../utils/dashboardNavigation";
+import { RETIREMENT_WATCH_MONTHS } from "../utils/employeeRetirement";
 
 const SummaryCard = ({ icon: Icon, title, value, subtitle, color, loading, onClick }) => {
     return (
@@ -93,9 +94,9 @@ export default function WorkforceSummaryCards({ summary, loading }) {
             icon: EventIcon,
             title: "Near Retirement",
             value: summary?.retirementWatch ?? 0,
-            subtitle: "Within 24 months",
+            subtitle: "Within 12 months",
             color: KPI_COLORS.retirement,
-            onClick: () => navigate(buildEmployeeListUrl({ retiringWithin: 24 }))
+            onClick: () => navigate(buildEmployeeListUrl({ retiringWithin: RETIREMENT_WATCH_MONTHS }))
         },
         {
             icon: VerifiedIcon,

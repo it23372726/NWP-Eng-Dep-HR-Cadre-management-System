@@ -78,7 +78,7 @@ export default function SummaryCards({ summary, loading }) {
             icon: EventIcon,
             title: "Retirement Watch",
             value: summary?.retirementWatch ?? 0,
-            subtitle: "Within 24 months",
+            subtitle: "Within 12 months",
             color: "#7C3AED"
         },
         {

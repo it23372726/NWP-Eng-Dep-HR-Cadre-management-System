@@ -112,13 +112,8 @@ export const getMinSalaryIncrementRecordDate = (status) => status?.nextDueDate ?
 export const getMinSalaryIncrementCatchUpDate = (status) =>
     status?.catchUpTargetDueDate ?? null;
 
-export const getMinSalaryIncrementEditDate = (status, employee) => {
-    if (!employee?.salaryIncrementLastDueYear || !employee?.incremantDate) {
-        return null;
-    }
-
-    return resolveDueDate(employee.incremantDate, employee.salaryIncrementLastDueYear);
-};
+export const getMinSalaryIncrementEditDate = (status) =>
+    status?.lastDueDate ?? null;
 
 export const validateSalaryIncrementRecordDate = (doneDate, status) => {
     if (!doneDate) {
@@ -156,7 +151,7 @@ export const validateSalaryIncrementCatchUpDate = (doneDate, status) => {
     return null;
 };
 
-export const validateSalaryIncrementEditDate = (doneDate, status, employee) => {
+export const validateSalaryIncrementEditDate = (doneDate, status) => {
     if (!doneDate) {
         return "Increment done date is required.";
     }
@@ -167,7 +162,7 @@ export const validateSalaryIncrementEditDate = (doneDate, status, employee) => {
         return "Increment done date cannot be in the future.";
     }
 
-    const minDate = getMinSalaryIncrementEditDate(status, employee);
+    const minDate = getMinSalaryIncrementEditDate(status);
     if (minDate && doneDate < minDate) {
         return `Increment done date cannot be before the due date (${formatSalaryIncrementDate(minDate)}).`;
     }
@@ -175,9 +170,9 @@ export const validateSalaryIncrementEditDate = (doneDate, status, employee) => {
     return null;
 };
 
-export const getSalaryIncrementRecordHelperText = (status, mode = "record", employee = null) => {
+export const getSalaryIncrementRecordHelperText = (status, mode = "record") => {
     const minDate = mode === "edit"
-        ? getMinSalaryIncrementEditDate(status, employee)
+        ? getMinSalaryIncrementEditDate(status)
         : mode === "catchUp"
             ? getMinSalaryIncrementCatchUpDate(status)
             : getMinSalaryIncrementRecordDate(status);
@@ -211,12 +206,20 @@ export const getSingleRecordOptionLabel = (status) => {
     return `Record next increment only (${status.nextDueYear})`;
 };
 
-export const wasMultiYearCatchUp = (status) => {
-    if (status?.lastDueYear == null || status?.priorDueYear == null) {
-        return status?.lastDueYear != null && status?.priorDueYear == null;
+export const isLatestCatchUpOperation = (status) =>
+    status?.lastOperationType === "CATCH_UP"
+    || (Number(status?.lastOperationRecordCount) > 1);
+
+export const formatSalaryIncrementDoneDate = (doneDate, { legacyImported = false } = {}) => {
+    if (doneDate) {
+        return formatSalaryIncrementDate(doneDate);
     }
 
-    return status.lastDueYear - status.priorDueYear > 1;
+    if (legacyImported) {
+        return "Completion date unavailable — imported from legacy increment status.";
+    }
+
+    return "—";
 };
 
 export const getSalaryIncrementStatusLabel = (status) => {

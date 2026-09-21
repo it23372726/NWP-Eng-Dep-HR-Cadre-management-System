@@ -119,3 +119,5 @@ export const downloadEmployeeDependentDetailsPdf = async (id) => {
     });
     return response.data;
 };
+
+export const getLifecycleCapabilities = async () => (await api.get("/employees/lifecycle-capabilities")).data;
