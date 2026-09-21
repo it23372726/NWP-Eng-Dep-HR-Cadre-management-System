@@ -44,6 +44,12 @@ public class EmployeeAction {
     @Column(name = "recorded_special_designation_name")
     private String recordedSpecialDesignationName;
 
+    /**
+     * Distinguishes "HR set the special designation on this action" from actions recorded before the
+     * field existed. Without it, replaying an older office change would clear a name it never touched.
+     */
+    private Boolean specialDesignationUpdated;
+
     @Enumerated(EnumType.STRING)
     private Grade oldGrade;
 
@@ -74,6 +80,14 @@ public class EmployeeAction {
     private String reason;
 
     private String remarks;
+
+    @Column(length = 36)
+    private String serviceAppointmentKey;
+    private Long serviceId;
+    private Long serviceLevelId;
+    private String appointmentBasis;
+    private String incrementDate;
+    private LocalDate firstIncrementDueDate;
 
     private LocalDateTime createdAt;
 

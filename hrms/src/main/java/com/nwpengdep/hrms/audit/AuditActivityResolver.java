@@ -7,6 +7,8 @@ import com.nwpengdep.hrms.dto.MakePermanentRequest;
 import com.nwpengdep.hrms.dto.NewAppointmentRequest;
 import com.nwpengdep.hrms.dto.OfficeChangeRequest;
 import com.nwpengdep.hrms.dto.PromotionRequest;
+import com.nwpengdep.hrms.dto.SalaryIncrementRecordRequest;
+import com.nwpengdep.hrms.dto.SalaryIncrementStatusDto;
 import com.nwpengdep.hrms.dto.TrainingAppointmentRequest;
 import com.nwpengdep.hrms.dto.TransferOutRequest;
 import com.nwpengdep.hrms.dto.VacationOfPostRequest;
@@ -21,6 +23,7 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -88,6 +91,7 @@ public class AuditActivityResolver {
                     requestBody,
                     "effectiveDate"
             );
+            case "appointtoanotherservice" -> lifecycleActivity(EmployeeActionType.SERVICE_APPOINTMENT, employee, entityId, requestBody, "appointmentDate");
             case "appointnewemployee" -> lifecycleActivity(
                     EmployeeActionType.NEW_APPOINTMENT,
                     employee,
@@ -136,6 +140,17 @@ public class AuditActivityResolver {
                     employee,
                     entityId
             );
+            case "recordsalaryincrement" -> salaryIncrementActivity(
+                    requestBody,
+                    result,
+                    entityId
+            );
+            case "updatesalaryincrement" -> salaryIncrementUpdateActivity(
+                    requestBody,
+                    result,
+                    entityId
+            );
+            case "undosalaryincrement" -> salaryIncrementUndoActivity(result, entityId);
             case "createemployee" -> simpleEmployeeActivity(
                     "New Employee Registration",
                     "NEW_EMPLOYEE",
@@ -403,6 +418,122 @@ public class AuditActivityResolver {
                 .build());
     }
 
+    private Optional<AuditActivityDetails> salaryIncrementActivity(
+            Object requestBody,
+            Object result,
+            String entityId
+    ) {
+        boolean catchUp = requestBody instanceof SalaryIncrementRecordRequest request
+                && request.isCatchUpToCurrentYear();
+        String summary = catchUp
+                ? "Record Salary Increment Catch-up"
+                : "Record Salary Increment";
+        String activityType = catchUp
+                ? "SALARY_INCREMENT_CATCH_UP"
+                : "SALARY_INCREMENT_RECORD";
+        return Optional.of(AuditActivityDetails.builder()
+                .activityType(activityType)
+                .activitySummary(summary)
+                .entityLabel(summary + (entityId != null ? " #" + entityId : ""))
+                .details(salaryIncrementDetails(
+                        activityType,
+                        summary,
+                        entityId,
+                        requestBody,
+                        result,
+                        null
+                ))
+                .build());
+    }
+
+    private Optional<AuditActivityDetails> salaryIncrementUpdateActivity(
+            Object requestBody,
+            Object result,
+            String entityId
+    ) {
+        String summary = "Update Salary Increment Date";
+        String activityType = "SALARY_INCREMENT_UPDATE";
+        return Optional.of(AuditActivityDetails.builder()
+                .activityType(activityType)
+                .activitySummary(summary)
+                .entityLabel(summary + (entityId != null ? " #" + entityId : ""))
+                .details(salaryIncrementDetails(
+                        activityType,
+                        summary,
+                        entityId,
+                        requestBody,
+                        result,
+                        null
+                ))
+                .build());
+    }
+
+    private Optional<AuditActivityDetails> salaryIncrementUndoActivity(
+            Object result,
+            String entityId
+    ) {
+        String summary = "Undo Salary Increment";
+        String activityType = "SALARY_INCREMENT_UNDO";
+        UUID reversedOperationId = result instanceof SalaryIncrementStatusDto status
+                ? status.getReversedOperationId()
+                : null;
+        return Optional.of(AuditActivityDetails.builder()
+                .activityType(activityType)
+                .activitySummary(summary)
+                .entityLabel(summary + (entityId != null ? " #" + entityId : ""))
+                .details(salaryIncrementDetails(
+                        activityType,
+                        summary,
+                        entityId,
+                        null,
+                        result,
+                        reversedOperationId
+                ))
+                .build());
+    }
+
+    private Map<String, Object> salaryIncrementDetails(
+            String activityType,
+            String summary,
+            String entityId,
+            Object requestBody,
+            Object result,
+            UUID reversedOperationId
+    ) {
+        Map<String, Object> details = baseDetails(activityType, summary);
+        if (entityId != null) {
+            details.put("employeeId", entityId);
+        }
+
+        if (requestBody instanceof SalaryIncrementRecordRequest request) {
+            if (request.getDoneDate() != null) {
+                details.put("doneDate", request.getDoneDate().toString());
+            }
+            details.put("catchUpToCurrentYear", request.isCatchUpToCurrentYear());
+        }
+
+        if (result instanceof SalaryIncrementStatusDto status) {
+            if (status.getLastOperationId() != null) {
+                details.put("operationId", status.getLastOperationId().toString());
+            }
+            if (status.getLastOperationFromYear() != null) {
+                details.put("fromYear", status.getLastOperationFromYear());
+            }
+            if (status.getLastOperationToYear() != null) {
+                details.put("toYear", status.getLastOperationToYear());
+            }
+            details.put("yearlyRecordCount", status.getLastOperationRecordCount());
+            if (status.getLastDoneDate() != null) {
+                details.put("lastDoneDate", status.getLastDoneDate().toString());
+            }
+        }
+
+        if (reversedOperationId != null) {
+            details.put("reversedOperationId", reversedOperationId.toString());
+        }
+        return details;
+    }
+
     private Optional<AuditActivityDetails> simpleEmployeeActivity(
             String summary,
             String activityType,
@@ -568,6 +699,7 @@ public class AuditActivityResolver {
         }
         return switch (actionTypeCode) {
             case "NEW_APPOINTMENT" -> "New Appointment";
+            case "SERVICE_APPOINTMENT" -> "Appointment to Another Service";
             case "TRANSFER_IN" -> "Transfer In";
             case "TRANSFER_OUT" -> "Transfer Out";
             case "PROMOTION" -> "Promotion";

@@ -13,6 +13,7 @@ import java.time.LocalDate;
 @AllArgsConstructor
 @Builder
 public class EmployeeActionUpdateRequest {
+    private String expectedHistoryRevision;
 
     @NotNull(message = "Action date is required")
     private LocalDate actionDate;
@@ -31,6 +32,11 @@ public class EmployeeActionUpdateRequest {
 
     private String remarks;
 
+    private String district;
+    private String appointmentBasis;
+    private String incrementDate;
+    private LocalDate firstIncrementDueDate;
+
     private String grade;
 
     private String recordedDesignationName;
@@ -38,6 +44,10 @@ public class EmployeeActionUpdateRequest {
     private String specialDesignationName;
 
     private Long serviceLevelId;
+
+    private Long serviceId;
+
+    private String transferredFrom;
 
     /** Promotion outcome: when true, employee leaves N.W.P. Engineering on promotion. */
     private Boolean transferringOut;

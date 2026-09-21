@@ -55,7 +55,8 @@ public class AllEmployeeDetailsReportExportService {
             "Salary Code",
             "Grade",
             "Nature of Appointment",
-            "Date of First Appointment",
+            "First Appointment in Current Service",
+            "Original Career Appointment",
             "Increment Date",
             "Entered Date to All Island Service",
             "Reported Date to Present Working Place",
@@ -70,7 +71,7 @@ public class AllEmployeeDetailsReportExportService {
 
     private static final int[] COLUMN_WIDTHS = {
             1600, 9000, 6000, 3000, 3000, 2000, 3000, 6000,
-            2500, 2500, 4000, 4000, 2500, 4000, 4000, 6000, 3500,
+            2500, 2500, 4000, 4000, 4000, 2500, 4000, 4000, 6000, 3500,
             4000, 4000, 8000, 3000, 3000
     };
 
@@ -473,6 +474,7 @@ public class AllEmployeeDetailsReportExportService {
                 nvl(row.getGrade()),
                 nvl(row.getNatureOfAppointment()),
                 formatDate(row.getDateOfFirstAppointment()),
+                formatDate(row.getOriginalFirstAppointmentDate()),
                 nvl(row.getIncremantDate()),
                 formatDate(row.getEnteredDateToAllIslandService()),
                 formatDate(row.getReportedDateToPresentWorkingPlace()),

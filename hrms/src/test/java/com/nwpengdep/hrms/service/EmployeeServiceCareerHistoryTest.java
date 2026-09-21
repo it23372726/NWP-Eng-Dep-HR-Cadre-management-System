@@ -98,7 +98,7 @@ class EmployeeServiceCareerHistoryTest {
                 mock(OfficeService.class),
                 new EmployeeServiceResolver(),
                 mock(TrainingGraduationService.class)
-        );
+        , mock(ServiceAppointmentService.class));
 
         ServiceType service = new ServiceType();
         service.setId(1L);

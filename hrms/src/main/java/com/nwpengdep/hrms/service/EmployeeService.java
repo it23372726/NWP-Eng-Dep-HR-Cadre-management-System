@@ -15,10 +15,12 @@ import com.nwpengdep.hrms.constants.DepartmentConstants;
 import com.nwpengdep.hrms.dto.ActionWorkplaceFields;
 import com.nwpengdep.hrms.dto.CareerHistoryEventRequest;
 import com.nwpengdep.hrms.dto.EmployeeChildRequest;
+import com.nwpengdep.hrms.dto.EmployeeListItemResponse;
 import com.nwpengdep.hrms.dto.EmployeeRequest;
 import com.nwpengdep.hrms.dto.EmployeeRequirementRequest;
 import com.nwpengdep.hrms.dto.EmployeeSpouseRequest;
 import com.nwpengdep.hrms.dto.EmployeeUpdateRequest;
+import com.nwpengdep.hrms.mapper.EmployeeListItemMapper;
 import com.nwpengdep.hrms.entity.ChildRelationship;
 import com.nwpengdep.hrms.entity.Designation;
 import com.nwpengdep.hrms.entity.Employee;
@@ -66,6 +68,7 @@ public class EmployeeService {
     private final OfficeService officeService;
     private final EmployeeServiceResolver employeeServiceResolver;
     private final TrainingGraduationService trainingGraduationService;
+    private final ServiceAppointmentService serviceAppointmentService;
 
     @Transactional
     public Employee createEmployee(EmployeeRequest request) {
@@ -219,6 +222,8 @@ public class EmployeeService {
         }
 
         List<CareerHistoryEventRequest> events = request.getCareerHistory();
+        if (events.stream().anyMatch(e -> e.getActionType() == EmployeeActionType.SERVICE_APPOINTMENT))
+            serviceAppointmentService.requireEnabled();
         careerHistoryValidator.validate(events);
 
         CareerHistoryEventRequest firstEvent = events.getFirst();
@@ -234,7 +239,8 @@ public class EmployeeService {
         );
         applyFinalAssignmentState(employee, finalAssignment);
 
-        employee.setDateOfFirstAppointment(firstEvent.getActionDate());
+        employee.setDateOfFirstAppointment(events.stream().filter(e -> e.getActionType() == EmployeeActionType.SERVICE_APPOINTMENT)
+                .map(CareerHistoryEventRequest::getActionDate).reduce((a, b) -> b).orElse(firstEvent.getActionDate()));
         employee.setStatus(EmployeeStatus.ACTIVE);
         requirementSyncService.syncEmployeeRequirements(employee);
         careerProgressionService.recalculateEmployeeCareer(employee);
@@ -410,6 +416,22 @@ public class EmployeeService {
             );
 
             switch (event.getActionType()) {
+                case SERVICE_APPOINTMENT -> {
+                    Designation target = resolveDesignation(event.getDesignationId());
+                    EmployeeAction appointment = EmployeeAction.builder().employee(employee)
+                            .actionType(EmployeeActionType.SERVICE_APPOINTMENT).actionDate(event.getActionDate())
+                            .oldDesignation(currentDesignation).newDesignation(target).oldGrade(currentGrade).newGrade(Grade.III)
+                            .serviceId(target.getService().getId()).serviceLevelId(event.getServiceLevelId())
+                            .serviceAppointmentKey(ServiceAppointmentService.validKey(event.getServiceAppointmentKey()))
+                            .appointmentBasis(event.getAppointmentBasis())
+                            .incrementDate(event.getIncrementDate()).firstIncrementDueDate(event.getFirstIncrementDueDate())
+                            .fromDepartment(currentDepartment).fromOffice(currentOffice)
+                            .department(workplace.getDepartment()).office(workplace.getOffice()).district(workplace.getDistrict())
+                            .remarks(event.getRemarks()).build();
+                    employeeActionService.saveAction(appointment);
+                    currentDesignation = target; currentRecordedName = null; currentSpecialName = null; currentGrade = Grade.III;
+                    currentDepartment = workplace.getDepartment(); currentOffice = workplace.getOffice();
+                }
                 case NEW_APPOINTMENT -> {
                     currentGrade = event.getGrade() != null
                             ? event.getGrade()
@@ -649,18 +671,34 @@ public class EmployeeService {
                 }
 
                 case OFFICE_CHANGE -> {
-                    employeeActionService.recordAction(
+                    boolean carriesSpecialName = Boolean.TRUE.equals(event.getSpecialDesignationUpdated())
+                            && currentRecordedName == null;
+                    if (carriesSpecialName) {
+                        validateSpecialDesignationEvent(event);
+                        currentSpecialName = normalizeSpecialDesignationName(
+                                event.getSpecialDesignationName()
+                        );
+                    }
+                    EmployeeAction officeChange = employeeActionService.recordActionWithGrades(
                             employee,
                             EmployeeActionType.OFFICE_CHANGE,
                             event.getActionDate(),
                             currentDesignation,
                             currentDesignation,
                             null,
+                            carriesSpecialName ? currentSpecialName : null,
+                            null,
+                            null,
+                            null,
                             null,
                             null,
                             event.getRemarks(),
                             workplace
                     );
+                    if (carriesSpecialName) {
+                        officeChange.setSpecialDesignationUpdated(true);
+                        employeeActionService.saveAction(officeChange);
+                    }
                     currentOffice = workplace.getOffice();
                 }
 
@@ -1239,17 +1277,23 @@ public class EmployeeService {
         vehicle.setRentedFrom(null);
     }
 
-    public List<Employee> getActiveEmployees() {
+    @Transactional(readOnly = true)
+    public List<EmployeeListItemResponse> getActiveEmployees() {
         return getActiveEmployeesByScope("NWP");
     }
 
-    public List<Employee> getActiveEmployeesByScope(String departmentScope) {
+    @Transactional(readOnly = true)
+    public List<EmployeeListItemResponse> getActiveEmployeesByScope(String departmentScope) {
         if ("SYSTEM_PENDING".equalsIgnoreCase(departmentScope)) {
-            return employeeRepository.findSystemPendingEmployees();
+            return EmployeeListItemMapper.toListItems(
+                    employeeRepository.findSystemPendingEmployeesForList()
+            );
         }
 
-        List<Employee> active = employeeRepository.findByStatus(EmployeeStatus.ACTIVE);
-        return filterByDepartmentScope(active, departmentScope);
+        List<Employee> active = employeeRepository.findForListByStatus(EmployeeStatus.ACTIVE);
+        return EmployeeListItemMapper.toListItems(
+                filterByDepartmentScope(active, departmentScope)
+        );
     }
 
     private boolean isSystemPendingEmployee(Employee employee) {
@@ -1288,11 +1332,15 @@ public class EmployeeService {
         return employees;
     }
 
-    public List<Employee> getInactiveEmployees() {
-        return employeeRepository.findByStatus(EmployeeStatus.INACTIVE);
+    @Transactional(readOnly = true)
+    public List<EmployeeListItemResponse> getInactiveEmployees() {
+        return EmployeeListItemMapper.toListItems(
+                employeeRepository.findForListByStatus(EmployeeStatus.INACTIVE)
+        );
     }
 
-    public List<Employee> getAllEmployees() {
+    @Transactional(readOnly = true)
+    public List<EmployeeListItemResponse> getAllEmployees() {
         return getActiveEmployees();
     }
 
@@ -1325,6 +1373,9 @@ public class EmployeeService {
         careerProgressionService.recalculateEmployeeCareer(employee);
         employee = employeeRepository.save(employee);
         trainingGraduationService.populateLifecycleFlags(employee);
+        serviceAppointmentService.populateCapability(employee);
+        employee.setLifecycleHistoryRevision(employeeActionService.historyRevision(id));
+        if (employee.getCurrentServiceAppointmentKey() != null) serviceAppointmentService.captureCurrent(employee);
         return employee;
     }
 
@@ -1388,6 +1439,12 @@ public class EmployeeService {
         ServiceLevel serviceLevel =
                 serviceLevelService.resolve(request.getServiceLevelId());
 
+        if (employee.getCurrentServiceAppointmentKey() != null) {
+            if (!java.util.Objects.equals(request.getDateOfFirstAppointment(), employee.getDateOfFirstAppointment())
+                    || request.getGrade() != employee.getGrade()
+                    || !java.util.Objects.equals(request.getIncremantDate(), employee.getIncremantDate()))
+                throw new IllegalArgumentException("Change appointment dates, grade and increment schedule through lifecycle history");
+        }
         mapUpdateRequestToEmployee(
                 employee,
                 request,
@@ -1521,21 +1578,40 @@ public class EmployeeService {
                 resolveFinalServiceLevelId(request.getServiceLevelId(), events)
         );
 
-        applyNonCareerFieldsFromUpdate(employee, request, serviceLevel);
-        employee.setDateOfFirstAppointment(firstEvent.getActionDate());
+        boolean hadAppointmentPeriods = employee.getCurrentServiceAppointmentKey() != null;
+        boolean appointmentHistory = hadAppointmentPeriods
+                || events.stream().anyMatch(e -> e.getActionType() == EmployeeActionType.SERVICE_APPOINTMENT);
+        if (appointmentHistory) {
+            employeeRepository.findByIdForUpdate(id).orElseThrow();
+            employeeActionService.requireHistoryRevision(id, request.getExpectedHistoryRevision());
+            requireFeatureForNewServiceAppointments(id, events);
+            serviceAppointmentService.validateHistoryRevision(employee, events);
+            serviceAppointmentService.begin(employee);
+        }
+        boolean applyQualifications = !appointmentHistory || hadAppointmentPeriods;
+        applyNonCareerFieldsFromUpdate(employee, request, serviceLevel, applyQualifications);
+        if (!appointmentHistory) employee.setDateOfFirstAppointment(firstEvent.getActionDate());
         employeeRepository.save(employee);
 
-        employeeActionRepository.deleteByEmployeeId(id);
+        if (appointmentHistory) {
+            employeeActionService.archiveHistoryForRevision(id);
+        } else employeeActionRepository.deleteByEmployeeId(id);
         postingRepository.deleteByEmployeeId(id);
 
         recordCareerHistoryActions(employee, events);
         employeeActionService.recalculateEmployeeState(id);
 
         Employee result = getEmployeeById(id);
-        applyNonCareerFieldsFromUpdate(result, request, serviceLevel);
+        applyNonCareerFieldsFromUpdate(result, request, serviceLevel, applyQualifications);
+        if (appointmentHistory) {
+            result.getServiceAppointments().stream().filter(p -> p.isCurrentAppointment()).findFirst().ifPresent(p -> {
+                result.setIncremantDate(p.getIncrementDate()); result.setFirstIncrementDueDate(p.getFirstIncrementDueDate());
+            });
+        }
         syncRequirementsFromCareerHistory(result, events);
         requirementSyncService.syncEmployeeRequirements(result);
         careerProgressionService.recalculateEmployeeCareer(result);
+        if (appointmentHistory) serviceAppointmentService.captureCurrent(result);
 
         if (result.getDesignation() != null) {
             designationAssignmentValidator.validate(
@@ -1569,10 +1645,43 @@ public class EmployeeService {
         }
     }
 
+    /**
+     * Revising history that is already recorded stays possible when the feature switch is off;
+     * introducing a further service appointment does not, even for an employee who already has periods.
+     */
+    private void requireFeatureForNewServiceAppointments(
+            Long employeeId,
+            List<CareerHistoryEventRequest> events
+    ) {
+        if (serviceAppointmentService.isEnabled()) {
+            return;
+        }
+
+        java.util.Set<String> recordedKeys = employeeActionRepository
+                .findByEmployeeIdOrderByActionDateDescCreatedAtDesc(employeeId)
+                .stream()
+                .filter(action -> !Boolean.TRUE.equals(action.getDeleted()))
+                .filter(action -> action.getActionType() == EmployeeActionType.SERVICE_APPOINTMENT)
+                .map(EmployeeAction::getServiceAppointmentKey)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+
+        boolean introducesAppointment = events.stream()
+                .filter(event -> event.getActionType() == EmployeeActionType.SERVICE_APPOINTMENT)
+                .anyMatch(event -> event.getServiceAppointmentKey() == null
+                        || !recordedKeys.contains(
+                                ServiceAppointmentService.validKey(event.getServiceAppointmentKey())));
+
+        if (introducesAppointment) {
+            serviceAppointmentService.requireEnabled();
+        }
+    }
+
     private void applyNonCareerFieldsFromUpdate(
             Employee employee,
             EmployeeUpdateRequest request,
-            ServiceLevel serviceLevel
+            ServiceLevel serviceLevel,
+            boolean applyQualifications
     ) {
         employee.setEmployeeNo(request.getEmployeeNo().trim());
         employee.setFullName(request.getFullName().trim());
@@ -1603,26 +1712,28 @@ public class EmployeeService {
         applyEmailAddress(employee, request.getEmailAddress());
         employee.setServiceLevel(serviceLevel);
         employee.setEmploymentType(EmploymentType.PERMANENT);
-        applyQualificationFields(
-                employee,
-                request.getEbGrade3Passed(),
-                request.getLanguageQualificationPassed(),
-                request.getMedicalReportCompleted(),
-                request.getOlApproved(),
-                request.getAlApproved(),
-                request.getDegreeApproved(),
-                request.getOtherQualificationName(),
-                request.getOtherQualificationApproved(),
-                request.getBirthCertificateApproved(),
-                request.getAlreadyConfirmedPermanent(),
-                request.getPermanentConfirmationDate(),
-                request.getEbGrade2Passed(),
-                request.getOtherGrade2RequirementCompleted(),
-                request.getGrade2RequiredYears(),
-                request.getGrade1RequiredYears(),
-                request.getRequirements(),
-                request.getQualificationUpdateOnly()
-        );
+        if (applyQualifications) {
+            applyQualificationFields(
+                    employee,
+                    request.getEbGrade3Passed(),
+                    request.getLanguageQualificationPassed(),
+                    request.getMedicalReportCompleted(),
+                    request.getOlApproved(),
+                    request.getAlApproved(),
+                    request.getDegreeApproved(),
+                    request.getOtherQualificationName(),
+                    request.getOtherQualificationApproved(),
+                    request.getBirthCertificateApproved(),
+                    request.getAlreadyConfirmedPermanent(),
+                    request.getPermanentConfirmationDate(),
+                    request.getEbGrade2Passed(),
+                    request.getOtherGrade2RequirementCompleted(),
+                    request.getGrade2RequiredYears(),
+                    request.getGrade1RequiredYears(),
+                    request.getRequirements(),
+                    request.getQualificationUpdateOnly()
+            );
+        }
         applyDependentDetails(
                 employee,
                 request.getSpouse(),
@@ -1631,28 +1742,36 @@ public class EmployeeService {
         );
     }
 
-    public List<Employee> searchActiveEmployees(String keyword) {
-        return employeeRepository
-                .findByFullNameContainingIgnoreCaseAndStatus(
+    @Transactional(readOnly = true)
+    public List<EmployeeListItemResponse> searchActiveEmployees(String keyword) {
+        return EmployeeListItemMapper.toListItems(
+                employeeRepository.findForListByFullNameContainingIgnoreCaseAndStatus(
                         keyword,
                         EmployeeStatus.ACTIVE
-                );
+                )
+        );
     }
 
-    public List<Employee> searchInactiveEmployees(String keyword) {
-        return employeeRepository
-                .findByFullNameContainingIgnoreCaseAndStatus(
+    @Transactional(readOnly = true)
+    public List<EmployeeListItemResponse> searchInactiveEmployees(String keyword) {
+        return EmployeeListItemMapper.toListItems(
+                employeeRepository.findForListByFullNameContainingIgnoreCaseAndStatus(
                         keyword,
                         EmployeeStatus.INACTIVE
-                );
+                )
+        );
     }
 
-    public List<Employee> searchEmployees(String keyword) {
+    @Transactional(readOnly = true)
+    public List<EmployeeListItemResponse> searchEmployees(String keyword) {
         return searchActiveEmployees(keyword);
     }
 
-    public Page<Employee> getEmployeesPaginated(int page, int size) {
-        return employeeRepository.findAll(PageRequest.of(page, size));
+    @Transactional(readOnly = true)
+    public Page<EmployeeListItemResponse> getEmployeesPaginated(int page, int size) {
+        return employeeRepository
+                .findAllForList(PageRequest.of(page, size))
+                .map(EmployeeListItemMapper::toListItem);
     }
 
     private void mapUpdateRequestToEmployee(
@@ -2596,7 +2715,7 @@ public class EmployeeService {
 
         requirementSyncService.syncEmployeeRequirements(employee);
 
-        if (!Boolean.TRUE.equals(qualificationUpdateOnly)) {
+        if (!Boolean.TRUE.equals(qualificationUpdateOnly) && employee.getCurrentServiceAppointmentKey() == null) {
             boolean permanentGradeThreeAlreadyConfirmed =
                     employee.getEmploymentType() == EmploymentType.PERMANENT
                             && employee.getGrade() == Grade.III
@@ -2676,7 +2795,10 @@ public class EmployeeService {
             return;
         }
 
-        events.stream()
+        int currentPeriodStart = 0;
+        for (int i = 0; i < events.size(); i++)
+            if (events.get(i).getActionType() == EmployeeActionType.SERVICE_APPOINTMENT) currentPeriodStart = i;
+        events.subList(currentPeriodStart, events.size()).stream()
                 .filter(event -> event.getActionType()
                         == EmployeeActionType.PERMANENT_CONFIRMATION)
                 .map(CareerHistoryEventRequest::getActionDate)

@@ -11,6 +11,7 @@ import java.util.List;
 
 @Data
 public class EmployeeUpdateRequest {
+    private String expectedHistoryRevision;
 
     @NotBlank(message = "Employee number is required")
     private String employeeNo;

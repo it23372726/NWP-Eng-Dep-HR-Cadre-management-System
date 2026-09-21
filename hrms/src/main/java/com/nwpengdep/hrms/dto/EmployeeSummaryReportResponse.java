@@ -23,6 +23,8 @@ public class EmployeeSummaryReportResponse {
 
     private LocalDate dateOfFirstAppointment;
 
+    private LocalDate originalFirstAppointmentDate;
+
     private String nic;
 
     private String incremantDate;

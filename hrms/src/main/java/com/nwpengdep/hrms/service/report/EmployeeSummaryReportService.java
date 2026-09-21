@@ -48,6 +48,7 @@ public class EmployeeSummaryReportService {
                         : "—")
                 .dateOfBirth(employee.getDateOfBirth())
                 .dateOfFirstAppointment(employee.getDateOfFirstAppointment())
+                .originalFirstAppointmentDate(employee.getOriginalFirstAppointmentDate())
                 .nic(nvl(employee.getNic()))
                 .incremantDate(formatIncremantDate(employee.getIncremantDate()))
                 .widowsOrphansPensionNo(nvl(employee.getWidowsOrphansPensionNo()))

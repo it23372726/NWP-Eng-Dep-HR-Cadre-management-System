@@ -39,6 +39,10 @@ public class CadreReportRowResponse {
 
     private long newAppointments;
 
+    private long serviceAppointmentsIn;
+
+    private long serviceAppointmentsOut;
+
     private long dismissals;
 
     private long vacationOfPost;

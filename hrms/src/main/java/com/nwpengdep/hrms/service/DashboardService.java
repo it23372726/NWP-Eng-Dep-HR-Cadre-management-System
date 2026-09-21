@@ -9,8 +9,9 @@ import com.nwpengdep.hrms.service.report.CadreVacancyCalculator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import java.time.Clock;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -19,7 +20,9 @@ import java.util.stream.Collectors;
 public class DashboardService {
 
     private static final int RETIREMENT_AGE_YEARS = 60;
-    private static final int RETIREMENT_WATCH_MONTHS = 24;
+    private static final int RETIREMENT_WATCH_MONTHS = 12;
+    private static final int RETIREMENT_FORECAST_FIVE_YEAR_MONTHS = 60;
+    private static final int RETIREMENT_ALERT_MONTHS = 6;
     private static final List<Grade> GRADE_ORDER = List.of(
             Grade.III,
             Grade.II,
@@ -38,25 +41,28 @@ public class DashboardService {
     private final SalaryIncrementService salaryIncrementService;
     private final EmployeeServiceResolver employeeServiceResolver;
     private final OrganizationSettingsService organizationSettingsService;
-    private final CadrePositionService cadrePositionService;
+    private final Clock clock;
 
     public DashboardStatsResponse getDashboardStats() {
-        List<Employee> activeNwpEmployees = getActiveNwpEmployees();
+        List<Employee> eligibleEmployees = getDashboardEligibleNwpEmployees();
+        Set<Long> eligibleIds = eligibleEmployees.stream()
+                .map(Employee::getId)
+                .collect(Collectors.toSet());
         long currentPostings = employeePostingService.getCurrentPostings()
                 .stream()
                 .filter(posting -> posting.getEmployee() != null
-                        && isNwpEmployee(posting.getEmployee()))
+                        && eligibleIds.contains(posting.getEmployee().getId()))
                 .count();
 
         return DashboardStatsResponse.builder()
-                .totalEmployees(activeNwpEmployees.size())
+                .totalEmployees(eligibleEmployees.size())
                 .totalDesignations(designationRepository.count())
                 .currentPostings((int) currentPostings)
                 .build();
     }
 
     public DashboardSummaryDto getDashboardSummary() {
-        List<Employee> activeEmployees = getActiveNwpEmployees();
+        List<Employee> activeEmployees = getDashboardEligibleNwpEmployees();
         long totalEmployees = activeEmployees.size();
         List<CadreStatusDto> cadreStatuses = getCadreStatus();
         long approvedCadre = cadrePositionRepository.findAll()
@@ -75,8 +81,11 @@ public class DashboardService {
                 ))
                 .sum();
 
-        long retirementWatch = countRetiringWithinMonths(RETIREMENT_WATCH_MONTHS);
-        LocalDate recentlyQualifiedCutoff = LocalDate.now().minusDays(30);
+        long retirementWatch = countRetiringWithinMonths(
+                activeEmployees,
+                RETIREMENT_WATCH_MONTHS
+        );
+        LocalDate recentlyQualifiedCutoff = today().minusDays(30);
 
         return DashboardSummaryDto.builder()
                 .totalEmployees((int) totalEmployees)
@@ -188,11 +197,11 @@ public class DashboardService {
     ) {
         return qualificationDate != null
                 && !qualificationDate.isBefore(cutoff)
-                && !qualificationDate.isAfter(LocalDate.now());
+                && !qualificationDate.isAfter(today());
     }
 
     public List<EmployeeDistributionDto> getServiceLevelDistribution() {
-        List<Employee> activeNwpEmployees = getActiveNwpEmployees();
+        List<Employee> activeNwpEmployees = getDashboardEligibleNwpEmployees();
         List<ServiceLevel> serviceLevels = serviceLevelRepository.findAll();
         return serviceLevels.stream()
                 .map(sl -> EmployeeDistributionDto.builder()
@@ -207,7 +216,7 @@ public class DashboardService {
     }
 
     public List<EmployeeDistributionDto> getServiceDistribution() {
-        List<Employee> activeEmployees = getActiveNwpEmployees();
+        List<Employee> activeEmployees = getDashboardEligibleNwpEmployees();
         return activeEmployees.stream()
                 .map(employee -> employeeServiceResolver.resolve(employee))
                 .filter(Objects::nonNull)
@@ -231,7 +240,7 @@ public class DashboardService {
     }
 
     public List<EmployeeDistributionDto> getDesignationDistribution() {
-        List<Employee> activeEmployees = getActiveNwpEmployees();
+        List<Employee> activeEmployees = getDashboardEligibleNwpEmployees();
         Map<String, Long> countsByName = activeEmployees.stream()
                 .filter(employee -> employee.getDesignation() != null)
                 .collect(Collectors.groupingBy(
@@ -255,7 +264,7 @@ public class DashboardService {
     }
 
     public List<EmployeeDistributionDto> getGradeDistribution() {
-        List<Employee> activeEmployees = getActiveNwpEmployees();
+        List<Employee> activeEmployees = getDashboardEligibleNwpEmployees();
         return GRADE_ORDER.stream()
                 .map(grade -> {
                     long count = activeEmployees.stream()
@@ -271,7 +280,7 @@ public class DashboardService {
     }
 
     public List<EmployeeDistributionDto> getPermanentStatusDistribution() {
-        List<Employee> activeEmployees = getActiveNwpEmployees();
+        List<Employee> activeEmployees = getDashboardEligibleNwpEmployees();
         Map<String, Long> counts = new LinkedHashMap<>();
         counts.put("Probation", 0L);
         counts.put("Qualified for Permanent", 0L);
@@ -328,7 +337,7 @@ public class DashboardService {
     }
 
     public List<DistrictWorkplaceDistributionDto> getWorkplaceDistributionByDistrict() {
-        List<Employee> activeEmployees = getActiveNwpEmployees();
+        List<Employee> activeEmployees = getDashboardEligibleNwpEmployees();
         return organizationSettingsService.getDistricts()
                 .stream()
                 .map(district -> {
@@ -377,34 +386,42 @@ public class DashboardService {
     }
 
     public RetirementForecastDto getRetirementForecast() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = today();
         int currentYear = today.getYear();
-        List<Employee> activeEmployees = getActiveNwpEmployees();
+        List<Employee> activeEmployees = getDashboardEligibleNwpEmployees();
 
         long thisYear = activeEmployees.stream()
-                .filter(e -> e.getDateOfBirth() != null)
-                .filter(e -> e.getDateOfBirth().plusYears(RETIREMENT_AGE_YEARS).getYear()
-                        == currentYear)
+                .map(this::expectedRetirementDate)
+                .filter(Objects::nonNull)
+                .filter(retirementDate -> retirementDate.getYear() == currentYear)
                 .count();
-        long withinTwoYears = countRetiringWithinMonths(24);
-        long withinFiveYears = countRetiringWithinMonths(60);
+        long withinOneYear = countRetiringWithinMonths(
+                activeEmployees,
+                RETIREMENT_WATCH_MONTHS
+        );
+        long withinFiveYears = countRetiringWithinMonths(
+                activeEmployees,
+                RETIREMENT_FORECAST_FIVE_YEAR_MONTHS
+        );
 
         return RetirementForecastDto.builder()
                 .retiringThisYear((int) thisYear)
-                .retiringWithinTwoYears((int) withinTwoYears)
+                .retiringWithinOneYear((int) withinOneYear)
                 .retiringWithinFiveYears((int) withinFiveYears)
                 .build();
     }
 
     public List<CadreStatusDto> getCadreStatus() {
+        List<Employee> eligibleEmployees = getDashboardEligibleNwpEmployees();
         return cadrePositionRepository.findAll()
                 .stream()
                 .map(cadre -> {
                     long approved = cadre.getApprovedCount() != null
                             ? cadre.getApprovedCount().longValue()
                             : 0L;
-                    long existing = cadrePositionService.countCurrentCadreOccupancy(
-                            cadre.getDesignation()
+                    long existing = countDashboardCadreOccupancy(
+                            cadre.getDesignation(),
+                            eligibleEmployees
                     );
                     long vacancy = CadreVacancyCalculator.vacancy(approved, existing);
                     String vacancyStatus = vacancy == 0 ? "green" : vacancy <= 2 ? "orange" : "red";
@@ -423,7 +440,7 @@ public class DashboardService {
     }
 
     public List<DistrictDistributionDto> getDistrictDistribution() {
-        List<Employee> activeEmployees = getActiveNwpEmployees();
+        List<Employee> activeEmployees = getDashboardEligibleNwpEmployees();
         List<DistrictDistributionDto> distribution = organizationSettingsService.getDistricts()
                 .stream()
                 .map(district -> {
@@ -476,39 +493,28 @@ public class DashboardService {
     }
 
     public List<RetirementWatchDto> getRetirementWatchList() {
-        LocalDate today = LocalDate.now();
-        LocalDate minDateOfBirth = today.minusYears(RETIREMENT_AGE_YEARS);
-        LocalDate maxDateOfBirth = minDateOfBirth.plusMonths(RETIREMENT_WATCH_MONTHS);
+        LocalDate today = today();
+        LocalDate end = today.plusMonths(RETIREMENT_WATCH_MONTHS);
 
-        List<Employee> retiringEmployees = employeeRepository.findRetiringSoon(
-                EmployeeStatus.ACTIVE,
-                minDateOfBirth,
-                maxDateOfBirth
-        );
-
-        return retiringEmployees.stream()
-                .filter(this::isNwpEmployee)
+        return getDashboardEligibleNwpEmployees().stream()
                 .map(employee -> {
-                    LocalDate dob = employee.getDateOfBirth();
-                    if (dob == null) {
+                    LocalDate expectedRetirementDate = expectedRetirementDate(employee);
+                    if (expectedRetirementDate == null
+                            || !retiresWithinInclusive(expectedRetirementDate, today, end)) {
                         return null;
                     }
 
-                    LocalDate expectedRetirementDate = dob.plusYears(RETIREMENT_AGE_YEARS);
-                    long monthsRemaining = java.time.temporal.ChronoUnit.MONTHS.between(
+                    long monthsRemaining = ChronoUnit.MONTHS.between(
                             today,
                             expectedRetirementDate
                     );
-                    if (monthsRemaining < 0 || monthsRemaining > RETIREMENT_WATCH_MONTHS) {
-                        return null;
-                    }
 
                     return RetirementWatchDto.builder()
                             .employeeId(employee.getId())
                             .employeeName(employee.getFullName())
                             .designation(employee.getDesignation() != null ?
                                     employee.getDesignation().getDesignationName() : "Unknown")
-                            .dateOfBirth(dob)
+                            .dateOfBirth(employee.getDateOfBirth())
                             .retirementDate(expectedRetirementDate)
                             .remainingMonths((int) monthsRemaining)
                             .build();
@@ -520,10 +526,10 @@ public class DashboardService {
     }
 
     public List<BirthdayDto> getBirthdaysThisMonth() {
-        int currentMonth = LocalDate.now().getMonthValue();
-        return employeeRepository.findBirthdaysInMonth(EmployeeStatus.ACTIVE, currentMonth)
-                .stream()
-                .filter(this::isNwpEmployee)
+        int currentMonth = today().getMonthValue();
+        return getDashboardEligibleNwpEmployees().stream()
+                .filter(employee -> employee.getDateOfBirth() != null
+                        && employee.getDateOfBirth().getMonthValue() == currentMonth)
                 .map(employee -> BirthdayDto.builder()
                         .employeeId(employee.getId())
                         .employeeName(employee.getFullName())
@@ -533,7 +539,7 @@ public class DashboardService {
     }
 
     public List<RecentEmployeeDto> getRecentlyAddedEmployees() {
-        return getActiveNwpEmployees()
+        return getDashboardEligibleNwpEmployees()
                 .stream()
                 .sorted(Comparator
                         .comparing(
@@ -620,7 +626,10 @@ public class DashboardService {
                     .build());
         }
 
-        long retiringIn6Months = countRetiringWithinMonths(6);
+        long retiringIn6Months = countRetiringWithinMonths(
+                getDashboardEligibleNwpEmployees(),
+                RETIREMENT_ALERT_MONTHS
+        );
         if (retiringIn6Months > 0) {
             alerts.add(DashboardAlertDto.builder()
                     .type("RETIREMENT")
@@ -674,28 +683,29 @@ public class DashboardService {
     }
 
     public List<SalaryIncrementWatchDto> getPendingSalaryIncrements() {
-        return salaryIncrementService.getPendingIncrements(getActiveNwpEmployees());
+        return salaryIncrementService.getPendingIncrements(getDashboardEligibleNwpEmployees());
     }
 
     public List<SalaryIncrementWatchDto> getUpcomingSalaryIncrements() {
-        return salaryIncrementService.getUpcomingIncrements(getActiveNwpEmployees());
+        return salaryIncrementService.getUpcomingIncrements(getDashboardEligibleNwpEmployees());
     }
 
     public int getNewAppointmentsThisYear() {
-        LocalDate startOfYear = LocalDate.of(LocalDate.now().getYear(), 1, 1);
-        LocalDate endOfYear = LocalDate.of(LocalDate.now().getYear(), 12, 31);
+        LocalDate startOfYear = LocalDate.of(today().getYear(), 1, 1);
+        LocalDate endOfYear = LocalDate.of(today().getYear(), 12, 31);
         return Math.toIntExact(employeeActionRepository.findAll()
                 .stream()
                 .filter(a -> a.getDeleted() == null || !a.getDeleted())
                 .filter(this::isNwpAction)
-                .filter(a -> a.getActionType() == EmployeeActionType.NEW_APPOINTMENT)
+                .filter(a -> a.getActionType() == EmployeeActionType.NEW_APPOINTMENT
+                        || a.getActionType() == EmployeeActionType.SERVICE_APPOINTMENT)
                 .filter(a -> !a.getActionDate().isBefore(startOfYear) && !a.getActionDate().isAfter(endOfYear))
                 .count());
     }
 
     public int getPromotionsThisYear() {
-        LocalDate startOfYear = LocalDate.of(LocalDate.now().getYear(), 1, 1);
-        LocalDate endOfYear = LocalDate.of(LocalDate.now().getYear(), 12, 31);
+        LocalDate startOfYear = LocalDate.of(today().getYear(), 1, 1);
+        LocalDate endOfYear = LocalDate.of(today().getYear(), 12, 31);
         return Math.toIntExact(employeeActionRepository.findAll()
                 .stream()
                 .filter(a -> a.getDeleted() == null || !a.getDeleted())
@@ -745,19 +755,47 @@ public class DashboardService {
                 .anyMatch(requirement -> requirement.getStatus() == RequirementStatus.PENDING);
     }
 
-    private long countRetiringWithinMonths(int months) {
-        LocalDate today = LocalDate.now();
-        return getActiveNwpEmployees().stream()
-                .filter(e -> e.getDateOfBirth() != null)
-                .map(e -> e.getDateOfBirth().plusYears(RETIREMENT_AGE_YEARS))
-                .filter(retirementDate -> {
-                    long monthsRemaining = java.time.temporal.ChronoUnit.MONTHS.between(
-                            today,
-                            retirementDate
-                    );
-                    return monthsRemaining >= 0 && monthsRemaining <= months;
-                })
+    private long countRetiringWithinMonths(List<Employee> employees, int months) {
+        LocalDate today = today();
+        LocalDate end = today.plusMonths(months);
+        return employees.stream()
+                .map(this::expectedRetirementDate)
+                .filter(Objects::nonNull)
+                .filter(retirementDate -> retiresWithinInclusive(retirementDate, today, end))
                 .count();
+    }
+
+    private LocalDate expectedRetirementDate(Employee employee) {
+        if (employee == null || employee.getDateOfBirth() == null) {
+            return null;
+        }
+        return employee.getDateOfBirth().plusYears(RETIREMENT_AGE_YEARS);
+    }
+
+    private boolean retiresWithinInclusive(
+            LocalDate retirementDate,
+            LocalDate today,
+            LocalDate end
+    ) {
+        return !retirementDate.isBefore(today) && !retirementDate.isAfter(end);
+    }
+
+    private long countDashboardCadreOccupancy(
+            Designation designation,
+            List<Employee> eligibleEmployees
+    ) {
+        if (designation == null || designation.getId() == null) {
+            return 0L;
+        }
+        return eligibleEmployees.stream()
+                .filter(employee -> employee.getDesignation() != null
+                        && designation.getId().equals(employee.getDesignation().getId()))
+                .filter(employee -> employee.getEmploymentType() != EmploymentType.ACTING)
+                .count();
+    }
+
+    private LocalDate today() {
+        return LocalDate.now(clock);
     }
 
     private String resolveWorkplaceLabel(Employee employee) {
@@ -790,8 +828,8 @@ public class DashboardService {
         return 2;
     }
 
-    private List<Employee> getActiveNwpEmployees() {
-        return employeeRepository.findByStatus(EmployeeStatus.ACTIVE)
+    private List<Employee> getDashboardEligibleNwpEmployees() {
+        return employeeRepository.findActiveExcludingSystemPending(EmployeeStatus.ACTIVE)
                 .stream()
                 .filter(this::isNwpEmployee)
                 .toList();

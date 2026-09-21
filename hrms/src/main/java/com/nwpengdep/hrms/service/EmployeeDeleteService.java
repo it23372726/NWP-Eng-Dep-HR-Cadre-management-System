@@ -4,6 +4,7 @@ import com.nwpengdep.hrms.entity.Employee;
 import com.nwpengdep.hrms.repository.EmployeeActionRepository;
 import com.nwpengdep.hrms.repository.EmployeePostingRepository;
 import com.nwpengdep.hrms.repository.EmployeeRepository;
+import com.nwpengdep.hrms.repository.SalaryIncrementRecordRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +17,7 @@ public class EmployeeDeleteService {
     private final EmployeeActionRepository employeeActionRepository;
     private final EmployeePostingRepository employeePostingRepository;
     private final EmployeePhotoService employeePhotoService;
+    private final SalaryIncrementRecordRepository salaryIncrementRecordRepository;
 
     @Transactional
     public void deleteEmployeePermanently(Long employeeId) {
@@ -29,11 +31,11 @@ public class EmployeeDeleteService {
             
             // Delete lifecycle actions first (they reference employee)
             employeeActionRepository.deleteByEmployeeId(employeeId);
-            
-            // Delete postings (they reference employee)
+
             employeePostingRepository.deleteByEmployeeId(employeeId);
-            
-            // Finally delete the employee
+
+            salaryIncrementRecordRepository.deleteByEmployeeId(employeeId);
+
             employeeRepository.delete(employee);
             
         } catch (Exception e) {

@@ -22,6 +22,7 @@ public class EmployeeWorkplaceHistoryService {
 
     private static final Set<EmployeeActionType> WORKPLACE_CHANGING_TYPES = EnumSet.of(
             EmployeeActionType.NEW_APPOINTMENT,
+            EmployeeActionType.SERVICE_APPOINTMENT,
             EmployeeActionType.OFFICE_CHANGE,
             EmployeeActionType.TRANSFER_OUT
     );
@@ -49,6 +50,8 @@ public class EmployeeWorkplaceHistoryService {
             if (workingPlace == null || workingPlace.isBlank()) {
                 continue;
             }
+            if (action.getActionType() == EmployeeActionType.SERVICE_APPOINTMENT && !workplaceEvents.isEmpty()
+                    && workingPlace.equals(workplaceEvents.getLast().workingPlace())) continue;
             workplaceEvents.add(new WorkplaceEvent(action.getActionDate(), workingPlace));
         }
 
@@ -130,7 +133,7 @@ public class EmployeeWorkplaceHistoryService {
 
     private String resolveWorkingPlaceAfterEvent(EmployeeAction action) {
         return switch (action.getActionType()) {
-            case NEW_APPOINTMENT -> formatWorkingPlace(
+            case NEW_APPOINTMENT, SERVICE_APPOINTMENT -> formatWorkingPlace(
                     action.getDepartment(),
                     action.getOffice()
             );

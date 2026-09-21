@@ -31,6 +31,7 @@ public class VehiclePermitService {
 
     private static final Set<EmployeeActionType> SENIOR_CAREER_ACTION_TYPES = EnumSet.of(
             EmployeeActionType.NEW_APPOINTMENT,
+            EmployeeActionType.SERVICE_APPOINTMENT,
             EmployeeActionType.PROMOTION,
             EmployeeActionType.ASSIGNMENT_GRADE_UPDATE,
             EmployeeActionType.TRANSFER_IN

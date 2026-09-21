@@ -17,5 +17,8 @@ public class OfficeChangeRequest {
 
     private String district;
 
+    /** Local title used for the same declared designation at the new office. Blank clears it. */
+    private String specialDesignationName;
+
     private String remarks;
 }

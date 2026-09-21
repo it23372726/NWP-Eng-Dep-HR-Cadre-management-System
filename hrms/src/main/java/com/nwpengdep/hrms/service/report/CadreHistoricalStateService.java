@@ -21,7 +21,11 @@ public class CadreHistoricalStateService {
             LocalDate asOfDate,
             List<EmployeeAction> employeeActions
     ) {
-        if (!employeeExistedOnDate(employee, asOfDate)) {
+        boolean appointmentHistory = employee.getCurrentServiceAppointmentKey() != null;
+        boolean existed = appointmentHistory ? employeeActions.stream().anyMatch(a -> !Boolean.TRUE.equals(a.getDeleted())
+                && a.getActionType() == EmployeeActionType.NEW_APPOINTMENT && !a.getActionDate().isAfter(asOfDate))
+                : employeeExistedOnDate(employee, asOfDate);
+        if (!existed) {
             return EmployeeSnapshot.inactive();
         }
 
@@ -39,7 +43,7 @@ public class CadreHistoricalStateService {
 
         for (EmployeeAction action : relevant) {
             switch (action.getActionType()) {
-                case NEW_APPOINTMENT, TRANSFER_IN, PROMOTION -> {
+                case NEW_APPOINTMENT, SERVICE_APPOINTMENT, TRANSFER_IN, PROMOTION -> {
                     active = true;
                     inNwpDepartment = DepartmentConstants.isNwpEngineering(
                             action.getDepartment()

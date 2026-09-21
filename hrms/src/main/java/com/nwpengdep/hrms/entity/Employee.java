@@ -26,6 +26,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -45,6 +46,11 @@ public class Employee {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Version
+    @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
+    @Builder.Default
+    private long version = 0L;
 
     @Column(unique = true)
     private String employeeNo;
@@ -79,6 +85,27 @@ public class Employee {
     private Grade grade;
 
     private LocalDate dateOfFirstAppointment;
+
+    private LocalDate originalFirstAppointmentDate;
+
+    @Column(length = 36)
+    private String currentServiceAppointmentKey;
+
+    private LocalDate firstIncrementDueDate;
+
+    @Transient
+    private LocalDate incrementScheduleEndDate;
+
+    @OneToMany(mappedBy = "employee", cascade = CascadeType.ALL, orphanRemoval = true,
+            fetch = FetchType.EAGER)
+    @OrderBy("startDate ASC, id ASC")
+    @Builder.Default
+    private List<EmployeeServiceAppointment> serviceAppointments = new ArrayList<>();
+
+    @Transient
+    private Boolean canAppointToAnotherService;
+    @Transient
+    private String lifecycleHistoryRevision;
 
     private LocalDate enteredDateToAllIslandService;
 

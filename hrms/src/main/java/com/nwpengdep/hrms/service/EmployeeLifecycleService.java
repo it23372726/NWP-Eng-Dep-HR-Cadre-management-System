@@ -54,6 +54,47 @@ public class EmployeeLifecycleService {
     private final EmployeeRequirementSyncService requirementSyncService;
     private final OfficeService officeService;
     private final TrainingGraduationService trainingGraduationService;
+    private final ServiceAppointmentService serviceAppointmentService;
+
+    @Transactional
+    public Employee appointToAnotherService(Long employeeId, com.nwpengdep.hrms.dto.ServiceAppointmentRequest request) {
+        serviceAppointmentService.requireEnabled();
+        Employee employee = employeeRepository.findByIdForUpdate(employeeId)
+                .orElseThrow(() -> new IllegalArgumentException("Employee not found"));
+        employeeActionService.requireHistoryRevision(employeeId, request.getExpectedHistoryRevision());
+        String key = ServiceAppointmentService.validKey(request.getServiceAppointmentKey());
+        boolean duplicate = employeeActionRepository.findByEmployeeIdOrderByActionDateDescCreatedAtDesc(employeeId).stream()
+                .anyMatch(a -> key.equals(a.getServiceAppointmentKey()));
+        if (duplicate) throw new IllegalArgumentException("This service appointment was already submitted. Refresh the employee history.");
+        if (employee.getStatus() != EmployeeStatus.ACTIVE || employee.getEmploymentType() != EmploymentType.PERMANENT)
+            throw new IllegalArgumentException("Appointment to another service requires an active permanent-category employee");
+        rejectContractEmploymentActions(employee); rejectSystemPendingEmployee(employee);
+        Designation target = designationRepository.findById(request.getNewDesignationId())
+                .orElseThrow(() -> new IllegalArgumentException("Designation not found"));
+        ServiceType previousService = employee.getDesignation() != null ? employee.getDesignation().getService() : employee.getService();
+        if (previousService == null || target.getService() == null || previousService.getId().equals(target.getService().getId()))
+            throw new IllegalArgumentException("Select a designation in a different service");
+        ServiceLevel level = serviceLevelService.resolve(request.getServiceLevelId());
+        designationAssignmentValidator.validateGrade(Grade.III, target);
+        designationAssignmentValidator.validateServiceLevel(level, target);
+        ServiceAppointmentService.validateSchedule(request.getAppointmentDate(), request.getIncrementDate(),
+                request.getFirstIncrementDueDate(), request.getAppointmentBasis());
+        officeService.validateNwpWorkplaceIfNwp(request.getDepartment(), request.getOffice(), request.getDistrict());
+        employeeActionService.validateSequentialActionDate(employeeId, request.getAppointmentDate());
+        serviceAppointmentService.begin(employee);
+        EmployeeAction action = EmployeeAction.builder().employee(employee).actionType(EmployeeActionType.SERVICE_APPOINTMENT)
+                .actionDate(request.getAppointmentDate()).oldDesignation(employee.getDesignation()).newDesignation(target)
+                .oldGrade(employee.getGrade()).newGrade(Grade.III).serviceId(target.getService().getId())
+                .serviceLevelId(level.getId()).serviceAppointmentKey(key).appointmentBasis(request.getAppointmentBasis().trim())
+                .incrementDate(request.getIncrementDate())
+                .firstIncrementDueDate(request.getFirstIncrementDueDate()).department(DepartmentConstants.normalize(request.getDepartment()))
+                .office(request.getOffice().trim()).district(request.getDistrict()).fromDepartment(employee.getCurrentDepartment())
+                .fromOffice(employee.getCurrentOffice()).remarks(request.getRemarks()).build();
+        employeeActionService.saveAction(action);
+        employeeActionService.validateServiceAppointmentTimeline(employeeId);
+        employeeActionService.recalculateEmployeeState(employeeId);
+        return employee;
+    }
 
     @Transactional
     public Employee transferOut(Long employeeId, TransferOutRequest request) {
@@ -192,12 +233,25 @@ public class EmployeeLifecycleService {
             throw new RuntimeException("Office change requires a different office");
         }
 
-        employeeActionService.recordAction(
+        String specialDesignationName = request.getSpecialDesignationName() == null
+                || request.getSpecialDesignationName().isBlank()
+                ? null : request.getSpecialDesignationName().trim();
+        if (specialDesignationName != null && employee.getDesignation() == null) {
+            throw new RuntimeException(
+                    "A special designation cannot be used with an Other/custom designation title"
+            );
+        }
+
+        EmployeeAction officeChange = employeeActionService.recordActionWithGrades(
                 employee,
                 EmployeeActionType.OFFICE_CHANGE,
                 request.getEffectiveDate(),
                 employee.getDesignation(),
                 employee.getDesignation(),
+                null,
+                specialDesignationName,
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -216,6 +270,8 @@ public class EmployeeLifecycleService {
                         )
                         .build()
         );
+        officeChange.setSpecialDesignationUpdated(true);
+        employeeActionService.saveAction(officeChange);
 
         employeeActionService.recalculateEmployeeState(employeeId);
 

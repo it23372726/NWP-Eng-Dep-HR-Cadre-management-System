@@ -77,7 +77,9 @@ public class EmployeeSummaryReportExportService {
             addSummaryRow(summaryTable, "Name", report.getEmployeeName(), labelFont, valueFont);
             addSummaryRow(summaryTable, "Designation", report.getDesignation(), labelFont, valueFont);
             addSummaryRow(summaryTable, "Date of Birth", formatDate(report.getDateOfBirth()), labelFont, valueFont);
-            addSummaryRow(summaryTable, "First Appointment Date",
+            if (report.getOriginalFirstAppointmentDate() != null) addSummaryRow(summaryTable, "Original Career Appointment",
+                    formatDate(report.getOriginalFirstAppointmentDate()), labelFont, valueFont);
+            addSummaryRow(summaryTable, report.getOriginalFirstAppointmentDate() != null ? "First Appointment in Current Service" : "First Appointment Date",
                     formatDate(report.getDateOfFirstAppointment()), labelFont, valueFont);
             addSummaryRow(summaryTable, "NIC", report.getNic(), labelFont, valueFont);
             addSummaryRow(summaryTable, "Increment Date", report.getIncremantDate(), labelFont, valueFont);

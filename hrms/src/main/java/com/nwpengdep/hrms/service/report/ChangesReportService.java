@@ -35,6 +35,7 @@ public class ChangesReportService {
 
     static {
         ACTION_LABELS.put(EmployeeActionType.NEW_APPOINTMENT, "New Appointment");
+        ACTION_LABELS.put(EmployeeActionType.SERVICE_APPOINTMENT, "Appointment to Another Service");
         ACTION_LABELS.put(EmployeeActionType.TRANSFER_IN, "Transfer In");
         ACTION_LABELS.put(EmployeeActionType.TRANSFER_OUT, "Transfer Out");
         ACTION_LABELS.put(EmployeeActionType.PROMOTION, "Promotion");

@@ -1,6 +1,7 @@
 package com.nwpengdep.hrms.controller;
 
 import java.util.List;
+import java.util.UUID;
 
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpHeaders;
@@ -20,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.nwpengdep.hrms.dto.DismissalRequest;
 import com.nwpengdep.hrms.dto.EmployeeActionResponse;
+import com.nwpengdep.hrms.dto.EmployeeListItemResponse;
 import com.nwpengdep.hrms.dto.EmployeeRequest;
 import com.nwpengdep.hrms.dto.EmployeeUpdateRequest;
 import com.nwpengdep.hrms.dto.LifecycleActionRequest;
@@ -28,6 +30,7 @@ import com.nwpengdep.hrms.dto.NewAppointmentRequest;
 import com.nwpengdep.hrms.dto.TrainingAppointmentRequest;
 import com.nwpengdep.hrms.dto.OfficeChangeRequest;
 import com.nwpengdep.hrms.dto.PromotionRequest;
+import com.nwpengdep.hrms.dto.SalaryIncrementHistoryItemDto;
 import com.nwpengdep.hrms.dto.SalaryIncrementRecordRequest;
 import com.nwpengdep.hrms.dto.SalaryIncrementStatusDto;
 import com.nwpengdep.hrms.dto.TransferOutRequest;
@@ -64,8 +67,15 @@ public class EmployeeController {
     private final EmployeePhotoService employeePhotoService;
     private final VehiclePermitService vehiclePermitService;
     private final SalaryIncrementService salaryIncrementService;
+    private final com.nwpengdep.hrms.service.ServiceAppointmentService serviceAppointmentService;
     private final EmployeeSummaryReportExportService employeeSummaryReportExportService;
     private final EmployeeDependentDetailsReportExportService employeeDependentDetailsReportExportService;
+
+    @GetMapping("/lifecycle-capabilities")
+    @PreAuthorize(EMPLOYEE_READ)
+    public java.util.Map<String, Boolean> lifecycleCapabilities() {
+        return java.util.Map.of("serviceAppointmentsEnabled", serviceAppointmentService.isEnabled());
+    }
 
     @PostMapping
     @PreAuthorize(EMPLOYEE_WRITE)
@@ -77,7 +87,7 @@ public class EmployeeController {
 
     @GetMapping
     @PreAuthorize(EMPLOYEE_READ)
-    public List<Employee> getActiveEmployees(
+    public List<EmployeeListItemResponse> getActiveEmployees(
             @RequestParam(required = false, defaultValue = "NWP") String departmentScope
     ) {
         return employeeService.getActiveEmployeesByScope(departmentScope);
@@ -85,7 +95,7 @@ public class EmployeeController {
 
     @GetMapping("/active")
     @PreAuthorize(EMPLOYEE_READ)
-    public List<Employee> getActiveEmployeesAlias(
+    public List<EmployeeListItemResponse> getActiveEmployeesAlias(
             @RequestParam(required = false, defaultValue = "NWP") String departmentScope
     ) {
         return employeeService.getActiveEmployeesByScope(departmentScope);
@@ -93,7 +103,7 @@ public class EmployeeController {
 
     @GetMapping("/inactive")
     @PreAuthorize(EMPLOYEE_READ)
-    public List<Employee> getInactiveEmployees() {
+    public List<EmployeeListItemResponse> getInactiveEmployees() {
         return employeeService.getInactiveEmployees();
     }
 
@@ -200,7 +210,7 @@ public class EmployeeController {
 
     @GetMapping("/search")
     @PreAuthorize(EMPLOYEE_READ)
-    public List<Employee> searchActiveEmployees(
+    public List<EmployeeListItemResponse> searchActiveEmployees(
             @RequestParam String keyword
     ) {
         return employeeService.searchActiveEmployees(keyword);
@@ -208,7 +218,7 @@ public class EmployeeController {
 
     @GetMapping("/inactive/search")
     @PreAuthorize(EMPLOYEE_READ)
-    public List<Employee> searchInactiveEmployees(
+    public List<EmployeeListItemResponse> searchInactiveEmployees(
             @RequestParam String keyword
     ) {
         return employeeService.searchInactiveEmployees(keyword);
@@ -263,6 +273,13 @@ public class EmployeeController {
             @Valid @RequestBody PromotionRequest request
     ) {
         return employeeLifecycleService.promoteEmployee(id, request);
+    }
+
+    @PostMapping("/{id}/service-appointment")
+    @PreAuthorize(EMPLOYEE_WRITE)
+    public Employee appointToAnotherService(@PathVariable Long id,
+            @Valid @RequestBody com.nwpengdep.hrms.dto.ServiceAppointmentRequest request) {
+        return employeeLifecycleService.appointToAnotherService(id, request);
     }
 
     @PostMapping("/{id}/retire")
@@ -342,8 +359,17 @@ public class EmployeeController {
 
     @GetMapping("/{id}/salary-increment")
     @PreAuthorize(EMPLOYEE_READ)
-    public SalaryIncrementStatusDto getSalaryIncrementStatus(@PathVariable Long id) {
-        return salaryIncrementService.getStatus(id);
+    public SalaryIncrementStatusDto getSalaryIncrementStatus(@PathVariable Long id,
+            @RequestParam(required = false) String serviceAppointmentKey) {
+        return salaryIncrementService.getStatus(id, serviceAppointmentKey);
+    }
+
+    @GetMapping("/{id}/salary-increment/history")
+    @PreAuthorize(EMPLOYEE_READ)
+    public List<SalaryIncrementHistoryItemDto> getSalaryIncrementHistory(
+            @PathVariable Long id
+    ) {
+        return salaryIncrementService.getHistory(id);
     }
 
     @PostMapping("/{id}/salary-increment")
@@ -366,13 +392,17 @@ public class EmployeeController {
 
     @DeleteMapping("/{id}/salary-increment")
     @PreAuthorize(EMPLOYEE_WRITE)
-    public SalaryIncrementStatusDto undoSalaryIncrement(@PathVariable Long id) {
-        return salaryIncrementService.undoIncrement(id);
+    public SalaryIncrementStatusDto undoSalaryIncrement(
+            @PathVariable Long id,
+            @RequestParam(required = false) UUID expectedLastOperationId,
+            @RequestParam(required = false) String serviceAppointmentKey
+    ) {
+        return salaryIncrementService.undoIncrement(id, expectedLastOperationId, serviceAppointmentKey);
     }
 
     @GetMapping("/paginated")
     @PreAuthorize(EMPLOYEE_READ)
-    public Page<Employee> getEmployeesPaginated(
+    public Page<EmployeeListItemResponse> getEmployeesPaginated(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {

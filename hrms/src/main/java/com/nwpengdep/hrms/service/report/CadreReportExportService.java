@@ -62,7 +62,9 @@ public class CadreReportExportService {
             "Promotion",
             "New Appointment",
             "Dismissals",
-            "Vacation of Post"
+            "Vacation of Post",
+            "Service Appointment OUT",
+            "Service Appointment IN"
     };
 
     private static final String[] EXISTING_CADRE_SUB_HEADERS = {
@@ -86,6 +88,7 @@ public class CadreReportExportService {
     private static final int[] COLUMN_WIDTHS = {
             1600, 9000, 2800, 3400, 3200, 3600, 3400, 3700,
             2800, 2800, 3200, 2600, 2800, 3400, 2800, 3400,
+            3400, 3400,
             2600, 2600, 2600, 2600, 2900, 2900, 4100
     };
 
@@ -111,6 +114,7 @@ public class CadreReportExportService {
     private static final float[] PDF_COLUMN_WIDTHS = {
             38, 211, 66, 80, 75, 84, 80, 87,
             66, 66, 75, 61, 66, 80, 66, 80,
+            80, 80,
             61, 61, 61, 61, 68, 68, 96
     };
     private static final float TITLE_ROW_HEIGHT = 28f;
@@ -539,6 +543,8 @@ public class CadreReportExportService {
         createNumericCell(excelRow, col++, row.getNewAppointments(), numericStyle);
         createNumericCell(excelRow, col++, row.getDismissals(), numericStyle);
         createNumericCell(excelRow, col++, row.getVacationOfPost(), numericStyle);
+        createNumericCell(excelRow, col++, row.getServiceAppointmentsOut(), numericStyle);
+        createNumericCell(excelRow, col++, row.getServiceAppointmentsIn(), numericStyle);
         createNumericCell(excelRow, col++, row.getPermanent(), numericStyle);
         createNumericCell(excelRow, col++, row.getVacancies(), numericStyle);
         createNumericCell(excelRow, col++, row.getExcess(), numericStyle);
@@ -832,6 +838,8 @@ public class CadreReportExportService {
         table.addCell(pdfNumericCell(String.valueOf(row.getNewAppointments()), font, totalRow));
         table.addCell(pdfNumericCell(String.valueOf(row.getDismissals()), font, totalRow));
         table.addCell(pdfNumericCell(String.valueOf(row.getVacationOfPost()), font, totalRow));
+        table.addCell(pdfNumericCell(String.valueOf(row.getServiceAppointmentsOut()), font, totalRow));
+        table.addCell(pdfNumericCell(String.valueOf(row.getServiceAppointmentsIn()), font, totalRow));
         table.addCell(pdfNumericCell(String.valueOf(row.getPermanent()), font, totalRow));
         table.addCell(pdfNumericCell(String.valueOf(row.getVacancies()), font, totalRow));
         table.addCell(pdfNumericCell(String.valueOf(row.getExcess()), font, totalRow));

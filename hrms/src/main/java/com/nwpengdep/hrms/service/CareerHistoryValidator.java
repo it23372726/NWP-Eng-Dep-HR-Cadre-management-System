@@ -98,6 +98,27 @@ public class CareerHistoryValidator {
             }
 
             switch (event.getActionType()) {
+                case SERVICE_APPOINTMENT -> {
+                    requireActive(active, position, "Appointment to another service");
+                    if (event.getGrade() != null && event.getGrade() != Grade.III)
+                        throw new IllegalArgumentException("Appointment to another service must start at Grade III");
+                    Designation target = resolveDesignation(event.getDesignationId(), position);
+                    if (target.getService() == null || currentServiceId == null
+                            || currentServiceId.equals(target.getService().getId()))
+                        throw new IllegalArgumentException("Select a designation in a different service");
+                    validateAssignmentState(target, Grade.III, event.getServiceLevelId(), position);
+                    ServiceAppointmentService.validKey(event.getServiceAppointmentKey());
+                    ServiceAppointmentService.validateSchedule(event.getActionDate(), event.getIncrementDate(),
+                            event.getFirstIncrementDueDate(), event.getAppointmentBasis());
+                    requireDepartmentAndOffice(event, position);
+                    validateNwpWorkplaceFields(event.getDepartment(), event.getOffice(), event.getDistrict(), position);
+                    currentDesignation = target; currentRecordedDesignationName = null;
+                    currentServiceId = target.getService().getId(); currentServiceLevelId = event.getServiceLevelId();
+                    currentGrade = Grade.III; permanentConfirmed = false;
+                    firstAppointmentDate = event.getActionDate(); grade2AchievedDate = null; grade1AchievedDate = null;
+                    currentDepartment = DepartmentConstants.normalize(event.getDepartment()); currentOffice = event.getOffice().trim();
+                    currentDistrict = DepartmentConstants.isNwpEngineering(currentDepartment) ? event.getDistrict() : null;
+                }
                 case NEW_APPOINTMENT -> {
                     if (!hasCatalogDesignation(event) && !isCustomDesignationEvent(event)) {
                         throw new RuntimeException(
@@ -508,6 +529,14 @@ public class CareerHistoryValidator {
                     if (event.getOffice() == null || event.getOffice().isBlank()) {
                         throw new RuntimeException(
                                 "Office change (event #" + position + ") must include the new office"
+                        );
+                    }
+                    if (event.getSpecialDesignationName() != null
+                            && !event.getSpecialDesignationName().isBlank()
+                            && currentRecordedDesignationName != null) {
+                        throw new RuntimeException(
+                                "Office change (event #" + position + ") cannot set a special designation"
+                                        + " while the employee holds an Other/custom designation title"
                         );
                     }
                     if (DepartmentConstants.isNwpEngineering(currentDepartment)) {

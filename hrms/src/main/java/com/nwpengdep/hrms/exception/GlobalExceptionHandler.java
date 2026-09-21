@@ -21,9 +21,22 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    @ExceptionHandler(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<String> handleConcurrentEmployeeChange(org.springframework.orm.ObjectOptimisticLockingFailureException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body("This employee was changed by another operation. Refresh the employee and review the latest data before saving.");
+    }
+
 
     private static final Pattern DUPLICATE_ENTRY_PATTERN =
             Pattern.compile("Duplicate entry '([^']+)' for key '([^']+)'");
+
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<?> handleConflict(ConflictException ex) {
+        log.warn("Request conflict: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ex.getMessage());
+    }
 
     @ExceptionHandler({
             AccessDeniedException.class,

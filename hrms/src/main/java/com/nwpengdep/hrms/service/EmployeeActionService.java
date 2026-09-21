@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import com.nwpengdep.hrms.constants.DepartmentConstants;
 import com.nwpengdep.hrms.dto.ActionWorkplaceFields;
+import com.nwpengdep.hrms.dto.CareerHistoryEventRequest;
 import com.nwpengdep.hrms.dto.EmployeeActionResponse;
 import com.nwpengdep.hrms.dto.EmployeeActionUpdateRequest;
 import com.nwpengdep.hrms.entity.Designation;
@@ -41,6 +42,8 @@ public class EmployeeActionService {
     private final OfficeService officeService;
     private final CurrentUserService currentUserService;
     private final TrainingGraduationService trainingGraduationService;
+    private final ServiceAppointmentService serviceAppointmentService;
+    private final CareerHistoryValidator careerHistoryValidator;
 
     public EmployeeAction recordAction(
             Employee employee,
@@ -166,6 +169,10 @@ public class EmployeeActionService {
                 )
                 .oldGrade(oldGrade)
                 .newGrade(newGrade)
+                .serviceId(newDesignation != null && newDesignation.getService() != null ? newDesignation.getService().getId()
+                        : employee.getService() != null ? employee.getService().getId() : null)
+                .serviceLevelId(newDesignation != null && newDesignation.getServiceLevel() != null ? newDesignation.getServiceLevel().getId()
+                        : employee.getServiceLevel() != null ? employee.getServiceLevel().getId() : null)
                 .transferredFrom(transferredFrom)
                 .transferredTo(transferredTo)
                 .reason(reason)
@@ -273,6 +280,37 @@ public class EmployeeActionService {
         return new EmployeeAction[] { transferOut, transferIn };
     }
 
+    public String historyRevision(Long employeeId) {
+        String content = employeeActionRepository.findByEmployeeIdOrderByActionDateDescCreatedAtDesc(employeeId).stream()
+                .filter(a -> !Boolean.TRUE.equals(a.getDeleted())).sorted(Comparator.comparing(EmployeeAction::getId))
+                .map(a -> java.util.Arrays.asList(a.getId(), a.getActionType(), a.getActionDate(),
+                        a.getNewDesignation() == null ? null : a.getNewDesignation().getId(), a.getNewGrade(),
+                        a.getDepartment(), a.getOffice(), a.getDistrict(), a.getToDepartment(), a.getToOffice(),
+                        a.getServiceId(), a.getServiceLevelId(), a.getServiceAppointmentKey(), a.getAppointmentBasis(),
+                        a.getIncrementDate(), a.getFirstIncrementDueDate(),
+                        a.getRemarks(), a.getReason(), a.getRecordedNewDesignationName(), a.getRecordedSpecialDesignationName()).toString())
+                .collect(java.util.stream.Collectors.joining("\n"));
+        try {
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(content.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException e) { throw new IllegalStateException(e); }
+    }
+
+    public void requireHistoryRevision(Long employeeId, String expected) {
+        if (expected == null || !expected.equals(historyRevision(employeeId)))
+            throw new com.nwpengdep.hrms.exception.ConflictException("Lifecycle history has changed. Refresh the employee and review the latest history before saving.");
+    }
+
+    public void archiveHistoryForRevision(Long employeeId) {
+        for (EmployeeAction old : employeeActionRepository.findByEmployeeIdOrderByActionDateDescCreatedAtDesc(employeeId)) {
+            if (!Boolean.TRUE.equals(old.getDeleted())) {
+                old.setDeleted(true); old.setDeletedAt(java.time.LocalDateTime.now());
+                old.setDeletedBy(currentUserService.getCurrentUsernameOrDefault("system"));
+                employeeActionRepository.save(old);
+            }
+        }
+    }
+
     public List<EmployeeActionResponse> getEmployeeActionHistory(Long employeeId) {
         List<EmployeeAction> actions = employeeActionRepository
                 .findByEmployeeIdOrderByActionDateDescCreatedAtDesc(employeeId)
@@ -283,11 +321,15 @@ public class EmployeeActionService {
         Long latestModifiableId = resolveLatestModifiableActionId(actions);
 
         return actions.stream()
-                .map(action -> toResponse(
-                        action,
-                        latestModifiableId != null
-                                && latestModifiableId.equals(action.getId())
-                ))
+                .map(action -> {
+                    boolean autoCreated = action.getActionType() == EmployeeActionType.TRANSFER_IN
+                            && action.getLinkedActionId() != null;
+                    boolean canEdit = !autoCreated;
+                    boolean canDelete = !autoCreated
+                            && latestModifiableId != null
+                            && latestModifiableId.equals(action.getId());
+                    return toResponse(action, canEdit, canDelete);
+                })
                 .toList();
     }
 
@@ -296,27 +338,38 @@ public class EmployeeActionService {
             Long actionId,
             EmployeeActionUpdateRequest request
     ) {
-        EmployeeAction action = requireLatestModifiableAction(actionId);
+        EmployeeAction action = requireEditableAction(actionId);
         Employee employee = action.getEmployee();
-        Grade oldGrade = action.getOldGrade();
-        Grade newGrade = action.getNewGrade();
+        if (employee.getCurrentServiceAppointmentKey() != null) {
+            employeeRepository.findByIdForUpdate(employee.getId()).orElseThrow();
+            requireHistoryRevision(employee.getId(), request.getExpectedHistoryRevision());
+            serviceAppointmentService.captureCurrent(employee);
+        }
 
+        Grade newGrade = action.getNewGrade();
         if (request.getGrade() != null) {
             newGrade = Grade.fromLabel(request.getGrade());
         }
 
-        if (action.getActionType() == EmployeeActionType.PROMOTION
-                || action.getActionType() == EmployeeActionType.ASSIGNMENT_GRADE_UPDATE) {
-            careerProgressionService.validateAssignmentEffectiveDate(
-                    employee,
-                    oldGrade,
-                    newGrade,
-                    request.getActionDate()
+        if (action.getActionType() == EmployeeActionType.SERVICE_APPOINTMENT
+                && request.getGrade() != null
+                && !"III".equals(request.getGrade())) {
+            throw new IllegalArgumentException(
+                    "Appointment to another service must start at Grade III"
             );
         }
 
         validateSequentialActionDateOnUpdate(action, request.getActionDate());
+        validateProposedTimeline(employee, action, request, newGrade);
 
+        if (action.getActionType() == EmployeeActionType.SERVICE_APPOINTMENT) {
+            action.setAppointmentBasis(request.getAppointmentBasis());
+            action.setIncrementDate(request.getIncrementDate());
+            action.setFirstIncrementDueDate(request.getFirstIncrementDueDate());
+            if (request.getServiceLevelId() != null) {
+                action.setServiceLevelId(request.getServiceLevelId());
+            }
+        }
         action.setActionDate(request.getActionDate());
         action.setRemarks(request.getRemarks());
 
@@ -325,6 +378,14 @@ public class EmployeeActionService {
                     .orElseThrow(() -> new RuntimeException("New designation not found"));
             action.setNewDesignation(newDesignation);
             action.setRecordedNewDesignationName(null);
+            if (action.getActionType() == EmployeeActionType.SERVICE_APPOINTMENT) {
+                if (newDesignation.getService() != null) {
+                    action.setServiceId(newDesignation.getService().getId());
+                }
+                if (newDesignation.getServiceLevel() != null) {
+                    action.setServiceLevelId(newDesignation.getServiceLevel().getId());
+                }
+            }
             if (request.getSpecialDesignationName() != null) {
                 action.setRecordedSpecialDesignationName(
                         normalizeSpecialDesignationName(request.getSpecialDesignationName())
@@ -344,6 +405,25 @@ public class EmployeeActionService {
             action.setRecordedSpecialDesignationName(
                     normalizeSpecialDesignationName(request.getSpecialDesignationName())
             );
+        }
+
+        if (action.getActionType() == EmployeeActionType.SERVICE_APPOINTMENT
+                && request.getServiceId() != null) {
+            action.setServiceId(request.getServiceId());
+        }
+
+        if (request.getTransferredFrom() != null) {
+            action.setTransferredFrom(
+                    request.getTransferredFrom().isBlank()
+                            ? null
+                            : request.getTransferredFrom().trim()
+            );
+        }
+
+        // An office change only changes the local title when the form actually carried the field.
+        if (action.getActionType() == EmployeeActionType.OFFICE_CHANGE
+                && request.getSpecialDesignationName() != null) {
+            action.setSpecialDesignationUpdated(true);
         }
 
         if (request.getDepartment() != null) {
@@ -367,20 +447,20 @@ public class EmployeeActionService {
             }
         }
 
+        applyWorkplaceDistrictUpdate(action, request);
+
         if (action.getActionType() == EmployeeActionType.PROMOTION
                 && request.getTransferringOut() != null) {
             applyPromotionWorkplaceUpdate(action, request);
         }
 
-        action.setReason(request.getReason());
+        applyReasonUpdate(action, request);
         action.setEditedBy(currentUserService.getCurrentUsernameOrDefault("system"));
         action.setEditedAt(java.time.LocalDateTime.now());
 
-        employeeActionRepository.save(action);
-
-        if (action.getActionType() == EmployeeActionType.TRANSFER_OUT
-                && action.getLinkedActionId() != null) {
-            syncLinkedTransferIn(action);
+        if (request.getServiceLevelId() != null
+                && action.getActionType() != EmployeeActionType.SERVICE_APPOINTMENT) {
+            action.setServiceLevelId(request.getServiceLevelId());
         }
 
         if (action.getActionType() == EmployeeActionType.PROMOTION
@@ -394,16 +474,32 @@ public class EmployeeActionService {
                 employee.setServiceLevel(serviceLevel);
             }
             careerProgressionService.recalculateEmployeeCareer(employee);
-            employeeActionRepository.save(action);
+            employeeRepository.save(employee);
+        } else if (request.getServiceLevelId() != null
+                && (action.getActionType() == EmployeeActionType.TRANSFER_OUT
+                || action.getActionType() == EmployeeActionType.NEW_APPOINTMENT)) {
+            employee.setServiceLevel(serviceLevelService.resolve(request.getServiceLevelId()));
             employeeRepository.save(employee);
         }
 
+        employeeActionRepository.save(action);
+
+        if (action.getActionType() == EmployeeActionType.TRANSFER_OUT
+                && action.getLinkedActionId() != null) {
+            syncLinkedTransferIn(action);
+        }
+
+        validateFullTimeline(action.getEmployee().getId());
         recalculateEmployeeState(action.getEmployee().getId());
         return action;
     }
 
-    @Transactional
     public void deleteEmployeeAction(Long actionId) {
+        deleteEmployeeAction(actionId, null);
+    }
+
+    @Transactional
+    public void deleteEmployeeAction(Long actionId, String expectedHistoryRevision) {
         EmployeeAction action = employeeActionRepository.findById(actionId)
                 .orElseThrow(() -> new RuntimeException("Employee action not found"));
 
@@ -426,6 +522,11 @@ public class EmployeeActionService {
         }
 
         action = requireLatestModifiableAction(actionId);
+        if (action.getEmployee().getCurrentServiceAppointmentKey() != null) {
+            employeeRepository.findByIdForUpdate(action.getEmployee().getId()).orElseThrow();
+            requireHistoryRevision(action.getEmployee().getId(), expectedHistoryRevision);
+            serviceAppointmentService.captureCurrent(action.getEmployee());
+        }
 
         if (action.getActionType() == EmployeeActionType.TRANSFER_IN) {
             throw new RuntimeException(
@@ -448,6 +549,7 @@ public class EmployeeActionService {
         action.setDeletedAt(java.time.LocalDateTime.now());
         employeeActionRepository.save(action);
 
+        validateServiceAppointmentTimeline(action.getEmployee().getId());
         recalculateEmployeeState(action.getEmployee().getId());
     }
 
@@ -464,6 +566,10 @@ public class EmployeeActionService {
                         .thenComparing(EmployeeAction::getId))
                 .toList();
 
+        if (employee.getCurrentServiceAppointmentKey() != null
+                || actions.stream().anyMatch(a -> a.getActionType() == EmployeeActionType.SERVICE_APPOINTMENT)) {
+            serviceAppointmentService.rebuild(employee, actions);
+        }
         postingRepository.deleteByEmployeeId(employeeId);
 
         Designation currentDesignation = null;
@@ -489,6 +595,23 @@ public class EmployeeActionService {
 
         for (EmployeeAction action : actions) {
             switch (action.getActionType()) {
+                case SERVICE_APPOINTMENT -> {
+                    boolean workplaceChanged = !java.util.Objects.equals(currentDepartment, action.getDepartment())
+                            || !java.util.Objects.equals(currentOffice, action.getOffice())
+                            || !java.util.Objects.equals(currentDistrict, action.getDistrict());
+                    currentDesignation = action.getNewDesignation(); currentRecordedDesignationName = null;
+                    currentSpecialDesignationName = null; currentGrade = Grade.III;
+                    currentDepartment = action.getDepartment(); currentOffice = action.getOffice();
+                    currentDistrict = resolveDistrictForDepartment(currentDepartment, action.getDistrict(), currentOffice, currentDistrict);
+                    if (workplaceChanged) reportedDateToPresentWorkingPlace = action.getActionDate();
+                    if (enteredDateToNWPCouncil == null && DepartmentConstants.isNwpEngineering(currentDepartment))
+                        enteredDateToNWPCouncil = action.getActionDate();
+                    if (action.getServiceLevelId() != null) employee.setServiceLevel(serviceLevelService.resolve(action.getServiceLevelId()));
+                    careerProgression.setPermanentConfirmationDate(null); careerProgression.setGrade3AchievedDate(null);
+                    careerProgression.setGrade2AchievedDate(null); careerProgression.setGrade1AchievedDate(null);
+                    careerProgression.setSupraAchievedDate(null); careerProgression.setSpecialAchievedDate(null);
+                    latestAppointmentDate = action.getActionDate();
+                }
                 case NEW_APPOINTMENT -> {
                     if (action.getNewDesignation() != null) {
                         currentDesignation = action.getNewDesignation();
@@ -595,6 +718,14 @@ public class EmployeeActionService {
                                 action.getDistrict(),
                                 currentOffice,
                                 currentDistrict
+                        );
+                    }
+                    // Only an office change that actually carried the field may change or clear the
+                    // local title; ones recorded before the field existed must leave it alone.
+                    if (Boolean.TRUE.equals(action.getSpecialDesignationUpdated())
+                            && currentRecordedDesignationName == null) {
+                        currentSpecialDesignationName = normalizeSpecialDesignationName(
+                                action.getRecordedSpecialDesignationName()
                         );
                     }
                 }
@@ -749,6 +880,13 @@ public class EmployeeActionService {
         if (currentGrade != null) {
             employee.setGrade(currentGrade);
         }
+        if (employee.getCurrentServiceAppointmentKey() != null) {
+            if (currentDesignation != null && currentDesignation.getServiceLevel() != null)
+                employee.setServiceLevel(currentDesignation.getServiceLevel());
+            else employee.getServiceAppointments().stream().filter(p -> p.isCurrentAppointment())
+                    .filter(p -> p.getServiceLevelId() != null).findFirst()
+                    .ifPresent(p -> employee.setServiceLevel(serviceLevelService.resolve(p.getServiceLevelId())));
+        }
         employee.setStatus(currentStatus);
         employee.setCurrentDepartment(currentDepartment);
         employee.setCurrentOffice(currentOffice);
@@ -761,7 +899,283 @@ public class EmployeeActionService {
         requirementSyncService.syncEmployeeRequirements(employee);
         requirementSyncService.completeRequirementsForAchievedGrade(employee);
         careerProgressionService.recalculateEmployeeCareer(employee);
+        if (employee.getCurrentServiceAppointmentKey() != null) serviceAppointmentService.captureCurrent(employee);
         employeeRepository.save(employee);
+    }
+
+    public void validateServiceAppointmentTimeline(Long employeeId) {
+        validateFullTimeline(employeeId);
+    }
+
+    /**
+     * Re-validate the whole employment timeline after any edit or delete.
+     * Uses CareerHistoryValidator so mid-history changes cannot break later events
+     * (e.g. moving Grade II later than Grade I allows).
+     */
+    public void validateFullTimeline(Long employeeId) {
+        Employee employee = employeeRepository.findById(employeeId).orElseThrow();
+        List<EmployeeAction> actions = loadActiveActionsChronological(employeeId);
+        List<CareerHistoryEventRequest> all = toCareerHistoryEvents(employee, actions);
+        List<CareerHistoryEventRequest> filtered = new java.util.ArrayList<>();
+        for (int i = 0; i < actions.size(); i++) {
+            EmployeeAction a = actions.get(i);
+            if (a.getActionType() == EmployeeActionType.TRANSFER_IN && a.getLinkedActionId() != null) {
+                continue;
+            }
+            if (Boolean.TRUE.equals(a.getTrainingAppointment())) {
+                continue;
+            }
+            filtered.add(all.get(i));
+        }
+        try {
+            careerHistoryValidator.validate(filtered);
+        } catch (RuntimeException ex) {
+            throw new RuntimeException(clarifyTimelineValidationMessage(ex.getMessage()), ex);
+        }
+        if (employee.getCurrentServiceAppointmentKey() != null
+                || actions.stream().anyMatch(
+                        a -> a.getActionType() == EmployeeActionType.SERVICE_APPOINTMENT)) {
+            serviceAppointmentService.validateHistoryRevision(employee, filtered);
+        }
+    }
+
+    private void validateProposedTimeline(
+            Employee employee,
+            EmployeeAction target,
+            EmployeeActionUpdateRequest request,
+            Grade proposedGrade
+    ) {
+        List<EmployeeAction> actions = loadActiveActionsChronological(employee.getId());
+        List<CareerHistoryEventRequest> events = toCareerHistoryEvents(employee, actions);
+        for (int i = 0; i < actions.size(); i++) {
+            if (!actions.get(i).getId().equals(target.getId())) {
+                continue;
+            }
+            CareerHistoryEventRequest event = events.get(i);
+            applyProposedFieldsToEvent(event, target, request, proposedGrade, employee);
+            // Keep the paired transfer-in in sync in the simulated timeline.
+            if (target.getActionType() == EmployeeActionType.TRANSFER_OUT
+                    && target.getLinkedActionId() != null) {
+                for (int j = 0; j < actions.size(); j++) {
+                    if (actions.get(j).getId().equals(target.getLinkedActionId())) {
+                        CareerHistoryEventRequest linked = events.get(j);
+                        linked.setActionDate(event.getActionDate());
+                        linked.setDesignationId(event.getDesignationId());
+                        linked.setRecordedDesignationName(event.getRecordedDesignationName());
+                        linked.setSpecialDesignationName(event.getSpecialDesignationName());
+                        linked.setDepartment(event.getDepartment());
+                        linked.setOffice(event.getOffice());
+                        linked.setDistrict(event.getDistrict());
+                        linked.setRemarks(event.getRemarks());
+                        break;
+                    }
+                }
+            }
+            break;
+        }
+        // Drop auto transfer-in and trainee appointment rows (same filters as SA timeline).
+        List<CareerHistoryEventRequest> filtered = new java.util.ArrayList<>();
+        for (int i = 0; i < actions.size(); i++) {
+            EmployeeAction a = actions.get(i);
+            if (a.getActionType() == EmployeeActionType.TRANSFER_IN && a.getLinkedActionId() != null) {
+                continue;
+            }
+            if (Boolean.TRUE.equals(a.getTrainingAppointment())) {
+                continue;
+            }
+            filtered.add(events.get(i));
+        }
+        try {
+            careerHistoryValidator.validate(filtered);
+        } catch (RuntimeException ex) {
+            throw new RuntimeException(clarifyTimelineValidationMessage(ex.getMessage()), ex);
+        }
+        if (employee.getCurrentServiceAppointmentKey() != null
+                || actions.stream().anyMatch(
+                        a -> a.getActionType() == EmployeeActionType.SERVICE_APPOINTMENT)) {
+            serviceAppointmentService.validateHistoryRevision(employee, filtered);
+        }
+    }
+
+    private void applyProposedFieldsToEvent(
+            CareerHistoryEventRequest event,
+            EmployeeAction target,
+            EmployeeActionUpdateRequest request,
+            Grade proposedGrade,
+            Employee employee
+    ) {
+        event.setActionDate(request.getActionDate());
+        event.setRemarks(request.getRemarks());
+
+        if (request.getNewDesignationId() != null) {
+            event.setDesignationId(request.getNewDesignationId());
+            event.setRecordedDesignationName(null);
+            Designation designation = designationRepository.findById(request.getNewDesignationId())
+                    .orElse(null);
+            if (designation != null && designation.getService() != null) {
+                event.setServiceId(designation.getService().getId());
+            }
+            if (designation != null && designation.getServiceLevel() != null) {
+                event.setServiceLevelId(designation.getServiceLevel().getId());
+            }
+            if (request.getSpecialDesignationName() != null) {
+                event.setSpecialDesignationName(
+                        normalizeSpecialDesignationName(request.getSpecialDesignationName())
+                );
+            }
+        } else if (request.getRecordedDesignationName() != null) {
+            if (!request.getRecordedDesignationName().isBlank()) {
+                event.setDesignationId(null);
+                event.setRecordedDesignationName(request.getRecordedDesignationName().trim());
+                event.setSpecialDesignationName(null);
+            }
+        } else if (request.getSpecialDesignationName() != null) {
+            event.setSpecialDesignationName(
+                    normalizeSpecialDesignationName(request.getSpecialDesignationName())
+            );
+        }
+
+        if (request.getGrade() != null) {
+            event.setGrade(proposedGrade);
+        }
+        if (request.getServiceLevelId() != null) {
+            event.setServiceLevelId(request.getServiceLevelId());
+        }
+        if (request.getServiceId() != null) {
+            event.setServiceId(request.getServiceId());
+        }
+        if (request.getDepartment() != null) {
+            event.setDepartment(DepartmentConstants.normalize(request.getDepartment()));
+        }
+        if (request.getOffice() != null) {
+            event.setOffice(request.getOffice().trim());
+        }
+        if (request.getToDepartment() != null) {
+            String toDept = DepartmentConstants.normalize(request.getToDepartment());
+            event.setToDepartment(toDept);
+            if (target.getActionType() == EmployeeActionType.TRANSFER_OUT
+                    || (target.getActionType() == EmployeeActionType.PROMOTION
+                    && Boolean.TRUE.equals(request.getTransferringOut()))) {
+                event.setDepartment(toDept);
+            }
+        }
+        if (request.getToOffice() != null) {
+            event.setToOffice(request.getToOffice().trim());
+            if (target.getActionType() == EmployeeActionType.TRANSFER_OUT
+                    || (target.getActionType() == EmployeeActionType.PROMOTION
+                    && Boolean.TRUE.equals(request.getTransferringOut()))) {
+                event.setOffice(request.getToOffice().trim());
+            }
+        }
+        String district = request.getToDistrict() != null
+                ? request.getToDistrict()
+                : request.getDistrict();
+        if (district != null) {
+            event.setDistrict(district.isBlank() ? null : district.trim());
+            event.setToDistrict(event.getDistrict());
+        }
+        if (request.getAppointmentBasis() != null) {
+            event.setAppointmentBasis(request.getAppointmentBasis());
+        }
+        if (request.getIncrementDate() != null) {
+            event.setIncrementDate(request.getIncrementDate());
+        }
+        if (request.getFirstIncrementDueDate() != null) {
+            event.setFirstIncrementDueDate(request.getFirstIncrementDueDate());
+        }
+        if (request.getReason() != null) {
+            event.setReason(request.getReason().isBlank() ? null : request.getReason().trim());
+        }
+        if (target.getActionType() == EmployeeActionType.PROMOTION
+                && request.getTransferringOut() != null) {
+            event.setTransferringOut(request.getTransferringOut());
+            if (Boolean.TRUE.equals(request.getTransferringOut())) {
+                if (request.getToDepartment() != null) {
+                    event.setDepartment(DepartmentConstants.normalize(request.getToDepartment()));
+                    event.setToDepartment(event.getDepartment());
+                }
+                if (request.getToOffice() != null) {
+                    event.setOffice(request.getToOffice().trim());
+                    event.setToOffice(event.getOffice());
+                }
+            } else {
+                event.setToDepartment(null);
+                event.setToOffice(null);
+                event.setTransferringOut(false);
+            }
+        }
+        if (target.getActionType() == EmployeeActionType.OFFICE_CHANGE
+                && request.getSpecialDesignationName() != null) {
+            event.setSpecialDesignationUpdated(true);
+        }
+        if (event.getServiceId() == null && employee.getService() != null) {
+            event.setServiceId(employee.getService().getId());
+        }
+    }
+
+    private List<EmployeeAction> loadActiveActionsChronological(Long employeeId) {
+        return employeeActionRepository
+                .findByEmployeeIdOrderByActionDateDescCreatedAtDesc(employeeId)
+                .stream()
+                .filter(a -> !Boolean.TRUE.equals(a.getDeleted()))
+                .sorted(Comparator.comparing(EmployeeAction::getActionDate)
+                        .thenComparing(EmployeeAction::getId))
+                .toList();
+    }
+
+    private List<CareerHistoryEventRequest> toCareerHistoryEvents(
+            Employee employee,
+            List<EmployeeAction> actions
+    ) {
+        return actions.stream().map(a -> {
+            CareerHistoryEventRequest e = new CareerHistoryEventRequest();
+            e.setActionType(a.getActionType());
+            e.setActionDate(a.getActionDate());
+            e.setDesignationId(a.getNewDesignation() != null ? a.getNewDesignation().getId() : null);
+            e.setRecordedDesignationName(a.getRecordedNewDesignationName());
+            e.setSpecialDesignationName(a.getRecordedSpecialDesignationName());
+            e.setSpecialDesignationUpdated(a.getSpecialDesignationUpdated());
+            e.setGrade(a.getNewGrade());
+            e.setServiceId(a.getServiceId() != null ? a.getServiceId()
+                    : a.getNewDesignation() != null && a.getNewDesignation().getService() != null
+                    ? a.getNewDesignation().getService().getId()
+                    : employee.getService() != null ? employee.getService().getId() : null);
+            e.setServiceLevelId(a.getServiceLevelId() != null ? a.getServiceLevelId()
+                    : a.getNewDesignation() != null && a.getNewDesignation().getServiceLevel() != null
+                    ? a.getNewDesignation().getServiceLevel().getId()
+                    : employee.getServiceLevel() != null ? employee.getServiceLevel().getId() : null);
+            e.setDepartment(a.getDepartment());
+            e.setOffice(a.getOffice());
+            e.setDistrict(a.getDistrict());
+            e.setToDepartment(a.getToDepartment());
+            e.setToOffice(a.getToOffice());
+            e.setToDistrict(a.getDistrict());
+            e.setTransferringOut(a.getActionType() == EmployeeActionType.PROMOTION
+                    && a.getToDepartment() != null
+                    && !DepartmentConstants.isNwpEngineering(a.getToDepartment())
+                    && DepartmentConstants.isNwpEngineering(a.getFromDepartment()));
+            e.setReason(a.getReason());
+            e.setRemarks(a.getRemarks());
+            e.setServiceAppointmentKey(a.getServiceAppointmentKey());
+            e.setAppointmentBasis(a.getAppointmentBasis());
+            e.setIncrementDate(a.getIncrementDate());
+            e.setFirstIncrementDueDate(a.getFirstIncrementDueDate());
+            return e;
+        }).toList();
+    }
+
+    private String clarifyTimelineValidationMessage(String message) {
+        if (message == null || message.isBlank()) {
+            return "This change would make a later lifecycle event invalid. "
+                    + "Adjust the later event first, then try again.";
+        }
+        if (message.contains("cannot be earlier than")
+                || message.contains("requires the service period")
+                || message.contains("probation period")) {
+            return message
+                    + " Move that later event first, then retry this edit.";
+        }
+        return message;
     }
 
     private boolean isWorkplaceEstablishingAction(EmployeeAction action) {
@@ -815,6 +1229,63 @@ public class EmployeeActionService {
             }
         }
         return actions.isEmpty() ? null : actions.getFirst().getId();
+    }
+
+    private void applyWorkplaceDistrictUpdate(
+            EmployeeAction action,
+            EmployeeActionUpdateRequest request
+    ) {
+        boolean workplaceType = switch (action.getActionType()) {
+            case SERVICE_APPOINTMENT, OFFICE_CHANGE, NEW_APPOINTMENT,
+                    TRANSFER_OUT, TRANSFER_IN -> true;
+            default -> false;
+        };
+        if (!workplaceType) {
+            return;
+        }
+
+        boolean workplaceTouched = request.getDepartment() != null
+                || request.getOffice() != null
+                || request.getToDepartment() != null
+                || request.getToOffice() != null
+                || request.getDistrict() != null
+                || request.getToDistrict() != null;
+        if (!workplaceTouched && action.getActionType() != EmployeeActionType.SERVICE_APPOINTMENT) {
+            return;
+        }
+
+        String district = request.getToDistrict() != null
+                ? request.getToDistrict()
+                : request.getDistrict();
+        if (district != null && district.isBlank()) {
+            district = null;
+        }
+        // Service appointment always applies district from the form (may clear for non-NWP).
+        if (action.getActionType() == EmployeeActionType.SERVICE_APPOINTMENT
+                || workplaceTouched) {
+            action.setDistrict(district);
+        }
+    }
+
+    private void applyReasonUpdate(
+            EmployeeAction action,
+            EmployeeActionUpdateRequest request
+    ) {
+        boolean reasonRequired = action.getActionType() == EmployeeActionType.DISMISSAL
+                || action.getActionType() == EmployeeActionType.VACATION_OF_POST;
+        if (reasonRequired) {
+            if (request.getReason() == null || request.getReason().isBlank()) {
+                throw new IllegalArgumentException("Reason is required for this lifecycle action");
+            }
+            action.setReason(request.getReason().trim());
+            return;
+        }
+        // Do not clear an existing reason when the edit form omits the field.
+        if (request.getReason() != null) {
+            action.setReason(
+                    request.getReason().isBlank() ? null : request.getReason().trim()
+            );
+        }
     }
 
     private void applyPromotionWorkplaceUpdate(
@@ -995,7 +1466,7 @@ public class EmployeeActionService {
                 || (oldGrade == Grade.I && newGrade == Grade.SPECIAL);
     }
 
-    private EmployeeAction requireLatestModifiableAction(Long actionId) {
+    private EmployeeAction requireEditableAction(Long actionId) {
         EmployeeAction action = employeeActionRepository.findById(actionId)
                 .orElseThrow(() -> new RuntimeException("Employee action not found"));
 
@@ -1010,6 +1481,12 @@ public class EmployeeActionService {
             );
         }
 
+        return action;
+    }
+
+    private EmployeeAction requireLatestModifiableAction(Long actionId) {
+        EmployeeAction action = requireEditableAction(actionId);
+
         List<EmployeeAction> actions = employeeActionRepository
                 .findByEmployeeIdOrderByActionDateDescCreatedAtDesc(
                         action.getEmployee().getId()
@@ -1022,7 +1499,7 @@ public class EmployeeActionService {
         if (latestModifiableId == null
                 || !latestModifiableId.equals(action.getId())) {
             throw new RuntimeException(
-                    "Only the most recent lifecycle action can be modified or deleted"
+                    "Only the most recent lifecycle action can be deleted"
             );
         }
 
@@ -1031,7 +1508,8 @@ public class EmployeeActionService {
 
     private EmployeeActionResponse toResponse(
             EmployeeAction action,
-            boolean canModify
+            boolean canEdit,
+            boolean canDelete
     ) {
         boolean autoCreated = action.getActionType() == EmployeeActionType.TRANSFER_IN
                 && action.getLinkedActionId() != null;
@@ -1053,6 +1531,7 @@ public class EmployeeActionService {
                 .newDesignationName(resolveActionDisplayDesignationName(action))
                 .recordedDesignationName(action.getRecordedNewDesignationName())
                 .specialDesignationName(action.getRecordedSpecialDesignationName())
+                .specialDesignationUpdated(action.getSpecialDesignationUpdated())
                 .newDesignationId(
                         action.getNewDesignation() != null
                                 ? action.getNewDesignation().getId()
@@ -1076,8 +1555,22 @@ public class EmployeeActionService {
                 .linkedActionId(action.getLinkedActionId())
                 .reason(action.getReason())
                 .remarks(action.getRemarks())
+                .serviceAppointmentKey(action.getServiceAppointmentKey())
+                .serviceId(action.getNewDesignation() != null && action.getNewDesignation().getService() != null
+                        ? action.getNewDesignation().getService().getId() : action.getServiceId())
+                .serviceLevelId(action.getServiceLevelId() != null ? action.getServiceLevelId()
+                        : action.getNewDesignation() != null && action.getNewDesignation().getServiceLevel() != null
+                        ? action.getNewDesignation().getServiceLevel().getId() : null)
+                .oldServiceCode(action.getOldDesignation() != null && action.getOldDesignation().getService() != null
+                        ? action.getOldDesignation().getService().getServiceCode() : null)
+                .newServiceCode(action.getNewDesignation() != null && action.getNewDesignation().getService() != null
+                        ? action.getNewDesignation().getService().getServiceCode() : null)
+                .appointmentBasis(action.getAppointmentBasis())
+                .incrementDate(action.getIncrementDate()).firstIncrementDueDate(action.getFirstIncrementDueDate())
                 .createdAt(action.getCreatedAt())
-                .canModify(canModify && !autoCreated)
+                .canModify(canEdit && !autoCreated)
+                .canEdit(canEdit && !autoCreated)
+                .canDelete(canDelete && !autoCreated)
                 .autoCreated(autoCreated)
                 .trainingGraduation(action.getTrainingGraduation())
                 .trainingAppointment(action.getTrainingAppointment())
@@ -1119,6 +1612,22 @@ public class EmployeeActionService {
                             + ")."
             );
         }
+
+        LocalDate nextDate = findNextActionDate(
+                action.getEmployee().getId(),
+                action.getId()
+        );
+        if (nextDate != null && newDate.isAfter(nextDate)) {
+            throw new RuntimeException(
+                    "Action date cannot be later than the next event ("
+                            + nextDate
+                            + "). Move that later event first, then retry this edit."
+            );
+        }
+
+        if (newDate.isAfter(LocalDate.now())) {
+            throw new RuntimeException("Action date cannot be in the future.");
+        }
     }
 
     private EmployeeAction findLatestAction(Long employeeId) {
@@ -1131,19 +1640,36 @@ public class EmployeeActionService {
     }
 
     private LocalDate findPreviousActionDate(Long employeeId, Long actionId) {
-        List<EmployeeAction> actions = employeeActionRepository
-                .findByEmployeeIdOrderByActionDateDescCreatedAtDesc(employeeId)
-                .stream()
-                .filter(action -> action.getDeleted() == null || !action.getDeleted())
-                .sorted(Comparator
-                        .comparing(EmployeeAction::getActionDate)
-                        .thenComparing(EmployeeAction::getId))
-                .toList();
+        List<EmployeeAction> actions = loadActiveActionsChronological(employeeId);
 
         for (int index = 0; index < actions.size(); index++) {
             if (actions.get(index).getId().equals(actionId) && index > 0) {
                 return actions.get(index - 1).getActionDate();
             }
+        }
+
+        return null;
+    }
+
+    private LocalDate findNextActionDate(Long employeeId, Long actionId) {
+        List<EmployeeAction> actions = loadActiveActionsChronological(employeeId);
+
+        for (int index = 0; index < actions.size(); index++) {
+            EmployeeAction current = actions.get(index);
+            if (!current.getId().equals(actionId)) {
+                continue;
+            }
+            // Linked auto transfer-in moves with transfer-out on save — skip it as a bound.
+            for (int next = index + 1; next < actions.size(); next++) {
+                EmployeeAction candidate = actions.get(next);
+                if (current.getActionType() == EmployeeActionType.TRANSFER_OUT
+                        && current.getLinkedActionId() != null
+                        && current.getLinkedActionId().equals(candidate.getId())) {
+                    continue;
+                }
+                return candidate.getActionDate();
+            }
+            return null;
         }
 
         return null;

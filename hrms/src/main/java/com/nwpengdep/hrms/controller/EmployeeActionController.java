@@ -32,7 +32,10 @@ public class EmployeeActionController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('EMPLOYEE_EDIT')")
-    public void deleteEmployeeAction(@PathVariable Long id) {
-        employeeActionService.deleteEmployeeAction(id);
+    public void deleteEmployeeAction(
+            @PathVariable Long id,
+            @RequestParam(required = false) String expectedHistoryRevision
+    ) {
+        employeeActionService.deleteEmployeeAction(id, expectedHistoryRevision);
     }
 }

@@ -112,6 +112,11 @@ public class CadreReportService {
                 )
         );
 
+        Map<Long, Long> serviceAppointmentsOut = toCountMap(employeeActionRepository.countGroupedByOldDesignationAndFromDepartment(
+                EmployeeActionType.SERVICE_APPOINTMENT, primaryDepartment, request.getStartDate(), request.getEndDate()));
+        Map<Long, Long> serviceAppointmentsIn = toCountMap(employeeActionRepository.countGroupedByNewDesignationAndDepartment(
+                EmployeeActionType.SERVICE_APPOINTMENT, primaryDepartment, request.getStartDate(), request.getEndDate()));
+
         Map<Long, Long> dismissalsMap = toCountMap(
                 employeeActionRepository.countGroupedByOldDesignationAndDepartment(
                         EmployeeActionType.DISMISSAL,
@@ -253,6 +258,8 @@ public class CadreReportService {
                                                     0L
                                             )
                             )
+                            .serviceAppointmentsIn(serviceAppointmentsIn.getOrDefault(designationId, 0L))
+                            .serviceAppointmentsOut(serviceAppointmentsOut.getOrDefault(designationId, 0L))
                             .dismissals(dismissals)
                             .vacationOfPost(vacationOfPost)
                             .permanent(permanent)
@@ -297,6 +304,8 @@ public class CadreReportService {
                 .vacationOfPost(sum(rows, CadreReportRowResponse::getVacationOfPost))
                 .permanent(sum(rows, CadreReportRowResponse::getPermanent))
                 .vacancies(sum(rows, CadreReportRowResponse::getVacancies))
+                .serviceAppointmentsIn(sum(rows, CadreReportRowResponse::getServiceAppointmentsIn))
+                .serviceAppointmentsOut(sum(rows, CadreReportRowResponse::getServiceAppointmentsOut))
                 .excess(sum(rows, CadreReportRowResponse::getExcess))
                 .casual(sum(rows, CadreReportRowResponse::getCasual))
                 .substitute(sum(rows, CadreReportRowResponse::getSubstitute))

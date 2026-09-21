@@ -35,6 +35,8 @@ public class AllEmployeeDetailsReportRowResponse {
 
     private LocalDate dateOfFirstAppointment;
 
+    private LocalDate originalFirstAppointmentDate;
+
     private String incremantDate;
 
     private LocalDate enteredDateToAllIslandService;

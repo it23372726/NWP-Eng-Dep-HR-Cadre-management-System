@@ -37,12 +37,12 @@ import com.nwpengdep.hrms.service.OrganizationSettingsService;
 @ExtendWith(MockitoExtension.class)
 class CadreReportExportServiceTest {
 
-    private static final int TOTAL_COLUMNS = 23;
+    private static final int TOTAL_COLUMNS = 25;
     private static final int HEADER_FIRST_ROW = 4;
     private static final int HEADER_LAST_ROW = 6;
     private static final int CHANGES_START_COL = 8;
-    private static final int CHANGES_END_COL = 15;
-    private static final int PARTICULARS_START_COL = 16;
+    private static final int CHANGES_END_COL = 17;
+    private static final int PARTICULARS_START_COL = 18;
 
     @Mock
     private CadreReportService cadreReportService;

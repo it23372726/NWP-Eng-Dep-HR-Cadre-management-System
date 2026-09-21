@@ -1,6 +1,10 @@
 package com.nwpengdep.hrms.dto;
 
 import java.time.LocalDate;
+import java.util.UUID;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.nwpengdep.hrms.entity.SalaryIncrementOperationType;
 
 import lombok.Builder;
 import lombok.Data;
@@ -23,6 +27,8 @@ public class SalaryIncrementStatusDto {
 
     private Integer lastDueYear;
 
+    private LocalDate lastDueDate;
+
     private LocalDate lastDoneDate;
 
     private Integer priorDueYear;
@@ -38,4 +44,23 @@ public class SalaryIncrementStatusDto {
     private String statusLabel;
 
     private String message;
+
+    private boolean hasRecordedIncrement;
+
+    private boolean canEdit;
+
+    private boolean canUndo;
+
+    private UUID lastOperationId;
+
+    private SalaryIncrementOperationType lastOperationType;
+
+    private Integer lastOperationFromYear;
+
+    private Integer lastOperationToYear;
+
+    private int lastOperationRecordCount;
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private UUID reversedOperationId;
 }

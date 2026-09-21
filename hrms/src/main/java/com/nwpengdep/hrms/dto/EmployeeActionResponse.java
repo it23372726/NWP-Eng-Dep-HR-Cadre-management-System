@@ -29,6 +29,8 @@ public class EmployeeActionResponse {
 
     private String specialDesignationName;
 
+    private Boolean specialDesignationUpdated;
+
     private Long newDesignationId;
 
     private String oldGrade;
@@ -59,9 +61,25 @@ public class EmployeeActionResponse {
 
     private String remarks;
 
+    private String serviceAppointmentKey;
+    private Long serviceId;
+    private Long serviceLevelId;
+    private String oldServiceCode;
+    private String newServiceCode;
+    private String appointmentBasis;
+    private String incrementDate;
+    private LocalDate firstIncrementDueDate;
+
     private LocalDateTime createdAt;
 
+    /** @deprecated Prefer canEdit; kept for older clients. Same meaning as canEdit. */
     private Boolean canModify;
+
+    /** Any non-auto event may be edited (full-timeline validation applies). */
+    private Boolean canEdit;
+
+    /** Only the latest modifiable event may be deleted. */
+    private Boolean canDelete;
 
     private Boolean autoCreated;
 

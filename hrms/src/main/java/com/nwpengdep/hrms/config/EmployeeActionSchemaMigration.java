@@ -18,6 +18,7 @@ public class EmployeeActionSchemaMigration {
 
     private final JdbcTemplate jdbcTemplate;
 
+    @org.springframework.core.annotation.Order(200)
     @EventListener(ApplicationReadyEvent.class)
     public void migrateEmployeeActionSchema() {
         try {
@@ -60,7 +61,8 @@ public class EmployeeActionSchemaMigration {
         }
 
         if (columnType.contains("'" + OFFICE_CHANGE + "'")
-                && columnType.contains("'" + VACATION_OF_POST + "'")) {
+                && columnType.contains("'" + VACATION_OF_POST + "'")
+                && columnType.contains("'SERVICE_APPOINTMENT'")) {
             return;
         }
 
@@ -68,6 +70,7 @@ public class EmployeeActionSchemaMigration {
                 ALTER TABLE employee_actions
                 MODIFY COLUMN action_type ENUM(
                     'NEW_APPOINTMENT',
+                    'SERVICE_APPOINTMENT',
                     'TRANSFER_IN',
                     'TRANSFER_OUT',
                     'PROMOTION',

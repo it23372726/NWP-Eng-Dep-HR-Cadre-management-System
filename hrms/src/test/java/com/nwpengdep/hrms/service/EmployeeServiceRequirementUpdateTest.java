@@ -93,7 +93,7 @@ class EmployeeServiceRequirementUpdateTest {
                 mock(OfficeService.class),
                 new EmployeeServiceResolver(),
                 mock(TrainingGraduationService.class)
-        );
+        , mock(ServiceAppointmentService.class));
 
         service = new ServiceType();
         service.setId(1L);

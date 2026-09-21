@@ -45,6 +45,14 @@ public class CareerHistoryEventRequest {
 
     private String remarks;
 
+    /** Office change only: true when the form carried the special designation field. */
+    private Boolean specialDesignationUpdated;
+
+    private String serviceAppointmentKey;
+    private String appointmentBasis;
+    private String incrementDate;
+    private LocalDate firstIncrementDueDate;
+
     /** When true on promotion, employee leaves N.W.P. Engineering on promotion. */
     private Boolean transferringOut;
 }

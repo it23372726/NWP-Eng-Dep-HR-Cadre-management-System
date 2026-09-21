@@ -11,7 +11,7 @@ public class RetirementForecastDto {
 
     private Integer retiringThisYear;
 
-    private Integer retiringWithinTwoYears;
+    private Integer retiringWithinOneYear;
 
     private Integer retiringWithinFiveYears;
 }

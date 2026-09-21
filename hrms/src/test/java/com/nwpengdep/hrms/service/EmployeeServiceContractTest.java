@@ -77,7 +77,7 @@ class EmployeeServiceContractTest {
                 officeService,
                 new EmployeeServiceResolver(),
                 mock(TrainingGraduationService.class)
-        );
+        , mock(ServiceAppointmentService.class));
 
         Designation designation = new Designation();
         designation.setId(1L);

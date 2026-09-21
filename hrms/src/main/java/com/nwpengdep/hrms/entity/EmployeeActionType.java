@@ -2,6 +2,7 @@ package com.nwpengdep.hrms.entity;
 
 public enum EmployeeActionType {
     NEW_APPOINTMENT,
+    SERVICE_APPOINTMENT,
     TRANSFER_IN,
     TRANSFER_OUT,
     PROMOTION,

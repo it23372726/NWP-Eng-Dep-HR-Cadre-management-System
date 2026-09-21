@@ -75,6 +75,7 @@ public class AllEmployeeDetailsReportService {
                         employee.getGrade() != null ? employee.getGrade().name() : "—"))
                 .natureOfAppointment(formatNatureOfAppointment(employee))
                 .dateOfFirstAppointment(isContract ? null : employee.getDateOfFirstAppointment())
+                .originalFirstAppointmentDate(employee.getOriginalFirstAppointmentDate())
                 .incremantDate(employee.getIncremantDate() != null ? employee.getIncremantDate() : "—")
                 .enteredDateToAllIslandService(employee.getEnteredDateToAllIslandService())
                 .reportedDateToPresentWorkingPlace(employee.getReportedDateToPresentWorkingPlace())

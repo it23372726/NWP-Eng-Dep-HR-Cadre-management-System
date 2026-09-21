@@ -3,9 +3,15 @@ package com.nwpengdep.hrms.repository;
 import com.nwpengdep.hrms.entity.Employee;
 import com.nwpengdep.hrms.entity.EmployeeStatus;
 import com.nwpengdep.hrms.entity.PermanentStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+
+import jakarta.persistence.LockModeType;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -18,10 +24,79 @@ public interface EmployeeRepository
 
     List<Employee> findByStatus(EmployeeStatus status);
 
+    @Query("""
+            SELECT e
+            FROM Employee e
+            WHERE e.status = :status
+              AND (
+                  e.employmentType IS NULL
+                  OR e.employmentType <> com.nwpengdep.hrms.entity.EmploymentType.PERMANENT
+                  OR EXISTS (
+                      SELECT 1
+                      FROM EmployeeAction a
+                      WHERE a.employee.id = e.id
+                        AND (a.deleted IS NULL OR a.deleted = false)
+                  )
+              )
+            """)
+    List<Employee> findActiveExcludingSystemPending(
+            @Param("status") EmployeeStatus status
+    );
+
+    @EntityGraph(attributePaths = {
+            "designation",
+            "service",
+            "serviceLevel",
+            "careerProgression",
+            "contactDetails",
+            "privateVehicle",
+            "benefits",
+            "requirements"
+    })
+    @Query("SELECT DISTINCT e FROM Employee e WHERE e.status = :status")
+    List<Employee> findForListByStatus(@Param("status") EmployeeStatus status);
+
     List<Employee> findByFullNameContainingIgnoreCaseAndStatus(
             String fullName,
             EmployeeStatus status
     );
+
+    @EntityGraph(attributePaths = {
+            "designation",
+            "service",
+            "serviceLevel",
+            "careerProgression",
+            "contactDetails",
+            "privateVehicle",
+            "benefits",
+            "requirements"
+    })
+    @Query("""
+            SELECT DISTINCT e
+            FROM Employee e
+            WHERE LOWER(e.fullName) LIKE LOWER(CONCAT('%', :fullName, '%'))
+              AND e.status = :status
+            """)
+    List<Employee> findForListByFullNameContainingIgnoreCaseAndStatus(
+            @Param("fullName") String fullName,
+            @Param("status") EmployeeStatus status
+    );
+
+    @EntityGraph(attributePaths = {
+            "designation",
+            "service",
+            "serviceLevel",
+            "careerProgression",
+            "contactDetails",
+            "privateVehicle",
+            "benefits",
+            "requirements"
+    })
+    @Query(
+            value = "SELECT DISTINCT e FROM Employee e",
+            countQuery = "SELECT COUNT(e) FROM Employee e"
+    )
+    Page<Employee> findAllForList(Pageable pageable);
 
     long countByStatus(EmployeeStatus status);
 
@@ -37,6 +112,10 @@ public interface EmployeeRepository
     List<Employee> findByDesignation_ServiceId(Long serviceId);
 
     Optional<Employee> findByEmployeeNo(String employeeNo);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT e FROM Employee e WHERE e.id = :id")
+    Optional<Employee> findByIdForUpdate(@Param("id") Long id);
 
     boolean existsByNic(String nic);
 
@@ -138,6 +217,31 @@ public interface EmployeeRepository
             String currentOffice,
             EmployeeStatus status
     );
+
+    @EntityGraph(attributePaths = {
+            "designation",
+            "service",
+            "serviceLevel",
+            "careerProgression",
+            "contactDetails",
+            "privateVehicle",
+            "benefits",
+            "requirements"
+    })
+    @Query("""
+            SELECT DISTINCT e
+            FROM Employee e
+            WHERE e.status = com.nwpengdep.hrms.entity.EmployeeStatus.ACTIVE
+              AND e.employmentType = com.nwpengdep.hrms.entity.EmploymentType.PERMANENT
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM EmployeeAction a
+                  WHERE a.employee.id = e.id
+                    AND (a.deleted IS NULL OR a.deleted = false)
+              )
+            ORDER BY e.employeeNo ASC
+            """)
+    List<Employee> findSystemPendingEmployeesForList();
 
     @Query("""
             SELECT e
