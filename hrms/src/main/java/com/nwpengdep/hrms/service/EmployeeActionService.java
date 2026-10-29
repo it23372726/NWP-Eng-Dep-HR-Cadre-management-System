@@ -360,6 +360,8 @@ public class EmployeeActionService {
         }
 
         validateSequentialActionDateOnUpdate(action, request.getActionDate());
+        List<CareerHistoryEventRequest> recordedTimeline =
+                recordedTimelineForValidation(employee.getId());
         validateProposedTimeline(employee, action, request, newGrade);
 
         if (action.getActionType() == EmployeeActionType.SERVICE_APPOINTMENT) {
@@ -372,6 +374,8 @@ public class EmployeeActionService {
         }
         action.setActionDate(request.getActionDate());
         action.setRemarks(request.getRemarks());
+        if (action.getActionType() == EmployeeActionType.PROMOTION && request.getAppointmentBasis() != null)
+            action.setAppointmentBasis(request.getAppointmentBasis().trim());
 
         if (request.getNewDesignationId() != null) {
             Designation newDesignation = designationRepository.findById(request.getNewDesignationId())
@@ -489,7 +493,7 @@ public class EmployeeActionService {
             syncLinkedTransferIn(action);
         }
 
-        validateFullTimeline(action.getEmployee().getId());
+        validateFullTimeline(action.getEmployee().getId(), recordedTimeline);
         recalculateEmployeeState(action.getEmployee().getId());
         return action;
     }
@@ -912,23 +916,31 @@ public class EmployeeActionService {
      * Uses CareerHistoryValidator so mid-history changes cannot break later events
      * (e.g. moving Grade II later than Grade I allows).
      */
+    public List<CareerHistoryEventRequest> recordedTimelineForValidation(Long employeeId) {
+        Employee employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+        return timelineEventsForValidation(
+                employee,
+                loadActiveActionsChronological(employeeId)
+        );
+    }
+
     public void validateFullTimeline(Long employeeId) {
+        validateFullTimeline(employeeId, null);
+    }
+
+    private void validateFullTimeline(
+            Long employeeId,
+            List<CareerHistoryEventRequest> recordedBaseline
+    ) {
         Employee employee = employeeRepository.findById(employeeId).orElseThrow();
         List<EmployeeAction> actions = loadActiveActionsChronological(employeeId);
-        List<CareerHistoryEventRequest> all = toCareerHistoryEvents(employee, actions);
-        List<CareerHistoryEventRequest> filtered = new java.util.ArrayList<>();
-        for (int i = 0; i < actions.size(); i++) {
-            EmployeeAction a = actions.get(i);
-            if (a.getActionType() == EmployeeActionType.TRANSFER_IN && a.getLinkedActionId() != null) {
-                continue;
-            }
-            if (Boolean.TRUE.equals(a.getTrainingAppointment())) {
-                continue;
-            }
-            filtered.add(all.get(i));
-        }
+        List<CareerHistoryEventRequest> filtered = timelineEventsForValidation(employee, actions);
+        List<CareerHistoryEventRequest> baseline = recordedBaseline != null
+                ? recordedBaseline
+                : filtered;
         try {
-            careerHistoryValidator.validate(filtered);
+            careerHistoryValidator.validate(filtered, baseline);
         } catch (RuntimeException ex) {
             throw new RuntimeException(clarifyTimelineValidationMessage(ex.getMessage()), ex);
         }
@@ -946,6 +958,7 @@ public class EmployeeActionService {
             Grade proposedGrade
     ) {
         List<EmployeeAction> actions = loadActiveActionsChronological(employee.getId());
+        List<CareerHistoryEventRequest> recorded = timelineEventsForValidation(employee, actions);
         List<CareerHistoryEventRequest> events = toCareerHistoryEvents(employee, actions);
         for (int i = 0; i < actions.size(); i++) {
             if (!actions.get(i).getId().equals(target.getId())) {
@@ -986,7 +999,7 @@ public class EmployeeActionService {
             filtered.add(events.get(i));
         }
         try {
-            careerHistoryValidator.validate(filtered);
+            careerHistoryValidator.validate(filtered, recorded);
         } catch (RuntimeException ex) {
             throw new RuntimeException(clarifyTimelineValidationMessage(ex.getMessage()), ex);
         }
@@ -995,6 +1008,26 @@ public class EmployeeActionService {
                         a -> a.getActionType() == EmployeeActionType.SERVICE_APPOINTMENT)) {
             serviceAppointmentService.validateHistoryRevision(employee, filtered);
         }
+    }
+
+    private List<CareerHistoryEventRequest> timelineEventsForValidation(
+            Employee employee,
+            List<EmployeeAction> actions
+    ) {
+        List<CareerHistoryEventRequest> all = toCareerHistoryEvents(employee, actions);
+        List<CareerHistoryEventRequest> filtered = new java.util.ArrayList<>();
+        for (int i = 0; i < actions.size(); i++) {
+            EmployeeAction action = actions.get(i);
+            if (action.getActionType() == EmployeeActionType.TRANSFER_IN
+                    && action.getLinkedActionId() != null) {
+                continue;
+            }
+            if (Boolean.TRUE.equals(action.getTrainingAppointment())) {
+                continue;
+            }
+            filtered.add(all.get(i));
+        }
+        return filtered;
     }
 
     private void applyProposedFieldsToEvent(
@@ -1152,8 +1185,8 @@ public class EmployeeActionService {
             e.setToDistrict(a.getDistrict());
             e.setTransferringOut(a.getActionType() == EmployeeActionType.PROMOTION
                     && a.getToDepartment() != null
-                    && !DepartmentConstants.isNwpEngineering(a.getToDepartment())
-                    && DepartmentConstants.isNwpEngineering(a.getFromDepartment()));
+                    && a.getFromDepartment() != null
+                    && !java.util.Objects.equals(a.getToDepartment(), a.getFromDepartment()));
             e.setReason(a.getReason());
             e.setRemarks(a.getRemarks());
             e.setServiceAppointmentKey(a.getServiceAppointmentKey());
@@ -1292,7 +1325,7 @@ public class EmployeeActionService {
             EmployeeAction action,
             EmployeeActionUpdateRequest request
     ) {
-        String nwpDepartment = DepartmentConstants.NWP_ENGINEERING;
+        String sourceDepartment = action.getFromDepartment() != null ? action.getFromDepartment() : action.getDepartment();
         boolean transferringOut = Boolean.TRUE.equals(request.getTransferringOut());
 
         if (transferringOut) {
@@ -1306,10 +1339,10 @@ public class EmployeeActionService {
             String normalizedDestination = DepartmentConstants.normalize(
                     request.getToDepartment().trim()
             );
-            if (DepartmentConstants.isNwpEngineering(normalizedDestination)) {
+            if (java.util.Objects.equals(DepartmentConstants.normalize(sourceDepartment), normalizedDestination)) {
                 throw new RuntimeException(
                         "Use \"Stays in department\" when the employee remains in "
-                                + nwpDepartment
+                                + sourceDepartment
                 );
             }
 
@@ -1321,9 +1354,7 @@ public class EmployeeActionService {
 
             String fromDepartment = action.getFromDepartment() != null
                     ? action.getFromDepartment()
-                    : (DepartmentConstants.isNwpEngineering(action.getDepartment())
-                            ? action.getDepartment()
-                            : nwpDepartment);
+                    : action.getDepartment();
             String fromOffice = action.getFromOffice() != null
                     ? action.getFromOffice()
                     : action.getOffice();
@@ -1359,7 +1390,7 @@ public class EmployeeActionService {
             throw new RuntimeException("Office is required for a staying promotion");
         }
 
-        action.setDepartment(nwpDepartment);
+        action.setDepartment(sourceDepartment);
         action.setOffice(stayingOffice.trim());
         action.setFromDepartment(null);
         action.setFromOffice(null);
@@ -1451,7 +1482,7 @@ public class EmployeeActionService {
         if (oldGrade == Grade.II && newGrade == Grade.I) {
             careerProgression.setGrade1AchievedDate(actionDate);
         }
-        if (oldGrade == Grade.I && newGrade == Grade.SUPRA) {
+        if (SupraPromotionPolicy.isEntryGrade(oldGrade) && newGrade == Grade.SUPRA) {
             careerProgression.setSupraAchievedDate(actionDate);
         }
         if (oldGrade == Grade.I && newGrade == Grade.SPECIAL) {
@@ -1462,7 +1493,7 @@ public class EmployeeActionService {
     private boolean isGradePromotion(Grade oldGrade, Grade newGrade) {
         return (oldGrade == Grade.III && newGrade == Grade.II)
                 || (oldGrade == Grade.II && newGrade == Grade.I)
-                || (oldGrade == Grade.I && newGrade == Grade.SUPRA)
+                || (SupraPromotionPolicy.isEntryGrade(oldGrade) && newGrade == Grade.SUPRA)
                 || (oldGrade == Grade.I && newGrade == Grade.SPECIAL);
     }
 

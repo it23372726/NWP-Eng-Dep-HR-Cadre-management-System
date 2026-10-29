@@ -17,6 +17,7 @@ import {
     buildPendingPermanentUpdatePayload,
     buildTrainingUpdatePayload,
     mapActionsToCareerHistory,
+    withSalaryIncrements,
     mapEmployeeToForm,
     validateCareerHistoryTimeline,
     validateContractFields,
@@ -43,6 +44,7 @@ import EmployeeDependentDetailsSection from "./EmployeeDependentDetailsSection";
 import EmployeePhotoUpload from "./EmployeePhotoUpload";
 import EmployeeQualificationsSection from "./EmployeeQualificationsSection";
 import EmployeeWorkplaceSection from "./EmployeeWorkplaceSection";
+import SalaryIncrementEntrySection from "./SalaryIncrementEntrySection";
 
 const EmployeeEditForm = forwardRef(function EmployeeEditForm(
     { employee, actionHistory, open, handleSubmit },
@@ -53,6 +55,8 @@ const EmployeeEditForm = forwardRef(function EmployeeEditForm(
     const [serviceLevels, setServiceLevels] = useState([]);
     const [formData, setFormData] = useState(mapEmployeeToForm(employee));
     const [historyEvents, setHistoryEvents] = useState([]);
+    const [salaryIncrements, setSalaryIncrements] = useState([]);
+    const [salaryIncrementError, setSalaryIncrementError] = useState("");
     const [assignmentError, setAssignmentError] = useState("");
     const [submitError, setSubmitError] = useState("");
     const [loadingHistory, setLoadingHistory] = useState(false);
@@ -143,6 +147,8 @@ const EmployeeEditForm = forwardRef(function EmployeeEditForm(
 
         const loadEditState = async () => {
             setLoadingHistory(true);
+            setSalaryIncrements([]);
+            setSalaryIncrementError("");
             setAssignmentError("");
             setSubmitError("");
             photoOptionsRef.current = { photoFile: null, removePhoto: false };
@@ -243,6 +249,7 @@ const EmployeeEditForm = forwardRef(function EmployeeEditForm(
         setSubmitError("");
 
         if (!events.length) {
+            setSalaryIncrements([]);
             return;
         }
 
@@ -281,6 +288,11 @@ const EmployeeEditForm = forwardRef(function EmployeeEditForm(
             return false;
         }
 
+        if (salaryIncrements.length && salaryIncrementError) {
+            setSubmitError(salaryIncrementError);
+            return false;
+        }
+
         if (isPermanent) {
             if (systemPending && !hasHistory) {
                 handleSubmit(
@@ -303,11 +315,15 @@ const EmployeeEditForm = forwardRef(function EmployeeEditForm(
                 return false;
             }
 
+            const recordedHistory = initialHistoryRef.current
+                ? JSON.parse(initialHistoryRef.current)
+                : null;
             const timelineError = validateCareerHistoryTimeline(
                 historyEvents,
                 designations,
                 serviceLevels,
-                services
+                services,
+                recordedHistory
             );
             if (timelineError) {
                 setSubmitError(timelineError);
@@ -340,12 +356,15 @@ const EmployeeEditForm = forwardRef(function EmployeeEditForm(
             }
 
             handleSubmit(
-                buildPermanentUpdatePayload(
-                    formData,
-                    historyEvents,
-                    selectedDesignation,
-                    employee,
-                    services
+                withSalaryIncrements(
+                    buildPermanentUpdatePayload(
+                        formData,
+                        historyEvents,
+                        selectedDesignation,
+                        employee,
+                        services
+                    ),
+                    salaryIncrements
                 ),
                 photoOptionsRef.current
             );
@@ -374,7 +393,10 @@ const EmployeeEditForm = forwardRef(function EmployeeEditForm(
             }
 
             handleSubmit(
-                buildTrainingUpdatePayload(formData),
+                withSalaryIncrements(
+                    buildTrainingUpdatePayload(formData),
+                    salaryIncrements
+                ),
                 photoOptionsRef.current
             );
             return true;
@@ -475,6 +497,15 @@ const EmployeeEditForm = forwardRef(function EmployeeEditForm(
                                 readOnlyWorkplace
                                 onIncrementDateChange={handleChange}
                             />
+                            <SalaryIncrementEntrySection
+                                events={historyEvents}
+                                incrementDate={formData.incremantDate}
+                                savedAppointments={employee?.serviceAppointments}
+                                employeeId={employee?.id}
+                                drafts={salaryIncrements}
+                                onChange={setSalaryIncrements}
+                                onDraftError={setSalaryIncrementError}
+                            />
 
                             <EmployeeQualificationsSection
                                 formData={formData}
@@ -532,6 +563,14 @@ const EmployeeEditForm = forwardRef(function EmployeeEditForm(
                         selectFieldProps={selectFieldProps}
                         variant="training"
                         onIncrementDateChange={handleChange}
+                    />
+                    <SalaryIncrementEntrySection
+                        appointmentDate={formData.dateOfFirstAppointment}
+                        incrementDate={formData.incremantDate}
+                        employeeId={employee?.id}
+                        drafts={salaryIncrements}
+                        onChange={setSalaryIncrements}
+                        onDraftError={setSalaryIncrementError}
                     />
                 </>
             ) : (

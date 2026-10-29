@@ -99,16 +99,20 @@ public class SalaryIncrementService {
 
         List<Integer> years;
         SalaryIncrementOperationType operationType;
-        if (request.isCatchUpToCurrentYear()) {
+        if (request.isCatchUpToCurrentYear() || request.getCatchUpThroughYear() != null) {
             if (!status.isCanCatchUpToCurrentYear()) {
                 throw new IllegalArgumentException(
                         "Catch-up is only available when multiple years are overdue"
                 );
             }
+            int targetYear = request.getCatchUpThroughYear() != null ? request.getCatchUpThroughYear() : status.getCatchUpTargetYear();
+            if (targetYear < status.getNextDueYear() || targetYear > status.getCatchUpTargetYear()) {
+                throw new IllegalArgumentException("Catch-up year must be between the next overdue year and the latest due year");
+            }
             years = missingYearsThrough(
                     employee,
                     active,
-                    status.getCatchUpTargetYear(),
+                    targetYear,
                     today
             );
             if (years.isEmpty()) {
@@ -116,7 +120,7 @@ public class SalaryIncrementService {
                         "Catch-up is only available when multiple years are overdue"
                 );
             }
-            validateDoneDateNotBefore(request.getDoneDate(), status.getCatchUpTargetDueDate());
+            validateDoneDateNotBefore(request.getDoneDate(), SalaryIncrementSchedule.resolveDueDate(employee.getIncremantDate(), targetYear));
             operationType = SalaryIncrementOperationType.CATCH_UP;
         } else {
             years = List.of(status.getNextDueYear());

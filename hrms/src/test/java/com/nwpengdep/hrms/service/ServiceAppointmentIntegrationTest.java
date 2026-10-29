@@ -49,6 +49,28 @@ class ServiceAppointmentIntegrationTest {
         actionService.recalculateEmployeeState(employee.getId()); em.flush();
     }
 
+    @Test void serviceAppointmentCadreCountsFollowDepartmentMovement() {
+        LocalDate date = LocalDate.of(2020, 7, 1);
+        lifecycle.appointToAnotherService(employee.getId(), appointment(date));
+        String main = com.nwpengdep.hrms.constants.DepartmentConstants.getPrimaryDepartmentName();
+        EmployeeAction action = actions.findByEmployeeIdOrderByActionDateDescCreatedAtDesc(employee.getId()).stream()
+                .filter(a -> a.getActionType() == EmployeeActionType.SERVICE_APPOINTMENT).findFirst().orElseThrow();
+        String[][] movements = {{main, main}, {main, "External"}, {"External", main}, {"External", "Other"}};
+        long[][] expected = {{1,1,0,0}, {1,0,1,0}, {0,0,0,1}, {0,0,0,0}};
+        for (int i = 0; i < movements.length; i++) {
+            action.setFromDepartment(movements[i][0]); action.setDepartment(movements[i][1]); actions.saveAndFlush(action);
+            assertEquals(expected[i][0], total(actions.countGroupedByOldDesignationAndFromDepartment(EmployeeActionType.SERVICE_APPOINTMENT, main, date, date)));
+            assertEquals(expected[i][1], total(actions.countServiceAppointmentStays(main, date, date)));
+            assertEquals(expected[i][2], total(actions.countServiceAppointmentTransfersOut(main, date, date)));
+            assertEquals(expected[i][3], total(actions.countServiceAppointmentTransfersIn(main, date, date)));
+            if (i == 2) assertEquals(mso.getId(), actions.countServiceAppointmentTransfersIn(main, date, date).getFirst()[0]);
+            if (i == 1) assertEquals(labourer.getId(), actions.countServiceAppointmentTransfersOut(main, date, date).getFirst()[0]);
+        }
+        action.setDeleted(true); actions.saveAndFlush(action);
+        assertEquals(0, total(actions.countServiceAppointmentTransfersIn(main, date, date)));
+    }
+    private long total(List<Object[]> rows) { return rows.stream().mapToLong(row -> ((Number) row[1]).longValue()).sum(); }
+
     @Test void newAppointmentPreservesOldConfirmationAndRequirementsAndSurvivesReload() {
         ServiceAppointmentRequest request = appointment(LocalDate.of(2020, 7, 1));
         lifecycle.appointToAnotherService(employee.getId(), request); reload();
@@ -75,7 +97,7 @@ class ServiceAppointmentIntegrationTest {
         EmployeeActionUpdateRequest change = revision(LocalDate.of(2021, 7, 1));
         actionService.updateEmployeeAction(actionId, change); reload();
         assertEquals(LocalDate.of(2021, 7, 1), employee.getDateOfFirstAppointment());
-        assertEquals(LocalDate.of(2024, 7, 1), employee.getServiceAppointments().stream().filter(EmployeeServiceAppointment::isCurrentAppointment).findFirst().orElseThrow().getProbationEndDate());
+        assertEquals(LocalDate.of(2022, 7, 1), employee.getServiceAppointments().stream().filter(EmployeeServiceAppointment::isCurrentAppointment).findFirst().orElseThrow().getProbationEndDate());
         actionService.deleteEmployeeAction(actionId, actionService.historyRevision(employee.getId())); reload();
         assertEquals(labourer.getId(), employee.getDesignation().getId());
         assertEquals(LocalDate.of(2010, 1, 1), employee.getDateOfFirstAppointment());
@@ -94,6 +116,42 @@ class ServiceAppointmentIntegrationTest {
         actionService.deleteEmployeeAction(latest().getId(), actionService.historyRevision(employee.getId())); reload();
         assertNull(employee.getCareerProgression().getPermanentConfirmationDate());
         assertNotEquals(PermanentStatus.PERMANENT, employee.getPermanentStatus());
+    }
+
+    @Test void confirmedThreeYearProbationAllowsConfirmationAtOneYearButNotEarlier() {
+        lifecycle.appointToAnotherService(employee.getId(), appointment(LocalDate.of(2020, 7, 1)));
+        reload();
+        assertEquals(LocalDate.of(2021, 7, 1), employee.getServiceAppointments().stream()
+                .filter(EmployeeServiceAppointment::isCurrentAppointment).findFirst().orElseThrow().getProbationEndDate());
+        for (EmployeeRequirement r : employee.getRequirements()) {
+            r.setStatus(RequirementStatus.COMPLETED); r.setCompletedDate(LocalDate.of(2021, 7, 1));
+        }
+        MakePermanentRequest confirmation = new MakePermanentRequest();
+        confirmation.setConfirmationDate(LocalDate.of(2021, 6, 30));
+        assertThrows(RuntimeException.class, () -> lifecycle.makePermanent(employee.getId(), confirmation));
+        confirmation.setConfirmationDate(LocalDate.of(2021, 7, 1));
+        lifecycle.makePermanent(employee.getId(), confirmation);
+        reload();
+        assertEquals(LocalDate.of(2021, 7, 1), employee.getCareerProgression().getPermanentConfirmationDate());
+        assertEquals(LocalDate.of(2013, 1, 1), employee.getServiceAppointments().stream()
+                .filter(p -> "INITIAL".equals(p.getAppointmentKey())).findFirst().orElseThrow().getPermanentConfirmationDate());
+    }
+
+    @Test void unconfirmedPreviousServiceStillRequiresThreeYears() {
+        EmployeeAction priorConfirmation = actions.findByEmployeeIdOrderByActionDateDescCreatedAtDesc(employee.getId())
+                .stream().filter(a -> a.getActionType() == EmployeeActionType.PERMANENT_CONFIRMATION).findFirst().orElseThrow();
+        priorConfirmation.setDeleted(true); actions.saveAndFlush(priorConfirmation);
+        actionService.recalculateEmployeeState(employee.getId());
+        lifecycle.appointToAnotherService(employee.getId(), appointment(LocalDate.of(2020, 7, 1)));
+        reload();
+        assertEquals(LocalDate.of(2023, 7, 1), employee.getServiceAppointments().stream()
+                .filter(EmployeeServiceAppointment::isCurrentAppointment).findFirst().orElseThrow().getProbationEndDate());
+        for (EmployeeRequirement r : employee.getRequirements()) {
+            r.setStatus(RequirementStatus.COMPLETED); r.setCompletedDate(LocalDate.of(2021, 7, 1));
+        }
+        MakePermanentRequest confirmation = new MakePermanentRequest();
+        confirmation.setConfirmationDate(LocalDate.of(2021, 7, 1));
+        assertThrows(RuntimeException.class, () -> lifecycle.makePermanent(employee.getId(), confirmation));
     }
 
     @Test void deletionFromAStaleHistoryScreenIsRejected() {
@@ -329,7 +387,7 @@ class ServiceAppointmentIntegrationTest {
         lifecycle.makePermanent(employee.getId(), confirmation);
         List<CareerHistoryEventRequest> history = history();
         CareerHistoryEventRequest boundary = history.stream().filter(e -> e.getActionType() == EmployeeActionType.SERVICE_APPOINTMENT).findFirst().orElseThrow();
-        boundary.setActionDate(LocalDate.of(2021, 7, 1)); boundary.setFirstIncrementDueDate(LocalDate.of(2021, 9, 1));
+        boundary.setActionDate(LocalDate.of(2022, 7, 2)); boundary.setFirstIncrementDueDate(LocalDate.of(2022, 9, 1));
         assertThrows(RuntimeException.class, () -> validator.validate(history));
         boundary.setActionDate(LocalDate.of(2019, 7, 1)); boundary.setFirstIncrementDueDate(LocalDate.of(2019, 9, 1));
         employeeService.updateEmployee(employee.getId(), historyUpdate(history)); reload();
@@ -412,10 +470,10 @@ class ServiceAppointmentIntegrationTest {
         r.setWidowsOrphansPensionNo("TEST-PENSION"); r.setPrivateVehicleUsedForGovWork(false); r.setExpectedHistoryRevision(actionService.historyRevision(employee.getId())); r.setCareerHistory(history); return r;
     }
 
-    @Test void confirmationBeforeNewThreeYearBoundaryIsRejected() {
+    @Test void confirmationBeforeNewOneYearBoundaryIsRejected() {
         lifecycle.appointToAnotherService(employee.getId(), appointment(LocalDate.of(2020, 7, 1)));
         for (EmployeeRequirement r : employee.getRequirements()) r.setStatus(RequirementStatus.COMPLETED);
-        MakePermanentRequest p = new MakePermanentRequest(); p.setConfirmationDate(LocalDate.of(2023, 6, 30));
+        MakePermanentRequest p = new MakePermanentRequest(); p.setConfirmationDate(LocalDate.of(2021, 6, 30));
         assertThrows(RuntimeException.class, () -> lifecycle.makePermanent(employee.getId(), p));
     }
 

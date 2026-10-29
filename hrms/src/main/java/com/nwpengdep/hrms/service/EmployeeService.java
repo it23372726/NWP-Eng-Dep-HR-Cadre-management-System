@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.nwpengdep.hrms.constants.DepartmentConstants;
 import com.nwpengdep.hrms.dto.ActionWorkplaceFields;
 import com.nwpengdep.hrms.dto.CareerHistoryEventRequest;
+import com.nwpengdep.hrms.dto.SalaryIncrementRecordRequest;
 import com.nwpengdep.hrms.dto.EmployeeChildRequest;
 import com.nwpengdep.hrms.dto.EmployeeListItemResponse;
 import com.nwpengdep.hrms.dto.EmployeeRequest;
@@ -69,6 +70,7 @@ public class EmployeeService {
     private final EmployeeServiceResolver employeeServiceResolver;
     private final TrainingGraduationService trainingGraduationService;
     private final ServiceAppointmentService serviceAppointmentService;
+    private final SalaryIncrementService salaryIncrementService;
 
     @Transactional
     public Employee createEmployee(EmployeeRequest request) {
@@ -258,6 +260,7 @@ public class EmployeeService {
         requirementSyncService.syncEmployeeRequirements(result);
         careerProgressionService.recalculateEmployeeCareer(result);
         result = employeeRepository.save(result);
+        applySalaryIncrementDrafts(result.getId(), request.getSalaryIncrements());
 
         if (result.getDesignation() != null) {
             designationAssignmentValidator.validate(result, result.getDesignation());
@@ -552,7 +555,17 @@ public class EmployeeService {
                     boolean gradeChanged = event.getGrade() != null
                             && (oldGrade == null || !oldGrade.equals(newGrade));
 
-                    if (event.getActionType() == EmployeeActionType.PROMOTION
+                    boolean supraExamPromotion = event.getActionType() == EmployeeActionType.PROMOTION
+                            && newGrade == Grade.SUPRA && SupraPromotionPolicy.isEntryGrade(oldGrade)
+                            && SupraPromotionPolicy.isSupraOnly(newDesignation);
+                    if (supraExamPromotion) {
+                        EmployeeAction promotion = employeeActionService.recordActionWithGrades(
+                                employee, EmployeeActionType.PROMOTION, event.getActionDate(),
+                                oldDesignation, newDesignation, newRecordedName, newSpecialName,
+                                oldGrade, newGrade, null, null, null, event.getRemarks(), workplace);
+                        promotion.setAppointmentBasis(event.getAppointmentBasis() == null ? null : event.getAppointmentBasis().trim());
+                        employeeActionService.saveAction(promotion);
+                    } else if (event.getActionType() == EmployeeActionType.PROMOTION
                             && designationChanged
                             && gradeChanged) {
                         ActionWorkplaceFields gradeUpdateWorkplace =
@@ -799,12 +812,7 @@ public class EmployeeService {
             if (currentOffice == null || currentOffice.isBlank()) {
                 throw new RuntimeException("Promotion requires a current office");
             }
-            if (!DepartmentConstants.isNwpEngineering(currentDepartment)) {
-                throw new RuntimeException(
-                        "Transfer out on promotion is only available for employees "
-                                + "in N.W.P. Engineering Department"
-                );
-            }
+
             if (event.getToDepartment() == null || event.getToDepartment().isBlank()) {
                 throw new RuntimeException(
                         "Destination department is required when transferring out on promotion"
@@ -819,7 +827,7 @@ public class EmployeeService {
             String normalizedDestination = DepartmentConstants.normalize(
                     event.getToDepartment().trim()
             );
-            if (DepartmentConstants.isNwpEngineering(normalizedDestination)) {
+            if (java.util.Objects.equals(DepartmentConstants.normalize(currentDepartment), normalizedDestination)) {
                 throw new RuntimeException(
                         "Use a staying promotion when the employee remains in "
                                 + DepartmentConstants.NWP_ENGINEERING
@@ -1570,7 +1578,10 @@ public class EmployeeService {
         }
 
         List<CareerHistoryEventRequest> events = request.getCareerHistory();
-        careerHistoryValidator.validate(events);
+        careerHistoryValidator.validate(
+                events,
+                employeeActionService.recordedTimelineForValidation(id)
+        );
         rejectTerminalHistoryForActiveEmployee(events);
 
         CareerHistoryEventRequest firstEvent = events.getFirst();
@@ -1627,7 +1638,22 @@ public class EmployeeService {
             );
         }
 
-        return employeeRepository.save(result);
+        Employee saved = employeeRepository.save(result);
+        applySalaryIncrementDrafts(saved.getId(), request.getSalaryIncrements());
+        return employeeRepository.findById(saved.getId())
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+    }
+
+    private void applySalaryIncrementDrafts(
+            Long employeeId,
+            List<SalaryIncrementRecordRequest> drafts
+    ) {
+        if (drafts == null || drafts.isEmpty()) {
+            return;
+        }
+        for (SalaryIncrementRecordRequest draft : drafts) {
+            salaryIncrementService.recordIncrement(employeeId, draft);
+        }
     }
 
     private void rejectTerminalHistoryForActiveEmployee(
@@ -1951,8 +1977,10 @@ public class EmployeeService {
         );
         trainingAction.setTrainingAppointment(true);
         employeeActionService.saveAction(trainingAction);
+        applySalaryIncrementDrafts(employee.getId(), request.getSalaryIncrements());
 
-        return employee;
+        return employeeRepository.findById(employee.getId())
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
     }
 
     private Employee updateTrainingEmployee(Long id, EmployeeUpdateRequest request) {
@@ -1983,7 +2011,10 @@ public class EmployeeService {
                 request.getCurrentDistrictOfWorking()
         );
 
-        return employeeRepository.save(employee);
+        employee = employeeRepository.save(employee);
+        applySalaryIncrementDrafts(employee.getId(), request.getSalaryIncrements());
+        return employeeRepository.findById(employee.getId())
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
     }
 
     private Employee updateTrainingQualificationsOnly(

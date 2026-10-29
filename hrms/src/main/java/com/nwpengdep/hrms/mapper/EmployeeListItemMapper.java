@@ -37,6 +37,9 @@ public final class EmployeeListItemMapper {
                 .profilePhotoPath(employee.getProfilePhotoPath())
                 .dateOfBirth(employee.getDateOfBirth())
                 .dateOfFirstAppointment(employee.getDateOfFirstAppointment())
+                .probationEndDate(employee.getDateOfFirstAppointment() == null ? null
+                        : employee.getDateOfFirstAppointment().plusYears(
+                                com.nwpengdep.hrms.service.ProbationPolicy.yearsForCurrentAppointment(employee)))
                 .contactNo(employee.getContactNo())
                 .currentDepartment(employee.getCurrentDepartment())
                 .currentOffice(employee.getCurrentOffice())

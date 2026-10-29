@@ -42,7 +42,7 @@ export function OrganizationSettingsProvider({ children }) {
             const user = getStoredUser();
             const token = localStorage.getItem("token");
 
-            if (!user || !token) {
+            if (!user || !token || user.role === "EMPLOYEE") {
                 return applySettings({
                     ...DEFAULT_ORGANIZATION_SETTINGS,
                     ...branding

@@ -606,7 +606,8 @@ public class CareerProgressionService {
         if (employee == null) {
             return null;
         }
-        return getMinimumPermanentConfirmationDate(employee.getDateOfFirstAppointment());
+        return employee.getDateOfFirstAppointment() == null ? null
+                : employee.getDateOfFirstAppointment().plusYears(ProbationPolicy.yearsForCurrentAppointment(employee));
     }
 
     public boolean completedThreeYears(Employee employee) {

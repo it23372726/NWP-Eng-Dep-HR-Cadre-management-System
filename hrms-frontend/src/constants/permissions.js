@@ -68,6 +68,8 @@ export function getDefaultRouteForUser(user) {
         return "/";
     }
 
+    if (user.role === "EMPLOYEE") return "/employees/self";
+
     if (hasPermission(user, "DASHBOARD")) {
         return "/dashboard";
     }

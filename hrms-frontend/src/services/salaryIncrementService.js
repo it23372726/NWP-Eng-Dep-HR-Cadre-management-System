@@ -1,18 +1,24 @@
 import api from "../api/axios";
+import { getStoredUser } from "../hooks/useAuth";
+
+export const getSalaryIncrementHistory = async (id) => {
+    const response = await api.get(`/employees/${id}/salary-increment/history`);
+    return response.data;
+};
 
 export const getSalaryIncrementStatus = async (id, serviceAppointmentKey) => {
-    const response = await api.get(`/employees/${id}/salary-increment`, { params: { serviceAppointmentKey } });
+    const response = await api.get(getStoredUser()?.role === "EMPLOYEE" ? "/employee-portal/salary-increment" : `/employees/${id}/salary-increment`, { params: { serviceAppointmentKey } });
     return response.data;
 };
 
 export const recordSalaryIncrement = async (
     id,
     doneDate,
-    { catchUpToCurrentYear = false, expectedLastOperationId, serviceAppointmentKey } = {}
+    { catchUpToCurrentYear = false, catchUpThroughYear, expectedLastOperationId, serviceAppointmentKey } = {}
 ) => {
     const response = await api.post(`/employees/${id}/salary-increment`, {
         doneDate,
-        catchUpToCurrentYear,
+        catchUpToCurrentYear, catchUpThroughYear,
         expectedLastOperationId, serviceAppointmentKey
     });
     return response.data;

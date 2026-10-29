@@ -57,13 +57,19 @@ export default function SimpleLifecycleDialog({
 
     const { fieldProps } = createFormFieldProps(handleChange);
 
+    const keepsRecordedDate = Boolean(
+        initialAction?.actionDate
+        && form.actionDate === initialAction.actionDate
+    );
     const dateBeforeMinimum = Boolean(
-        previousEventDate
+        !keepsRecordedDate
+        && previousEventDate
         && form.actionDate
         && form.actionDate < previousEventDate
     );
     const dateAfterMaximum = Boolean(
-        maxDate
+        !keepsRecordedDate
+        && maxDate
         && form.actionDate
         && form.actionDate > maxDate
     );
@@ -119,8 +125,8 @@ export default function SimpleLifecycleDialog({
                             required
                             slotProps={{
                                 htmlInput: {
-                                    ...(previousEventDate ? { min: previousEventDate } : {}),
-                                    ...(maxDate ? { max: maxDate } : {})
+                                    ...(previousEventDate && !keepsRecordedDate ? { min: previousEventDate } : {}),
+                                    ...(maxDate && !keepsRecordedDate ? { max: maxDate } : {})
                                 }
                             }}
                             error={dateBeforeMinimum || dateAfterMaximum}

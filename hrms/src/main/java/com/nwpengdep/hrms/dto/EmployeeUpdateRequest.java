@@ -9,6 +9,8 @@ import lombok.Data;
 import java.time.LocalDate;
 import java.util.List;
 
+import jakarta.validation.Valid;
+
 @Data
 public class EmployeeUpdateRequest {
     private String expectedHistoryRevision;
@@ -125,6 +127,9 @@ public class EmployeeUpdateRequest {
     private List<EmployeeRequirementRequest> requirements;
 
     private List<CareerHistoryEventRequest> careerHistory;
+
+    @Valid
+    private List<SalaryIncrementRecordRequest> salaryIncrements;
 
     private Boolean qualificationUpdateOnly;
 

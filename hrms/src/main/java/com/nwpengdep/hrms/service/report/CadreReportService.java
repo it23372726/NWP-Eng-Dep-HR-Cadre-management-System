@@ -58,6 +58,10 @@ public class CadreReportService {
                 )
         );
 
+        toCountMap(employeeActionRepository.countPromotionTransfersIn(primaryDepartment,
+                request.getStartDate(), request.getEndDate()))
+                .forEach((designation, count) -> transferInMap.merge(designation, count, Long::sum));
+
         Map<Long, Long> transferOutMap = toCountMap(
                 employeeActionRepository.countGroupedByOldDesignationAndFromDepartment(
                         EmployeeActionType.TRANSFER_OUT,
@@ -114,8 +118,13 @@ public class CadreReportService {
 
         Map<Long, Long> serviceAppointmentsOut = toCountMap(employeeActionRepository.countGroupedByOldDesignationAndFromDepartment(
                 EmployeeActionType.SERVICE_APPOINTMENT, primaryDepartment, request.getStartDate(), request.getEndDate()));
-        Map<Long, Long> serviceAppointmentsIn = toCountMap(employeeActionRepository.countGroupedByNewDesignationAndDepartment(
-                EmployeeActionType.SERVICE_APPOINTMENT, primaryDepartment, request.getStartDate(), request.getEndDate()));
+        Map<Long, Long> serviceAppointmentsIn = toCountMap(employeeActionRepository.countServiceAppointmentStays(
+                primaryDepartment, request.getStartDate(), request.getEndDate()));
+
+        toCountMap(employeeActionRepository.countServiceAppointmentTransfersOut(primaryDepartment, request.getStartDate(), request.getEndDate()))
+                .forEach((designation, count) -> transferOutMap.merge(designation, count, Long::sum));
+        toCountMap(employeeActionRepository.countServiceAppointmentTransfersIn(primaryDepartment, request.getStartDate(), request.getEndDate()))
+                .forEach((designation, count) -> transferInMap.merge(designation, count, Long::sum));
 
         Map<Long, Long> dismissalsMap = toCountMap(
                 employeeActionRepository.countGroupedByOldDesignationAndDepartment(

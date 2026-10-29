@@ -1,3 +1,4 @@
+import { serviceAppointmentOutcome } from "../utils/serviceAppointmentOutcome";
 import {
     DEFAULT_DISTRICTS,
     DEFAULT_PRIMARY_DEPARTMENT,
@@ -261,6 +262,10 @@ export function getActionTypeLabel(action) {
     if (action.trainingAppointment) {
         return "New Trainee Appointment";
     }
+    if (action.actionType === "SERVICE_APPOINTMENT") {
+        const outcome = serviceAppointmentOutcome(action);
+        return `Appointment to Another Service${outcome === "transfer" ? " / Transfer Out" : outcome === "stay" ? " / Same Department" : ""}`;
+    }
     if (action.actionType === "PROMOTION") {
         return isPromotionTransferOut(action)
             ? "Promotion / Transfer Out"
@@ -454,14 +459,20 @@ export function getActionDetailLines(action) {
 
     const lines = [];
     const type = action.actionType;
+    if (type === "PROMOTION" && action.appointmentBasis)
+        lines.push({ label: "Examination passed", value: action.appointmentBasis });
     if (type === "SERVICE_APPOINTMENT") {
+        const outcome = serviceAppointmentOutcome(action);
         return [
+            ...(outcome ? [{ label: "Appointment outcome", value: outcome === "transfer" ? "Transferred to another department" : "Stayed in the same department" }] : []),
             { label: "Service", value: `${action.oldServiceCode || "Previous service"} → ${action.newServiceCode || "New service"}` },
             { label: "Designation", value: `${action.oldDesignationName || "Previous designation"} → ${action.newDesignationName || "—"}` },
-            { label: "Entry grade", value: "Grade III — fresh three-year probation" },
+            { label: "Entry grade", value: "Grade III — one-year probation after a previously confirmed three-year probation; otherwise three years" },
             { label: "Examination passed", value: action.appointmentBasis || "—" },
             { label: "First increment due", value: action.firstIncrementDueDate || "—" },
-            { label: "Workplace", value: [action.department, action.office].filter(Boolean).join(" — ") }
+            ...(action.fromDepartment || action.fromOffice ? [{ label: "Previous workplace", value: formatWorkplace(action.fromDepartment, action.fromOffice) }] : []),
+            { label: outcome === "transfer" ? "Destination workplace" : "Appointment workplace", value: formatWorkplace(action.department || action.toDepartment, action.office || action.toOffice) || "—" },
+            ...(action.district ? [{ label: "Working district", value: action.district?.label || action.district }] : [])
         ];
     }
 

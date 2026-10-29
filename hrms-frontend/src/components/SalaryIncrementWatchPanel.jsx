@@ -14,6 +14,9 @@ import ScheduleIcon from "@mui/icons-material/Schedule";
 import { useNavigate } from "react-router-dom";
 import { formatSalaryIncrementDate, getOverdueLabel } from "../utils/salaryIncrement";
 
+const VISIBLE_INCREMENT_ROWS = 5;
+const INCREMENT_ROW_HEIGHT = 66;
+
 function IncrementList({ title, items, emptyMessage, icon, tone }) {
     const navigate = useNavigate();
 
@@ -47,7 +50,15 @@ function IncrementList({ title, items, emptyMessage, icon, tone }) {
                     {emptyMessage}
                 </Typography>
             ) : (
-                <List dense disablePadding>
+                <List
+                    dense
+                    disablePadding
+                    sx={{
+                        maxHeight: VISIBLE_INCREMENT_ROWS * INCREMENT_ROW_HEIGHT,
+                        overflowY: "auto",
+                        overscrollBehavior: "contain"
+                    }}
+                >
                     {items.map((item) => (
                         <ListItem
                             key={item.employeeId}

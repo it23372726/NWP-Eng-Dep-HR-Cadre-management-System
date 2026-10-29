@@ -1,3 +1,4 @@
+import { isSupraOnlyDesignation, isSupraExamPromotion } from "../../utils/supraPromotion";
 import {
     Dialog,
     DialogTitle,
@@ -32,7 +33,6 @@ import DateInput from "../DateInput";
 import {
     GRADES,
     getServiceRules,
-    getPrimaryDepartmentName,
     isOtherDesignation,
     isPrimaryDepartment,
     OTHER_DESIGNATION_VALUE,
@@ -225,6 +225,9 @@ function getSelectableGrades(
     designationAllowedGrades,
     serviceAllowedGrades
 ) {
+    if (["III", "II", "I"].includes(currentGrade)
+        && designationAllowedGrades?.length === 1 && designationAllowedGrades[0] === "Supra"
+        && serviceAllowedGrades?.includes("Supra")) return ["Supra"];
     let designationGrades = designationAllowedGrades?.length
         ? designationAllowedGrades
         : GRADES.filter((grade) => grade !== "None");
@@ -276,6 +279,7 @@ export default function PromotionDialog({
         serviceLevelId: "",
         promotionDate: "",
         remarks: "",
+        appointmentBasis: "",
         promotionOutcome: PROMOTION_OUTCOME.STAYING,
         toDepartmentType: DEPARTMENT_OPTIONS.OTHER,
         toOtherDepartmentName: "",
@@ -306,9 +310,9 @@ export default function PromotionDialog({
 
             if (initialAction) {
                 const transferringOut = Boolean(
-                    isPrimaryDepartment(initialAction.fromDepartment)
+                    initialAction.fromDepartment
                     && initialAction.department
-                    && !isPrimaryDepartment(initialAction.department)
+                    && initialAction.fromDepartment !== initialAction.department
                 );
                 const destination = transferringOut
                     ? parseDepartmentValue(initialAction.department)
@@ -328,6 +332,7 @@ export default function PromotionDialog({
                         : String(employee.serviceLevel?.id ?? ""),
                     promotionDate: initialAction.actionDate || "",
                     remarks: initialAction.remarks || "",
+                    appointmentBasis: initialAction.appointmentBasis || "",
                     promotionOutcome: transferringOut
                         ? PROMOTION_OUTCOME.TRANSFERRING_OUT
                         : PROMOTION_OUTCOME.STAYING,
@@ -376,6 +381,7 @@ export default function PromotionDialog({
                 serviceLevelId: String(employee.serviceLevel?.id ?? ""),
                 promotionDate: "",
                 remarks: "",
+        appointmentBasis: "",
                 promotionOutcome: PROMOTION_OUTCOME.STAYING,
                 toDepartmentType: DEPARTMENT_OPTIONS.OTHER,
                 toOtherDepartmentName: "",
@@ -469,12 +475,14 @@ export default function PromotionDialog({
                 !== baselineDesignationName.trim().toLowerCase()
         : Boolean(baselineDesignationId)
             && Number(form.newDesignationId) !== Number(baselineDesignationId);
+    const supraExamPromotion = isSupraExamPromotion(baselineGrade, selectedDesignation)
+        && (!isEdit || initialAction?.actionType === "PROMOTION");
     const isGrade2Promotion =
         !isEdit && baselineGrade === "III" && form.grade === "II";
     const isGrade1Promotion =
         !isEdit && baselineGrade === "II" && form.grade === "I";
     const isSupraPromotion =
-        !isEdit && baselineGrade === "I" && form.grade === "Supra";
+        !supraExamPromotion && !isEdit && baselineGrade === "I" && form.grade === "Supra";
     const isSpecialPromotion =
         !isEdit && baselineGrade === "I" && form.grade === "Special";
     const gradeChanged = baselineGrade !== form.grade;
@@ -595,26 +603,31 @@ export default function PromotionDialog({
         rulesSource
     );
 
-    const serviceMinEffectiveDate = isGrade2Promotion
+    const gradeStepMinDate = supraExamPromotion ? null : baselineGrade === "III" && form.grade === "II"
         ? grade2EligibleDate
-        : isGrade1Promotion
+        : baselineGrade === "II" && form.grade === "I"
             ? grade1EligibleDate
-            : isSupraPromotion
+            : baselineGrade === "I" && form.grade === "Supra"
                 ? supraEligibleDate
-                : isSpecialPromotion
+                : baselineGrade === "I" && form.grade === "Special"
                     ? specialEligibleDate
                     : null;
+    const keepsRecordedDate = isEdit
+        && form.promotionDate === initialAction?.actionDate;
+    const serviceMinEffectiveDate = keepsRecordedDate ? null : gradeStepMinDate;
     const minEffectiveDate = combineMinDates(
         serviceMinEffectiveDate,
         previousEventDate
     );
     const effectiveDateTooEarly = Boolean(
-        minEffectiveDate
+        !keepsRecordedDate
+        && minEffectiveDate
         && form.promotionDate
         && form.promotionDate < minEffectiveDate
     );
     const effectiveDateTooLate = Boolean(
-        maxDate
+        !keepsRecordedDate
+        && maxDate
         && form.promotionDate
         && form.promotionDate > maxDate
     );
@@ -792,11 +805,10 @@ export default function PromotionDialog({
     const supraQualified = isSupraPromotionQualified(form, rulesSource);
     const specialQualified = isSpecialPromotionQualified(form, rulesSource);
 
-    const inNwpDepartment = isEdit
-        ? isPrimaryDepartment(initialAction.fromDepartment)
-        : isPrimaryDepartment(employee?.currentDepartment);
     const transferringOut = form.promotionOutcome === PROMOTION_OUTCOME.TRANSFERRING_OUT;
-    const showPromotionOutcome = isPromotion && inNwpDepartment;
+    const sourceDepartment = (isEdit ? initialAction.fromDepartment || initialAction.department : employee?.currentDepartment) || "current department";
+    const inNwpDepartment = isPrimaryDepartment(sourceDepartment);
+    const showPromotionOutcome = isPromotion;
     const toDepartment = resolveDepartmentValue(
         form.toDepartmentType,
         form.toOtherDepartmentName
@@ -840,33 +852,38 @@ export default function PromotionDialog({
             return;
         }
 
-        const minDate = combineMinDates(
-            employee?.grade === "III" && nextForm.grade === "II"
-                ? getGrade2EligibilityDate(
-                    buildPromotionCandidate(nextForm, "grade2", nextRulesSource),
-                    nextRulesSource
-                )
-                : employee?.grade === "II" && nextForm.grade === "I"
-                    ? getGrade1EligibilityDate(
-                        buildPromotionCandidate(nextForm, "grade1", nextRulesSource),
+        const keepsRecordedPromotionDate = isEdit
+            && nextForm.promotionDate === initialAction?.actionDate;
+        const minDate = keepsRecordedPromotionDate
+            ? previousEventDate
+            : combineMinDates(
+                baselineGrade === "III" && nextForm.grade === "II"
+                    ? getGrade2EligibilityDate(
+                        buildPromotionCandidate(nextForm, "grade2", nextRulesSource),
                         nextRulesSource
                     )
-                    : employee?.grade === "I" && nextForm.grade === "Supra"
-                        ? getSupraEligibilityDate(
-                            buildPromotionCandidate(nextForm, "supra", nextRulesSource),
+                    : baselineGrade === "II" && nextForm.grade === "I"
+                        ? getGrade1EligibilityDate(
+                            buildPromotionCandidate(nextForm, "grade1", nextRulesSource),
                             nextRulesSource
                         )
-                        : employee?.grade === "I" && nextForm.grade === "Special"
-                            ? getSpecialEligibilityDate(
-                                buildPromotionCandidate(nextForm, "special", nextRulesSource),
+                        : !isSupraOnlyDesignation(nextRulesSource) && baselineGrade === "I" && nextForm.grade === "Supra"
+                            ? getSupraEligibilityDate(
+                                buildPromotionCandidate(nextForm, "supra", nextRulesSource),
                                 nextRulesSource
                             )
-                            : null,
-            previousEventDate
-        );
+                            : baselineGrade === "I" && nextForm.grade === "Special"
+                                ? getSpecialEligibilityDate(
+                                    buildPromotionCandidate(nextForm, "special", nextRulesSource),
+                                    nextRulesSource
+                                )
+                                : null,
+                previousEventDate
+            );
 
         if (
-            minDate
+            !keepsRecordedPromotionDate
+            && minDate
             && nextForm.promotionDate
             && nextForm.promotionDate < minDate
         ) {
@@ -896,7 +913,7 @@ export default function PromotionDialog({
         }
 
         if (
-            employee?.grade === "I"
+            !isSupraOnlyDesignation(nextRulesSource) && employee?.grade === "I"
             && nextForm.grade === "Supra"
             && !isSupraPromotionQualified(nextForm, nextRulesSource)
         ) {
@@ -944,7 +961,11 @@ export default function PromotionDialog({
                 getServiceRules(nextRulesSource)?.allowedGrades
             );
             if (!nextSelectableGrades.includes(next.grade)) {
-                next.grade = employee?.grade ?? nextSelectableGrades[0] ?? "";
+                next.grade = nextSelectableGrades[0] ?? "";
+            }
+            if (isSupraOnlyDesignation(designation)) {
+                next.grade = "Supra";
+                next.serviceLevelId = String(designation.serviceLevel?.id ?? "");
             }
             normalizeRequirements(getServiceRules(nextRulesSource)?.grade2Requirements).forEach(
                 (requirement) => {
@@ -1110,6 +1131,11 @@ export default function PromotionDialog({
             return;
         }
 
+        if (supraExamPromotion && !form.appointmentBasis?.trim()) {
+            setError("Enter the examination passed for the Supra promotion.");
+            return;
+        }
+
         const payload = {
             ...(isOtherPromotion
                 ? {
@@ -1119,7 +1145,8 @@ export default function PromotionDialog({
                     newDesignationId: Number(form.newDesignationId),
                     specialDesignationName: form.specialDesignationName?.trim() || null
                 }),
-            grade: form.grade,
+            grade: supraExamPromotion ? "Supra" : form.grade,
+            appointmentBasis: supraExamPromotion ? form.appointmentBasis.trim() : null,
             serviceLevelId: Number(form.serviceLevelId),
             requirements: isEdit ? [] : buildSubmittedRequirements(),
             grade2RequiredYears: null,
@@ -1331,6 +1358,12 @@ export default function PromotionDialog({
                             </Grid>
                         )}
 
+                        {supraExamPromotion ? <Grid size={{ xs: 12, sm: 6 }}>
+                            <TextField fullWidth size="small" required label="Examination passed"
+                                name="appointmentBasis" value={form.appointmentBasis || ""}
+                                onChange={handleChange} slotProps={{ htmlInput: { maxLength: 255 } }}
+                                helperText="Name of the examination passed for this Supra promotion. Entry grade is Supra." />
+                        </Grid> : (
                         <Grid size={{ xs: 12, sm: 6 }}>
                             <TextField
                                 {...selectFieldProps}
@@ -1348,6 +1381,7 @@ export default function PromotionDialog({
                                 ))}
                             </TextField>
                         </Grid>
+                        )}
 
                         <Grid size={{ xs: 12, sm: 6 }}>
                             <TextField
@@ -1364,16 +1398,6 @@ export default function PromotionDialog({
                             </TextField>
                         </Grid>
 
-                        {!inNwpDepartment && isPromotion && (
-                            <Grid size={{ xs: 12 }}>
-                                <Alert severity="info">
-                                    This promotion will be recorded but will not
-                                    appear in the Cadre report because the employee
-                                    is not in {getPrimaryDepartmentName()}.
-                                </Alert>
-                            </Grid>
-                        )}
-
                         {showPromotionOutcome && (
                             <Grid size={{ xs: 12 }}>
                                 <FormControl component="fieldset" required>
@@ -1388,7 +1412,7 @@ export default function PromotionDialog({
                                         <FormControlLabel
                                             value={PROMOTION_OUTCOME.STAYING}
                                             control={<Radio />}
-                                            label={`Stays in ${getPrimaryDepartmentName()}`}
+                                            label={`Stays in ${sourceDepartment}`}
                                         />
                                         <FormControlLabel
                                             value={PROMOTION_OUTCOME.TRANSFERRING_OUT}
@@ -1401,7 +1425,11 @@ export default function PromotionDialog({
                                     severity="info"
                                     sx={{ mt: 1.5 }}
                                 >
-                                    {transferringOut
+                                    {!inNwpDepartment
+                                        ? (transferringOut && isPrimaryDepartment(toDepartment)
+                                            ? "Cadre report: Transfer In on the new designation only."
+                                            : "This promotion does not affect the main department cadre report.")
+                                        : transferringOut
                                         ? "Cadre report: Promotion on the old designation only. The employee will not count as a New Appointment in this department."
                                         : "Cadre report: Promotion on the old designation and New Appointment on the new designation."}
                                 </Alert>
@@ -1422,7 +1450,7 @@ export default function PromotionDialog({
                                     office={form.toOffice}
                                     departmentLabel="Destination department"
                                     officeLabel="Destination office"
-                                    excludeNwpDepartment
+                                    excludeNwpDepartment={isPrimaryDepartment(isEdit ? initialAction.fromDepartment : employee?.currentDepartment)}
                                     onDepartmentTypeChange={(value) =>
                                         setForm((prev) => ({
                                             ...prev,
@@ -1461,7 +1489,7 @@ export default function PromotionDialog({
                                 slotProps={{
                                     htmlInput: {
                                         ...(minEffectiveDate ? { min: minEffectiveDate } : {}),
-                                        ...(maxDate ? { max: maxDate } : {})
+                                        ...(!keepsRecordedDate && maxDate ? { max: maxDate } : {})
                                     }
                                 }}
                                 error={effectiveDateTooEarly || effectiveDateTooLate}

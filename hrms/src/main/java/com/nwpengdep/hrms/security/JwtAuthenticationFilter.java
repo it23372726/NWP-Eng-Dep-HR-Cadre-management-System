@@ -26,6 +26,8 @@ public class JwtAuthenticationFilter
     private final JwtService jwtService;
     private final CustomUserDetailsService userDetailsService;
 
+    private final com.nwpengdep.hrms.repository.EmployeeRepository employeeRepository;
+
     @Override
     protected void doFilterInternal(
             HttpServletRequest request,
@@ -49,12 +51,27 @@ public class JwtAuthenticationFilter
         jwt = authHeader.substring(7);
 
         try {
-            username = jwtService.extractUsername(jwt);
+            io.jsonwebtoken.Claims claims = jwtService.extractClaims(jwt);
+            if ("EMPLOYEE".equals(claims.get("identityType", String.class))) {
+                com.nwpengdep.hrms.entity.Employee employee = employeeRepository.findById(Long.valueOf(claims.getSubject())).orElse(null);
+                if (!com.nwpengdep.hrms.service.EmployeePortalService.eligible(employee)
+                        || !jwtService.employeeCredentialStamp(employee).equals(claims.get("credentialStamp", String.class))) {
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    return;
+                }
+                var principal = new EmployeePrincipal(employee.getId(), employee.getEmployeeNo());
+                var authentication = new UsernamePasswordAuthenticationToken(principal, null,
+                        java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("EMPLOYEE_SELF")));
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+                filterChain.doFilter(request, response);
+                return;
+            }
+            username = claims.getSubject();
         } catch (ExpiredJwtException e) {
             // Token is expired, return 401 Unauthorized
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             return;
-        } catch (JwtException e) {
+        } catch (JwtException | IllegalArgumentException e) {
             // Invalid token, return 401 Unauthorized
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             return;

@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.nwpengdep.hrms.dto.ActionWorkplaceFields;
 import com.nwpengdep.hrms.dto.DismissalRequest;
 import com.nwpengdep.hrms.dto.EmployeeActionUpdateRequest;
+import com.nwpengdep.hrms.dto.EmployeeUpdateRequest;
 import com.nwpengdep.hrms.dto.OfficeChangeRequest;
 import com.nwpengdep.hrms.dto.PromotionRequest;
 import com.nwpengdep.hrms.dto.TransferOutRequest;
@@ -443,6 +444,167 @@ class EmployeeActionUpdateTest {
                         .office("Office B")
                         .build()));
         assertTrue(blocked.getMessage().contains("next event"));
+    }
+
+    @Test
+    void raisingRequiredYearsStillAllowsUnchangedHistorySaves() {
+        recordShortPromotionsThenRaiseYears(Grade.SUPRA);
+        Long grade2Id = actionIdForGrade(Grade.II);
+
+        actionService.updateEmployeeAction(grade2Id, EmployeeActionUpdateRequest.builder()
+                .actionDate(LocalDate.of(2006, 1, 1))
+                .newDesignationId(technicalOfficer.getId())
+                .grade("II")
+                .serviceLevelId(level.getId())
+                .remarks("Remark only")
+                .build());
+        reload();
+        assertEquals("Remark only", actions.findById(grade2Id).orElseThrow().getRemarks());
+        assertEquals(Grade.SUPRA, employee.getGrade());
+
+        EmployeeUpdateRequest profile = new EmployeeUpdateRequest();
+        profile.setEmployeeNo(employee.getEmployeeNo());
+        profile.setNic(employee.getNic());
+        profile.setFullName("Recorded history kept");
+        profile.setEmploymentType(EmploymentType.PERMANENT);
+        profile.setServiceLevelId(level.getId());
+        profile.setIncremantDate(employee.getIncremantDate());
+        profile.setPermanentAddress("Synthetic test address");
+        profile.setContactNo("TEST");
+        profile.setWidowsOrphansPensionNo("TEST-PENSION");
+        profile.setPrivateVehicleUsedForGovWork(false);
+        profile.setCareerHistory(actionService.recordedTimelineForValidation(employee.getId()));
+        employeeService.updateEmployee(employee.getId(), profile);
+        reload();
+        assertEquals("Recorded history kept", employee.getFullName());
+        assertEquals(Grade.SUPRA, employee.getGrade());
+        assertEquals(LocalDate.of(2006, 1, 1), actions.findById(actionIdForGrade(Grade.II)).orElseThrow().getActionDate());
+        assertEquals(LocalDate.of(2012, 1, 1), actions.findById(actionIdForGrade(Grade.I)).orElseThrow().getActionDate());
+        assertEquals(LocalDate.of(2014, 1, 1), actions.findById(actionIdForGrade(Grade.SUPRA)).orElseThrow().getActionDate());
+    }
+
+    @Test
+    void changedGradeTwoDateUsesTheNewRequiredYears() {
+        recordShortPromotionsThenRaiseYears(Grade.SUPRA);
+        RuntimeException blocked = assertThrows(RuntimeException.class, () ->
+                actionService.updateEmployeeAction(actionIdForGrade(Grade.II), EmployeeActionUpdateRequest.builder()
+                        .actionDate(LocalDate.of(2007, 1, 1))
+                        .newDesignationId(technicalOfficer.getId())
+                        .grade("II")
+                        .serviceLevelId(level.getId())
+                        .build()));
+        assertTrue(blocked.getMessage().contains("cannot be earlier"));
+    }
+
+    @Test
+    void changedGradeOneDateUsesTheNewRequiredYears() {
+        recordShortPromotionsThenRaiseYears(Grade.SUPRA);
+        RuntimeException blocked = assertThrows(RuntimeException.class, () ->
+                actionService.updateEmployeeAction(actionIdForGrade(Grade.I), EmployeeActionUpdateRequest.builder()
+                        .actionDate(LocalDate.of(2013, 1, 1))
+                        .newDesignationId(technicalOfficer.getId())
+                        .grade("I")
+                        .serviceLevelId(level.getId())
+                        .build()));
+        assertTrue(blocked.getMessage().contains("cannot be earlier"));
+    }
+
+    @Test
+    void changedSupraDateUsesTheNewRequiredYears() {
+        recordShortPromotionsThenRaiseYears(Grade.SUPRA);
+        RuntimeException blocked = assertThrows(RuntimeException.class, () ->
+                actionService.updateEmployeeAction(actionIdForGrade(Grade.SUPRA), EmployeeActionUpdateRequest.builder()
+                        .actionDate(LocalDate.of(2015, 1, 1))
+                        .newDesignationId(technicalOfficer.getId())
+                        .grade("Supra")
+                        .serviceLevelId(level.getId())
+                        .build()));
+        assertTrue(blocked.getMessage().contains("cannot be earlier"));
+    }
+
+    @Test
+    void changedSpecialDateUsesTheNewRequiredYears() {
+        recordShortPromotionsThenRaiseYears(Grade.SPECIAL);
+        RuntimeException blocked = assertThrows(RuntimeException.class, () ->
+                actionService.updateEmployeeAction(actionIdForGrade(Grade.SPECIAL), EmployeeActionUpdateRequest.builder()
+                        .actionDate(LocalDate.of(2015, 1, 1))
+                        .newDesignationId(technicalOfficer.getId())
+                        .grade("Special")
+                        .serviceLevelId(level.getId())
+                        .build()));
+        assertTrue(blocked.getMessage().contains("cannot be earlier"));
+    }
+
+    private void recordShortPromotionsThenRaiseYears(Grade topGrade) {
+        ServiceType service = employee.getService();
+        service.setGrade2RequiredYears(0);
+        service.setGrade1RequiredYears(0);
+        service.setSupraRequiredYears(0);
+        service.setSpecialRequiredYears(0);
+        service.getAllowedGrades().add(topGrade);
+        technicalOfficer.getAllowedGrades().add(topGrade);
+        em.merge(service);
+        em.merge(technicalOfficer);
+        em.flush();
+
+        employee.setDateOfFirstAppointment(LocalDate.of(2000, 1, 1));
+        employees.saveAndFlush(employee);
+        EmployeeAction appointment = actions.findByEmployeeIdOrderByActionDateDescCreatedAtDesc(employee.getId())
+                .stream()
+                .filter(a -> a.getActionType() == EmployeeActionType.NEW_APPOINTMENT)
+                .findFirst()
+                .orElseThrow();
+        appointment.setActionDate(LocalDate.of(2000, 1, 1));
+        actions.saveAndFlush(appointment);
+        actionService.recalculateEmployeeState(employee.getId());
+        reload();
+
+        actionService.recordAction(
+                employee,
+                EmployeeActionType.PERMANENT_CONFIRMATION,
+                LocalDate.of(2003, 1, 1),
+                technicalOfficer,
+                technicalOfficer,
+                null,
+                null,
+                null,
+                null,
+                ActionWorkplaceFields.of("Other Department", "Office A")
+        );
+        promote(Grade.II, LocalDate.of(2006, 1, 1));
+        promote(Grade.I, LocalDate.of(2012, 1, 1));
+        promote(topGrade, LocalDate.of(2014, 1, 1));
+        reload();
+
+        service = employee.getService();
+        service.setGrade2RequiredYears(10);
+        service.setGrade1RequiredYears(10);
+        service.setSupraRequiredYears(10);
+        service.setSpecialRequiredYears(10);
+        em.merge(service);
+        em.flush();
+        reload();
+    }
+
+    private void promote(Grade grade, LocalDate date) {
+        PromotionRequest request = new PromotionRequest();
+        request.setNewDesignationId(technicalOfficer.getId());
+        request.setGrade(grade);
+        request.setServiceLevelId(level.getId());
+        request.setPromotionDate(date);
+        request.setRequirements(List.of());
+        lifecycle.promoteEmployee(employee.getId(), request);
+        reload();
+    }
+
+    private Long actionIdForGrade(Grade grade) {
+        return actions.findByEmployeeIdOrderByActionDateDescCreatedAtDesc(employee.getId())
+                .stream()
+                .filter(action -> !Boolean.TRUE.equals(action.getDeleted()))
+                .filter(action -> action.getNewGrade() == grade)
+                .findFirst()
+                .orElseThrow()
+                .getId();
     }
 
     private EmployeeAction latest() {

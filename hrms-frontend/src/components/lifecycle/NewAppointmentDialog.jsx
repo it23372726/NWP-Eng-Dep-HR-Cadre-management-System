@@ -83,13 +83,19 @@ export default function NewAppointmentDialog({
         form.otherDepartmentName
     );
 
+    const keepsRecordedDate = Boolean(
+        initialAction?.actionDate
+        && form.appointmentDate === initialAction.actionDate
+    );
     const dateBeforeMinimum = Boolean(
-        previousEventDate
+        !keepsRecordedDate
+        && previousEventDate
         && form.appointmentDate
         && form.appointmentDate < previousEventDate
     );
     const dateAfterMaximum = Boolean(
-        maxDate
+        !keepsRecordedDate
+        && maxDate
         && form.appointmentDate
         && form.appointmentDate > maxDate
     );
@@ -144,8 +150,8 @@ export default function NewAppointmentDialog({
                             required
                             slotProps={{
                                 htmlInput: {
-                                    ...(previousEventDate ? { min: previousEventDate } : {}),
-                                    ...(maxDate ? { max: maxDate } : {})
+                                    ...(previousEventDate && !keepsRecordedDate ? { min: previousEventDate } : {}),
+                                    ...(maxDate && !keepsRecordedDate ? { max: maxDate } : {})
                                 }
                             }}
                             error={dateBeforeMinimum || dateAfterMaximum}

@@ -1,3 +1,4 @@
+import { isSupraExamPromotion, resolvePromotionGrade } from "../utils/supraPromotion";
 import {
     Alert,
     Box,
@@ -50,7 +51,8 @@ import {
 } from "../utils/employeeFormUtils";
 import {
     getCareerHistoryEventMinDate,
-    PROBATION_YEARS
+    PROBATION_YEARS,
+    getProbationTimelineState
 } from "../utils/gradeAchievementDates";
 import {
     combineMinDates,
@@ -242,6 +244,11 @@ export const deriveTimelineState = (events) => {
                     }
                     grade = event.grade;
                 }
+                if (event.actionType === "PROMOTION" && event.transferringOut && event.toDepartment) {
+                    currentDepartment = event.toDepartment;
+                    currentOffice = event.toOffice;
+                    currentDistrictOfWorking = applyNwpDistrict(event.toDepartment, event.toDistrict, currentDistrictOfWorking);
+                }
                 break;
             case "TRANSFER_IN":
                 if (event.toDepartment) {
@@ -342,6 +349,7 @@ export const deriveTimelineState = (events) => {
     });
 
     return {
+        ...getProbationTimelineState(events),
         designationId,
         recordedDesignationName,
         specialDesignationName,
@@ -392,6 +400,12 @@ const nextGradeOptions = (currentGrade, allowedGrades = []) => {
 
 const eventSummary = (event, designations, serviceLevels) => {
     const parts = [];
+    if (event.actionType === "SERVICE_APPOINTMENT") {
+        if (event.fromDepartment) parts.push(`From: ${[event.fromDepartment, event.fromOffice].filter(Boolean).join(" — ")}`);
+        if (event.appointmentBasis) parts.push(`Exam: ${event.appointmentBasis}`);
+        if (event.firstIncrementDueDate) parts.push(`First increment due: ${event.firstIncrementDueDate}`);
+    }
+    if (event.actionType === "PROMOTION" && event.appointmentBasis) parts.push(`Exam: ${event.appointmentBasis}`);
     if (event.specialDesignationName?.trim()) {
         parts.push(event.specialDesignationName.trim());
     } else if (event.recordedDesignationName) {
@@ -506,6 +520,9 @@ export default function CareerHistoryBuilder({
         if (state.grade === "III" && !state.permanentConfirmed) {
             types.push("PERMANENT_CONFIRMATION");
         }
+        if (serviceAppointmentsEnabled) {
+            types.push("SERVICE_APPOINTMENT");
+        }
         types.push("PROMOTION", "ASSIGNMENT_GRADE_UPDATE", "TRANSFER_OUT", "OFFICE_CHANGE");
         types.push(...TERMINAL_TYPES);
         return types;
@@ -539,6 +556,12 @@ export default function CareerHistoryBuilder({
         )) }
         : (eventDraftDesignation || currentDesignation);
 
+    const supraExamPromotion = eventDraft.actionType === "PROMOTION"
+        && isSupraExamPromotion(state.grade, eventDraftDesignation);
+    const effectiveEventGrade = resolvePromotionGrade(
+        eventDraft.actionType, state.grade, eventDraftDesignation, eventDraft.grade
+    );
+
     const firstDraftAssignmentError =
         (firstDraft.designationId || isOtherFirstDesignation)
         && firstDraft.serviceLevelId
@@ -560,7 +583,7 @@ export default function CareerHistoryBuilder({
         actionDate: eventDraft.actionDate,
         designationId: eventDraft.designationId,
         recordedDesignationName: eventDraft.recordedDesignationName,
-        grade: eventDraft.grade,
+        grade: effectiveEventGrade,
         serviceLevelId: eventDraft.serviceLevelId,
         serviceId: eventDraft.serviceId,
         timelineState: state,
@@ -573,7 +596,7 @@ export default function CareerHistoryBuilder({
     const previousEventDate = state.lastDate;
     const serviceMinDate = getCareerHistoryEventMinDate({
         actionType: eventDraft.actionType,
-        grade: eventDraft.grade,
+        grade: effectiveEventGrade,
         timelineState: state,
         designation: eventDraftDesignationForMinDate
     });
@@ -593,12 +616,12 @@ export default function CareerHistoryBuilder({
                 return eventDraftChronologyError;
             }
             if (eventDraft.actionType === "PERMANENT_CONFIRMATION") {
-                return `Confirmation date cannot be earlier than ${formatDisplayDate(eventDraftMinDate)} (${PROBATION_YEARS}-year probation).`;
+                return `Confirmation date cannot be earlier than ${formatDisplayDate(eventDraftMinDate)} (${state.probationYears ?? PROBATION_YEARS}-year probation).`;
             }
-            if (state.grade === "III" && eventDraft.grade === "II") {
+            if (state.grade === "III" && effectiveEventGrade === "II") {
                 return `Effective date cannot be earlier than ${formatDisplayDate(eventDraftMinDate)} (Grade II service period).`;
             }
-            if (state.grade === "II" && eventDraft.grade === "I") {
+            if (state.grade === "II" && effectiveEventGrade === "I") {
                 return `Effective date cannot be earlier than ${formatDisplayDate(eventDraftMinDate)} (Grade I service period).`;
             }
             return timelineMinDateHelperText(eventDraftMinDate, { tooEarly: true });
@@ -606,12 +629,12 @@ export default function CareerHistoryBuilder({
         if (eventDraftMinDate) {
             if (serviceMinDate && serviceMinDate === eventDraftMinDate) {
                 if (eventDraft.actionType === "PERMANENT_CONFIRMATION") {
-                    return `Earliest allowed: ${formatDisplayDate(eventDraftMinDate)} (${PROBATION_YEARS}-year probation).`;
+                    return `Earliest allowed: ${formatDisplayDate(eventDraftMinDate)} (${state.probationYears ?? PROBATION_YEARS}-year probation).`;
                 }
-                if (state.grade === "III" && eventDraft.grade === "II") {
+                if (state.grade === "III" && effectiveEventGrade === "II") {
                     return `Earliest allowed: ${formatDisplayDate(eventDraftMinDate)} (Grade II service period).`;
                 }
-                if (state.grade === "II" && eventDraft.grade === "I") {
+                if (state.grade === "II" && effectiveEventGrade === "I") {
                     return `Earliest allowed: ${formatDisplayDate(eventDraftMinDate)} (Grade I service period).`;
                 }
             }
@@ -654,6 +677,11 @@ export default function CareerHistoryBuilder({
 
     const handleEventDraftChange = (e) => {
         const { name, value } = e.target;
+        if (name === "actionType" && value === "SERVICE_APPOINTMENT") {
+            setAppointmentIndex(events.length);
+            setError("");
+            return;
+        }
         setEventDraft((prev) => {
             let next = { ...prev, [name]: value };
 
@@ -703,6 +731,10 @@ export default function CareerHistoryBuilder({
                 }
             }
 
+            const target = designations.find(d => d.id === Number(next.designationId));
+            if (name === "designationId" && next.grade === "Supra"
+                && !target?.allowedGrades?.includes("Supra")) next.grade = "";
+            next.grade = resolvePromotionGrade(next.actionType, state.grade, target, next.grade);
             return next;
         });
         setError("");
@@ -805,6 +837,8 @@ export default function CareerHistoryBuilder({
     };
 
     const validateEventDraft = () => {
+        if (supraExamPromotion && !eventDraft.appointmentBasis?.trim())
+            return "Enter the examination passed for the Supra promotion.";
         if (!eventDraft.actionType) {
             return "Select the event type";
         }
@@ -835,12 +869,11 @@ export default function CareerHistoryBuilder({
                 if (isOtherEventDesignation && !eventDraft.serviceLevelId) {
                     return "Promotion with a custom title requires a service level";
                 }
-                if (!eventDraft.grade) {
+                if (!effectiveEventGrade) {
                     return "Promotion requires the grade";
                 }
                 if (
-                    isPrimaryDepartment(state.currentDepartment)
-                    && eventDraft.promotionOutcome === "transferringOut"
+                    eventDraft.promotionOutcome === "transferringOut"
                 ) {
                     const promotionDestination = resolveDepartmentValue(
                         eventDraft.toDepartmentType,
@@ -852,7 +885,7 @@ export default function CareerHistoryBuilder({
                 }
                 break;
             case "ASSIGNMENT_GRADE_UPDATE":
-                if (!eventDraft.grade) {
+                if (!effectiveEventGrade) {
                     return "Grade update requires the new grade";
                 }
                 break;
@@ -919,7 +952,7 @@ export default function CareerHistoryBuilder({
             actionDate: eventDraft.actionDate,
             designationId: eventDraft.designationId,
             recordedDesignationName: eventDraft.recordedDesignationName,
-            grade: eventDraft.grade,
+            grade: effectiveEventGrade,
             serviceLevelId: eventDraft.serviceLevelId,
             serviceId: eventDraft.serviceId,
             timelineState: state,
@@ -961,6 +994,7 @@ export default function CareerHistoryBuilder({
 
         const event = {
             actionType: eventDraft.actionType,
+            appointmentBasis: supraExamPromotion ? eventDraft.appointmentBasis.trim() : null,
             actionDate: eventDraft.actionDate,
             designationId: eventDraft.designationId
                 && !isOtherEventDesignation
@@ -972,7 +1006,7 @@ export default function CareerHistoryBuilder({
             specialDesignationName: isOtherEventDesignation
                 ? null
                 : eventDraft.specialDesignationName?.trim() || null,
-            grade: eventDraft.grade || null,
+            grade: effectiveEventGrade || null,
             serviceLevelId: eventDraft.serviceLevelId
                 ? Number(eventDraft.serviceLevelId)
                 : null,
@@ -997,13 +1031,12 @@ export default function CareerHistoryBuilder({
                 }
                 : {}),
             ...(eventDraft.actionType === "PROMOTION"
-                && isPrimaryDepartment(state.currentDepartment)
                 && eventDraft.promotionOutcome === "transferringOut"
                 ? {
                     transferringOut: true,
                     toDepartment,
                     toOffice: eventDraft.toOffice.trim(),
-                    toDistrict: null
+                    toDistrict: isPrimaryDepartment(toDepartment) ? eventDraft.toDistrict : null
                 }
                 : {}),
             reason: eventDraft.reason?.trim() || null,
@@ -1087,8 +1120,7 @@ export default function CareerHistoryBuilder({
             : Boolean(eventDraft.designationId) && !isOtherEventDesignation;
     const showTransferDestination = draftType === "TRANSFER_OUT";
     const showPromotionOutcome =
-        draftType === "PROMOTION"
-        && isPrimaryDepartment(state.currentDepartment);
+        draftType === "PROMOTION";
     const promotionTransferringOut = eventDraft.promotionOutcome === "transferringOut";
     const showPromotionTransferDestination =
         showPromotionOutcome && promotionTransferringOut;
@@ -1098,6 +1130,13 @@ export default function CareerHistoryBuilder({
     const appointmentPrefix = appointmentIndex == null ? [] : events.slice(0, appointmentIndex);
     const appointmentState = deriveTimelineState(appointmentPrefix);
     const appointmentEmployee = {
+        dateOfFirstAppointment: appointmentState.firstAppointmentDate,
+        careerProgression: { permanentConfirmationDate: appointmentState.permanentConfirmationDate },
+        serviceAppointments: appointmentState.completedInitialProbation
+            ? appointmentPrefix.filter(e => e.actionType === "PERMANENT_CONFIRMATION").map(e => ({
+                startDate: getProbationTimelineState(appointmentPrefix.slice(0, appointmentPrefix.indexOf(e))).firstAppointmentDate,
+                permanentConfirmationDate: e.actionDate
+            })) : [],
         designation: designations.find(d => d.id === Number(appointmentState.designationId)),
         service: services.find(s => s.id === Number(appointmentState.serviceId)),
         recordedDesignationName: appointmentState.recordedDesignationName,
@@ -1354,7 +1393,6 @@ export default function CareerHistoryBuilder({
             {hasFirstAppointment && availableActionTypes.length > 0 && (
                 <Box>
                     <Divider sx={{ mb: 2 }} />
-                    {serviceAppointmentsEnabled && <Button variant="outlined" sx={{ mb: 2 }} onClick={() => setAppointmentIndex(events.length)}>Appointment to Another Service</Button>}
                     <Typography variant="body2" sx={{fontWeight: 600,  mb: 1.5 }}>
                         Add Career Event
                     </Typography>
@@ -1458,14 +1496,20 @@ export default function CareerHistoryBuilder({
                                 />
                             </Grid>
                         )}
-                        {showGradeField && (
+                        {supraExamPromotion && <Grid size={{ xs: 12, sm: 6 }}>
+                            <TextField {...fieldProps} onChange={handleEventDraftChange} label="Examination passed" name="appointmentBasis"
+                                value={eventDraft.appointmentBasis || ""} required
+                                slotProps={{ htmlInput: { maxLength: 255 } }}
+                                helperText="Entry grade is Supra for the selected designation." />
+                        </Grid>}
+                        {showGradeField && !supraExamPromotion && (
                             <Grid size={{ xs: 12, sm: 4 }}>
                                 <TextField
                                     {...selectFieldProps}
                                     onChange={handleEventDraftChange}
                                     label="Grade / Class"
                                     name="grade"
-                                    value={eventDraft.grade}
+                                    value={effectiveEventGrade}
                                     error={
                                         showGradeField
                                         && Boolean(eventDraftAssignmentError)
@@ -1525,7 +1569,7 @@ export default function CareerHistoryBuilder({
                                         <FormControlLabel
                                             value="staying"
                                             control={<Radio />}
-                                            label={`Stays in ${getPrimaryDepartmentName()}`}
+                                            label={`Stays in ${state.currentDepartment || "current department"}`}
                                         />
                                         <FormControlLabel
                                             value="transferringOut"
@@ -1542,7 +1586,7 @@ export default function CareerHistoryBuilder({
                                 otherDepartmentName={eventDraft.toOtherDepartmentName}
                                 district={eventDraft.toDistrict}
                                 office={eventDraft.toOffice}
-                                excludeNwpDepartment
+                                excludeNwpDepartment={isPrimaryDepartment(state.currentDepartment)}
                                 onDepartmentTypeChange={(value) =>
                                     setEventDraft((prev) => ({
                                         ...prev,

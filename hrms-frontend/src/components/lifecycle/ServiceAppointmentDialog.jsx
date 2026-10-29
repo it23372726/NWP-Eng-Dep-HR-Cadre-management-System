@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, Grid, MenuItem, Stack, TextField, Typography } from "@mui/material";
+import { Alert, FormControl, FormLabel, RadioGroup, FormControlLabel, Radio, Button, Dialog, DialogActions, DialogContent, DialogTitle, Grid, MenuItem, Stack, TextField, Typography } from "@mui/material";
 import DateInput from "../DateInput";
 import DepartmentOfficeFields, { parseDepartmentValue, resolveDepartmentValue } from "../workplace/DepartmentOfficeFields";
 import { getDesignations } from "../../services/designationService";
 import { getApiErrorMessage, isPrimaryDepartment } from "../../constants/hrms";
-import { getPermanentConfirmationMinDate } from "../../utils/gradeAchievementDates";
+import { getPermanentConfirmationMinDate, getServiceAppointmentProbationYears } from "../../utils/gradeAchievementDates";
 import {
     formatTimelineDate,
     minIsoDate,
@@ -21,7 +21,10 @@ export default function ServiceAppointmentDialog({ open, onClose, onSubmit, empl
         if (!open) return;
         let cancelled = false;
         const source = initialAction || {};
+        const sourceDepartment = source.fromDepartment || employee?.currentDepartment || "";
         setForm({
+            sourceDepartment,
+            outcome: source.department && source.department !== sourceDepartment ? "transfer" : "stay",
             newDesignationId: String(source.newDesignationId || source.designationId || ""),
             serviceId: String(source.serviceId || ""),
             appointmentDate: source.actionDate || "",
@@ -53,15 +56,23 @@ export default function ServiceAppointmentDialog({ open, onClose, onSubmit, empl
     const designationValue = designationOptions.some(d => String(d.id) === form.newDesignationId)
         ? form.newDesignationId : "";
     const unavailableSelection = designations.length > 0 && form.newDesignationId && !designationValue;
-    const department = resolveDepartmentValue(form.departmentType, form.otherDepartmentName);
+    const department = form.outcome === "stay" ? form.sourceDepartment : resolveDepartmentValue(form.departmentType, form.otherDepartmentName);
     const set = (name, value) => setForm(prev => ({ ...prev, [name]: value }));
-    const probationEnd = getPermanentConfirmationMinDate(form.appointmentDate);
+    const probationYears = getServiceAppointmentProbationYears(employee, form.appointmentDate);
+    const probationEnd = getPermanentConfirmationMinDate(form.appointmentDate, probationYears);
 
     const today = todayIsoDate();
-    const latestAllowedDate = minIsoDate(maxDate, minIsoDate(nextEventDate, today));
-    const dateTooEarly = Boolean(previousEventDate && form.appointmentDate
+    const keepsRecordedDate = Boolean(
+        initialAction?.actionDate
+        && form.appointmentDate === initialAction.actionDate
+    );
+    const latestAllowedDate = keepsRecordedDate
+        ? null
+        : minIsoDate(maxDate, minIsoDate(nextEventDate, today));
+    const dateTooEarly = Boolean(!keepsRecordedDate && previousEventDate && form.appointmentDate
         && form.appointmentDate < previousEventDate);
-    const dateTooLate = Boolean(form.appointmentDate && form.appointmentDate > latestAllowedDate);
+    const dateTooLate = Boolean(!keepsRecordedDate && latestAllowedDate
+        && form.appointmentDate && form.appointmentDate > latestAllowedDate);
     const dueBeforeAppointment = Boolean(form.firstIncrementDueDate && form.appointmentDate
         && form.firstIncrementDueDate < form.appointmentDate);
     const tooLateMessage = maxDateHelperText
@@ -85,10 +96,14 @@ export default function ServiceAppointmentDialog({ open, onClose, onSubmit, empl
             return setError("Enter the first increment due date from the appointment letter. It cannot precede the appointment.");
         if (!department || !form.office.trim() || (isPrimaryDepartment(department) && !form.district))
             return setError("Complete the department, office and working district.");
+        if (form.outcome === "transfer" && department.trim().toLowerCase() === form.sourceDepartment.trim().toLowerCase())
+            return setError("Choose another department, or select Stay in current department.");
         setSaving(true); setError("");
         try {
             await onSubmit({
                 expectedHistoryRevision: employee?.lifecycleHistoryRevision,
+                fromDepartment: form.sourceDepartment,
+                fromOffice: initialAction?.fromOffice || employee?.currentOffice || "",
                 newDesignationId: target.id, serviceLevelId: target.serviceLevel.id, serviceId: target.service.id,
                 appointmentDate: form.appointmentDate, grade: "III", appointmentBasis: form.appointmentBasis.trim(),
                 // The annual increment day is the month and day of the first due date from the letter.
@@ -105,7 +120,7 @@ export default function ServiceAppointmentDialog({ open, onClose, onSubmit, empl
         <DialogTitle>{initialAction ? "Revise appointment to another service" : "Appointment to Another Service"}</DialogTitle>
         <DialogContent dividers>
             <Stack spacing={2}>
-                <Alert severity="info">The employee starts at Grade III with a fresh three-year probation. Previous service history and recorded increments are preserved.</Alert>
+                <Alert severity="info">The employee starts at Grade III with a {probationYears}-year probation. A previously completed and confirmed three-year probation qualifies for one year in the new service. Previous service history and recorded increments are preserved.</Alert>
                 <Grid container spacing={2}>
                     <Grid size={{ xs: 12, sm: 6 }}><TextField select fullWidth size="small" label="New service" value={serviceValue}
                         onChange={e => setForm(p => ({ ...p, serviceId: e.target.value, newDesignationId: "" }))}>
@@ -133,7 +148,32 @@ export default function ServiceAppointmentDialog({ open, onClose, onSubmit, empl
                                 ? `Annual increment falls on ${form.firstIncrementDueDate.slice(5)} from now on`
                                 : "From the appointment letter; sets the annual increment day"}
                         onChange={e => set("firstIncrementDueDate", e.target.value)} /></Grid>
-                    <DepartmentOfficeFields departmentType={form.departmentType} otherDepartmentName={form.otherDepartmentName || ""}
+                    <Grid size={12}>
+                        <FormControl component="fieldset">
+                            <FormLabel component="legend">Appointment outcome</FormLabel>
+                            <RadioGroup value={form.outcome} onChange={e => {
+                                const outcome = e.target.value;
+                                setForm(p => ({ ...p, outcome,
+                                    ...parseDepartmentValue(outcome === "stay" ? p.sourceDepartment : ""),
+                                    office: outcome === "stay" ? (initialAction?.fromOffice || employee?.currentOffice || "") : "",
+                                    district: outcome === "stay" ? (employee?.currentDistrictOfWorking?.label || employee?.currentDistrictOfWorking || "") : ""
+                                }));
+                            }}>
+                                <FormControlLabel value="stay" control={<Radio />} label={`Stay in ${form.sourceDepartment} and appoint to another service`} />
+                                <FormControlLabel value="transfer" control={<Radio />} label="Transfer to another department and appoint to another service" />
+                            </RadioGroup>
+                        </FormControl>
+                        <Alert severity="info" sx={{ mt: 1 }}>
+                            {isPrimaryDepartment(form.sourceDepartment)
+                                ? form.outcome === "stay"
+                                    ? "Cadre report: Service Appointment OUT on the old designation and Service Appointment IN on the new designation."
+                                    : "Cadre report: Service Appointment OUT and Transfer Out on the old designation."
+                                : form.outcome === "transfer" && isPrimaryDepartment(department)
+                                    ? "Cadre report: Transfer In on the new designation only."
+                                    : "This appointment does not affect the main department cadre report."}
+                        </Alert>
+                    </Grid>
+                    <DepartmentOfficeFields departmentReadOnly={form.outcome === "stay"} departmentType={form.departmentType} otherDepartmentName={form.otherDepartmentName || ""}
                         district={form.district} office={form.office}
                         onDepartmentTypeChange={v => setForm(p => ({ ...p, departmentType: v, district: "", office: "" }))}
                         onOtherDepartmentNameChange={v => set("otherDepartmentName", v)} onDistrictChange={v => setForm(p => ({ ...p, district: v, office: "" }))}

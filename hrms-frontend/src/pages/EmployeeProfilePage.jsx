@@ -41,6 +41,9 @@ import {
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
+import api from "../api/axios";
+import { logout } from "../services/authService";
+import { clearAuthData } from "../utils/tokenUtils";
 
 import { getEmployeeById, saveEmployeePhoto, updateEmployee, getVehiclePermitStatus, recordVehiclePermitCollection, updateVehiclePermitCollection, undoVehiclePermitCollection, downloadEmployeeSummaryPdf, downloadEmployeeDependentDetailsPdf } from "../services/employeeService";
 import { triggerDownload } from "../services/allEmployeeDetailsReportService";
@@ -114,24 +117,7 @@ import {
 } from "../services/salaryIncrementService";
 import { resolveEmployeeListReturnTo } from "../utils/employeeListReturnNavigation";
 
-const getThreeYearRequirementDate = (dateOfFirstAppointment) => {
-    if (!dateOfFirstAppointment) {
-        return null;
-    }
-
-    const date = new Date(dateOfFirstAppointment);
-    date.setFullYear(date.getFullYear() + 3);
-    return date.toISOString().split("T")[0];
-};
-
-const hasCompletedThreeYears = (dateOfFirstAppointment) => {
-    const requirementDate = getThreeYearRequirementDate(dateOfFirstAppointment);
-    if (!requirementDate) {
-        return false;
-    }
-
-    return new Date() >= new Date(`${requirementDate}T00:00:00`);
-};
+import { getEmployeeProbationMinDate, hasCompletedProbationYears } from "../utils/gradeAchievementDates";
 
 const meetsGradeThreePermanentRequirements = (employee) => {
     if (employee?.employmentType !== "PERMANENT" || employee?.grade !== "III") {
@@ -149,7 +135,7 @@ const meetsGradeThreePermanentRequirements = (employee) => {
     );
 
     return configuredComplete
-        && hasCompletedThreeYears(employee.dateOfFirstAppointment);
+        && hasCompletedProbationYears(employee);
 };
 
 function ProfileQuickFact({ icon, label, value }) {
@@ -191,7 +177,8 @@ export default function EmployeeProfilePage() {
     const employeeReturnTo = resolveEmployeeListReturnTo(
         location.state?.employeeListOrigin
     );
-    const canEdit = canEditEmployees(getStoredUser());
+    const isEmployeePortal = getStoredUser()?.role === "EMPLOYEE";
+    const canEdit = !isEmployeePortal && canEditEmployees(getStoredUser());
 
     const [employee, setEmployee] = useState(null);
     const [actionHistory, setActionHistory] = useState([]);
@@ -250,14 +237,18 @@ export default function EmployeeProfilePage() {
         try {
             // Load employee first: GET /employees/{id} syncs/saves on the backend.
             // Parallel /actions used to call the same write path and race → 400 on first open.
-            const selectedEmployee = await getEmployeeById(id);
-            const actions = await getEmployeeActions(id);
+            const selectedEmployee = isEmployeePortal
+                ? (await api.get("/employee-portal/profile")).data
+                : await getEmployeeById(id);
+            const actions = isEmployeePortal
+                ? (await api.get("/employee-portal/history")).data
+                : await getEmployeeActions(id);
 
             setEmployee(selectedEmployee);
             setActionHistory(actions);
 
             try {
-                const designationsData = await getDesignations();
+                const designationsData = isEmployeePortal ? [] : await getDesignations();
                 setDesignations(designationsData);
             } catch {
                 setDesignations([]);
@@ -440,7 +431,7 @@ export default function EmployeeProfilePage() {
         }
     };
 
-    const handleRecordSalaryIncrement = async (doneDate, { catchUpToCurrentYear = false } = {}) => {
+    const handleRecordSalaryIncrement = async (doneDate, { catchUpToCurrentYear = false, catchUpThroughYear } = {}) => {
         if (recordingSalaryIncrement) {
             return;
         }
@@ -448,14 +439,14 @@ export default function EmployeeProfilePage() {
         setRecordingSalaryIncrement(true);
         try {
             const status = await recordSalaryIncrement(employee.id, doneDate, {
-                catchUpToCurrentYear,
+                catchUpToCurrentYear, catchUpThroughYear,
                 expectedLastOperationId: salaryIncrementStatus?.lastOperationId,
                 serviceAppointmentKey: salaryAppointmentKey || undefined
             });
             setSalaryIncrementStatus(status);
             toast.success(
                 catchUpToCurrentYear
-                    ? "Salary increments caught up through current year"
+                    ? `Salary increments recorded through ${catchUpThroughYear || "the latest due year"}`
                     : "Salary increment recorded"
             );
             setOpenRecordSalaryIncrement(false);
@@ -540,9 +531,7 @@ export default function EmployeeProfilePage() {
         meetsGradeThreePermanentRequirements(employee)
         && employee.careerProgression?.qualifiedForPermanent
         && employee.permanentStatus !== "PERMANENT";
-    const threeYearDate = getThreeYearRequirementDate(
-        employee.dateOfFirstAppointment
-    );
+    const threeYearDate = getEmployeeProbationMinDate(employee);
     const previousEventDate = getLatestEventDate(actionHistory);
     const salaryPeriod = employee.serviceAppointments?.find(p => p.appointmentKey === salaryAppointmentKey);
     const salaryEmployee = salaryPeriod ? { ...employee, incremantDate: salaryPeriod.incrementDate,
@@ -555,20 +544,32 @@ export default function EmployeeProfilePage() {
         : "View Qualifications";
 
     return (
-        <Box>
-            <Button
+        <Box sx={isEmployeePortal ? { maxWidth: 1360, mx: "auto", px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 4 }, minHeight: "100dvh" } : undefined}>
+            {isEmployeePortal ? <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", gap: 2, mb: 3 }}>
+                <Box>
+                    <Typography variant="overline" color="primary.main" sx={{ fontWeight: 800, letterSpacing: "0.12em" }}>EMPLOYEE PORTAL</Typography>
+                    <Typography variant="body2" color="text.secondary">Your service record, in one place.</Typography>
+                </Box>
+                <Button variant="outlined" size="small" sx={{ flexShrink: 0, borderRadius: 2 }} onClick={async () => {
+                try { await logout(); } catch { /* Always clear the local session. */ }
+                finally { clearAuthData(); navigate("/", { replace: true }); }
+            }}>Sign out</Button></Stack> : <Button
                 size="small"
                 startIcon={<ArrowBackIcon />}
                 onClick={() => navigate(employeeReturnTo)}
                 sx={{ mb: 1.25, color: "text.secondary" }}
             >
                 Back to employees
-            </Button>
+            </Button>}
             <Paper
                 variant="outlined"
                 sx={{
-                    p: { xs: 2, sm: 2.5 },
-                    mb: 2.5,
+                    p: { xs: 2.5, sm: 4 },
+                    borderRadius: "20px",
+                    borderTop: "4px solid",
+                    borderTopColor: "primary.main",
+                    boxShadow: "0 8px 32px rgba(20, 45, 70, 0.045)",
+                    mb: 3,
                     overflow: "hidden",
                     position: "relative",
                     background: (theme) =>
@@ -597,7 +598,7 @@ export default function EmployeeProfilePage() {
                     gap: 2
                 }}
             >
-                <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
+                <Stack direction="row" spacing={2} sx={{ alignItems: "center", minWidth: 0, flex: { xs: "0 1 auto", sm: "1 1 280px" } }}>
                     <Box
                         sx={{
                             p: 0.5,
@@ -617,7 +618,7 @@ export default function EmployeeProfilePage() {
                             spacing={1}
                             sx={{ alignItems: { xs: "flex-start", sm: "center" } }}
                         >
-                            <Typography variant="h4" sx={{ overflowWrap: "anywhere" }}>
+                            <Typography component="h1" variant="h4" sx={{ overflowWrap: "anywhere", fontSize: { xs: "1.4rem", sm: "1.9rem" }, letterSpacing: "-0.025em", lineHeight: 1.25 }}>
                                 {employee.fullName}
                             </Typography>
                             <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: "wrap" }}>
@@ -961,10 +962,11 @@ export default function EmployeeProfilePage() {
                 variant="outlined"
                 sx={{
                     mb: 2.5,
-                    px: { xs: 0.5, sm: 1 },
+                    px: 0.75,
+                    borderRadius: "14px",
                     overflow: "hidden",
                     position: { md: "sticky" },
-                    top: { md: 72 },
+                    top: { md: isEmployeePortal ? 16 : 72 },
                     zIndex: 4,
                     bgcolor: (theme) => theme.palette.background.paper
                 }}
@@ -972,9 +974,16 @@ export default function EmployeeProfilePage() {
                 <Tabs
                     value={activeTab}
                     onChange={(_, value) => setActiveTab(value)}
-                    variant="scrollable"
-                    scrollButtons="auto"
+                    variant="standard"
+                    scrollButtons={false}
                     aria-label="Employee profile sections"
+                    sx={{
+                        py: 0.75,
+                        "& .MuiTabs-list": { display: "grid", gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", sm: "repeat(auto-fit, minmax(150px, 1fr))" }, gap: 0.75 },
+                        "& .MuiTabs-indicator": { display: "none" },
+                        "& .MuiTab-root": { minWidth: 0, maxWidth: "none", minHeight: 50, px: { xs: 1, sm: 2 }, borderRadius: "10px", textTransform: "none", fontWeight: 650, fontSize: "0.85rem" },
+                        "& .MuiTab-root.Mui-selected": { bgcolor: "primary.main", color: "primary.contrastText", boxShadow: "0 3px 8px rgba(20, 60, 100, 0.15)" }
+                    }}
                 >
                     <Tab
                         icon={<BadgeIcon fontSize="small" />}

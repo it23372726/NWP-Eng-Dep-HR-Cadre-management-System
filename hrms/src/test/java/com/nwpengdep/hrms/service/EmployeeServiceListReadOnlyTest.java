@@ -68,7 +68,7 @@ class EmployeeServiceListReadOnlyTest {
                 mock(OfficeService.class),
                 new EmployeeServiceResolver(),
                 mock(TrainingGraduationService.class)
-        , mock(ServiceAppointmentService.class));
+        , mock(ServiceAppointmentService.class), mock(SalaryIncrementService.class));
     }
 
     @Test

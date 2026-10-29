@@ -1,3 +1,4 @@
+import { isSupraExamPromotion } from "./supraPromotion.js";
 const addYears = (date, years) => {
     if (!date) {
         return null;
@@ -14,13 +15,50 @@ export const normalizeRequiredYears = (years) =>
 
 export const PROBATION_YEARS = 3;
 
-export const getPermanentConfirmationMinDate = (firstAppointmentDate) =>
-    addYears(firstAppointmentDate, PROBATION_YEARS);
+export const getPermanentConfirmationMinDate = (firstAppointmentDate, years = PROBATION_YEARS) =>
+    addYears(firstAppointmentDate, years);
+
+export const completedInitialProbation = (start, confirmation) =>
+    Boolean(start && confirmation && confirmation >= addYears(start, PROBATION_YEARS));
+
+export const getServiceAppointmentProbationYears = (employee, appointmentDate) => {
+    if (!appointmentDate) return PROBATION_YEARS;
+    const periods = (employee?.serviceAppointments ?? []).filter(p => !p.superseded && !p.archivedSnapshot);
+    const candidates = [...periods, { startDate: employee?.dateOfFirstAppointment,
+        permanentConfirmationDate: employee?.careerProgression?.permanentConfirmationDate }];
+    return candidates.some(p => p.startDate < appointmentDate
+        && p.permanentConfirmationDate <= appointmentDate
+        && completedInitialProbation(p.startDate, p.permanentConfirmationDate)) ? 1 : PROBATION_YEARS;
+};
+
+export const getEmployeeProbationMinDate = (employee) => employee?.probationEndDate ?? getPermanentConfirmationMinDate(
+    employee?.dateOfFirstAppointment,
+    employee?.currentServiceAppointmentKey && employee.currentServiceAppointmentKey !== "INITIAL"
+        ? getServiceAppointmentProbationYears(employee, employee.dateOfFirstAppointment) : PROBATION_YEARS
+);
+
+// Replay only the supplied historical prefix; later confirmations cannot qualify an earlier appointment.
+export const getProbationTimelineState = (events = []) => {
+    let firstAppointmentDate = null;
+    let completed = false;
+    let probationYears = PROBATION_YEARS;
+    for (const event of events) {
+        if (event.deleted) continue;
+        if (event.actionType === "SERVICE_APPOINTMENT") {
+            probationYears = completed ? 1 : PROBATION_YEARS;
+            firstAppointmentDate = event.actionDate;
+        } else if (event.actionType === "NEW_APPOINTMENT" || event.trainingGraduation) {
+            firstAppointmentDate = event.actionDate;
+            probationYears = PROBATION_YEARS;
+        } else if (event.actionType === "PERMANENT_CONFIRMATION") {
+            completed ||= completedInitialProbation(firstAppointmentDate, event.actionDate);
+        }
+    }
+    return { probationYears, completedInitialProbation: completed, firstAppointmentDate };
+};
 
 export function hasCompletedProbationYears(employee) {
-    const minDate = getPermanentConfirmationMinDate(
-        employee?.dateOfFirstAppointment
-    );
+    const minDate = getEmployeeProbationMinDate(employee);
     if (!minDate) {
         return false;
     }
@@ -64,8 +102,10 @@ export const getCareerHistoryEventMinDate = ({
     timelineState,
     designation
 }) => {
+    if (actionType === "PROMOTION" && grade === "Supra"
+        && isSupraExamPromotion(timelineState?.grade, designation)) return null;
     if (actionType === "PERMANENT_CONFIRMATION") {
-        return getPermanentConfirmationMinDate(timelineState?.firstAppointmentDate);
+        return getPermanentConfirmationMinDate(timelineState?.firstAppointmentDate, timelineState?.probationYears);
     }
 
     const currentGrade = timelineState?.grade;

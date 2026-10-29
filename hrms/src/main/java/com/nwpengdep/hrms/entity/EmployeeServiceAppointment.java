@@ -49,4 +49,11 @@ public class EmployeeServiceAppointment {
     @CollectionTable(name = "service_appointment_requirements", joinColumns = @JoinColumn(name = "appointment_id"))
     @OrderColumn(name = "requirement_order")
     private List<ServiceAppointmentRequirement> requirements = new ArrayList<>();
+    /** Derive existing periods too, so the rule change needs no destructive history migration. */
+    public LocalDate getProbationEndDate() {
+        if (employee == null || startDate == null || appointmentKey == null
+                || "INITIAL".equals(appointmentKey) || archivedSnapshot) return probationEndDate;
+        return startDate.plusYears(com.nwpengdep.hrms.service.ProbationPolicy
+                .yearsForAppointment(employee, appointmentKey, startDate));
+    }
 }

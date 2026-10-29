@@ -1,7 +1,9 @@
 package com.nwpengdep.hrms.service;
 
 import java.time.LocalDate;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.stereotype.Component;
 
@@ -26,10 +28,32 @@ public class CareerHistoryValidator {
     private final CareerProgressionService careerProgressionService;
     private final OfficeService officeService;
 
+    /**
+     * A promotion already stored with this date and the same base date.
+     * Raising the service year count later must not reject that row.
+     * A new date, or a change to the date it is counted from, is checked again.
+     */
+    private record ServiceYearGrant(
+            LocalDate actionDate,
+            Grade fromGrade,
+            Grade toGrade,
+            LocalDate baseDate
+    ) {
+    }
+
     public void validate(List<CareerHistoryEventRequest> events) {
+        validate(events, null);
+    }
+
+    public void validate(
+            List<CareerHistoryEventRequest> events,
+            List<CareerHistoryEventRequest> recordedEvents
+    ) {
         if (events == null || events.isEmpty()) {
             return;
         }
+
+        Set<ServiceYearGrant> recordedGrants = collectServiceYearGrants(recordedEvents);
 
         CareerHistoryEventRequest first = events.getFirst();
         if (first.getActionType() != EmployeeActionType.NEW_APPOINTMENT) {
@@ -41,6 +65,8 @@ public class CareerHistoryValidator {
         LocalDate today = LocalDate.now();
         LocalDate previousDate = null;
         LocalDate firstAppointmentDate = null;
+        boolean completedInitialProbation = false;
+        int probationYears = ProbationPolicy.INITIAL_YEARS;
         LocalDate grade2AchievedDate = null;
         LocalDate grade1AchievedDate = null;
         Designation currentDesignation = null;
@@ -99,6 +125,7 @@ public class CareerHistoryValidator {
 
             switch (event.getActionType()) {
                 case SERVICE_APPOINTMENT -> {
+                    probationYears = completedInitialProbation ? ProbationPolicy.SUBSEQUENT_YEARS : ProbationPolicy.INITIAL_YEARS;
                     requireActive(active, position, "Appointment to another service");
                     if (event.getGrade() != null && event.getGrade() != Grade.III)
                         throw new IllegalArgumentException("Appointment to another service must start at Grade III");
@@ -196,8 +223,11 @@ public class CareerHistoryValidator {
                     validatePermanentConfirmationDate(
                             event.getActionDate(),
                             firstAppointmentDate,
-                            position
+                            probationYears,
+                            position,
+                            recordedGrants
                     );
+                    completedInitialProbation |= ProbationPolicy.completedInitialProbation(firstAppointmentDate, event.getActionDate());
                     permanentConfirmed = true;
                 }
 
@@ -215,12 +245,26 @@ public class CareerHistoryValidator {
                                 "Promotion (event #" + position + ") must include the grade"
                         );
                     }
-                    validateGradeStep(
-                            currentGrade,
-                            event.getGrade(),
-                            resolveService(currentServiceId, position),
-                            position
-                    );
+                    boolean supraExamPromotion = event.getGrade() == Grade.SUPRA
+                            && hasCatalogDesignation(event)
+                            && SupraPromotionPolicy.isSupraOnly(resolveDesignation(event.getDesignationId(), position))
+                            && SupraPromotionPolicy.isEntryGrade(currentGrade);
+                    if (supraExamPromotion) {
+                        boolean unchangedLegacyExam = event.getAppointmentBasis() == null && recordedEvents != null
+                                && recordedEvents.stream().anyMatch(recorded ->
+                                    recorded.getActionType() == EmployeeActionType.PROMOTION
+                                    && recorded.getGrade() == Grade.SUPRA && recorded.getAppointmentBasis() == null
+                                    && java.util.Objects.equals(recorded.getActionDate(), event.getActionDate())
+                                    && java.util.Objects.equals(recorded.getDesignationId(), event.getDesignationId()));
+                        if (!unchangedLegacyExam) SupraPromotionPolicy.validateExam(event.getAppointmentBasis());
+                    } else {
+                        validateGradeStep(
+                                currentGrade,
+                                event.getGrade(),
+                                resolveService(currentServiceId, position),
+                                position
+                        );
+                    }
 
                     ServiceType currentService = resolveService(currentServiceId, position);
                     if (hasCatalogDesignation(event)) {
@@ -230,16 +274,19 @@ public class CareerHistoryValidator {
                                 target.getService() != null ? target.getService().getId() : null,
                                 position
                         );
-                        validateGradePromotionDate(
-                                currentGrade,
-                                event.getGrade(),
-                                event.getActionDate(),
-                                firstAppointmentDate,
-                                grade2AchievedDate,
-                                grade1AchievedDate,
-                                target,
-                                position
-                        );
+                        if (!supraExamPromotion) {
+                            validateGradePromotionDate(
+                                    currentGrade,
+                                    event.getGrade(),
+                                    event.getActionDate(),
+                                    firstAppointmentDate,
+                                    grade2AchievedDate,
+                                    grade1AchievedDate,
+                                    target,
+                                    position,
+                                    recordedGrants
+                            );
+                        }
                         currentDesignation = target;
                         currentRecordedDesignationName = null;
                         currentServiceId = target.getService() != null
@@ -260,7 +307,8 @@ public class CareerHistoryValidator {
                                 grade2AchievedDate,
                                 grade1AchievedDate,
                                 currentService,
-                                position
+                                position,
+                                recordedGrants
                         );
                         currentDesignation = null;
                         currentRecordedDesignationName =
@@ -295,13 +343,7 @@ public class CareerHistoryValidator {
                     }
 
                     if (Boolean.TRUE.equals(event.getTransferringOut())) {
-                        if (!DepartmentConstants.isNwpEngineering(currentDepartment)) {
-                            throw new RuntimeException(
-                                    "Transfer out on promotion (event #" + position
-                                            + ") is only available from "
-                                            + DepartmentConstants.NWP_ENGINEERING
-                            );
-                        }
+
                         if (event.getToDepartment() == null || event.getToDepartment().isBlank()) {
                             throw new RuntimeException(
                                     "Transfer out on promotion (event #" + position
@@ -317,13 +359,15 @@ public class CareerHistoryValidator {
                         String destination = DepartmentConstants.normalize(
                                 event.getToDepartment().trim()
                         );
-                        if (DepartmentConstants.isNwpEngineering(destination)) {
+                        if (java.util.Objects.equals(DepartmentConstants.normalize(currentDepartment), destination)) {
                             throw new RuntimeException(
                                     "Promotion (event #" + position
                                             + ") cannot transfer out to "
                                             + DepartmentConstants.NWP_ENGINEERING
                             );
                         }
+                        officeService.validateNwpWorkplaceIfNwp(destination, event.getToOffice(), event.getToDistrict());
+                        currentDistrict = DepartmentConstants.isNwpEngineering(destination) ? event.getToDistrict() : null;
                         currentDepartment = destination;
                         currentOffice = event.getToOffice().trim();
                     }
@@ -359,7 +403,8 @@ public class CareerHistoryValidator {
                                 grade2AchievedDate,
                                 grade1AchievedDate,
                                 target,
-                                position
+                                position,
+                                recordedGrants
                         );
                     } else if (isCustomDesignationEvent(event)) {
                         currentDesignation = null;
@@ -373,7 +418,8 @@ public class CareerHistoryValidator {
                                 grade2AchievedDate,
                                 grade1AchievedDate,
                                 currentService,
-                                position
+                                position,
+                                recordedGrants
                         );
                     } else if (currentDesignation != null) {
                         validateGradePromotionDate(
@@ -384,7 +430,8 @@ public class CareerHistoryValidator {
                                 grade2AchievedDate,
                                 grade1AchievedDate,
                                 currentDesignation,
-                                position
+                                position,
+                                recordedGrants
                         );
                     } else {
                         validateGradePromotionDate(
@@ -395,7 +442,8 @@ public class CareerHistoryValidator {
                                 grade2AchievedDate,
                                 grade1AchievedDate,
                                 currentService,
-                                position
+                                position,
+                                recordedGrants
                         );
                     }
                     validateGradeStep(
@@ -617,17 +665,27 @@ public class CareerHistoryValidator {
     private void validatePermanentConfirmationDate(
             LocalDate confirmationDate,
             LocalDate firstAppointmentDate,
-            int position
+            int probationYears,
+            int position,
+            Set<ServiceYearGrant> recordedGrants
     ) {
-        LocalDate minimumDate = careerProgressionService
-                .getMinimumPermanentConfirmationDate(firstAppointmentDate);
+        if (serviceYearRecorded(
+                recordedGrants,
+                confirmationDate,
+                Grade.III,
+                null,
+                firstAppointmentDate
+        )) {
+            return;
+        }
+        LocalDate minimumDate = firstAppointmentDate == null ? null : firstAppointmentDate.plusYears(probationYears);
         if (minimumDate != null && confirmationDate.isBefore(minimumDate)) {
             throw new RuntimeException(
                     "Permanent confirmation (event #" + position
                             + ") cannot be earlier than "
                             + minimumDate
                             + ". The employee must complete the "
-                            + CareerProgressionService.PROBATION_YEARS
+                            + probationYears
                             + "-year probation period from the first appointment date."
             );
         }
@@ -641,7 +699,8 @@ public class CareerHistoryValidator {
             LocalDate grade2AchievedDate,
             LocalDate grade1AchievedDate,
             Designation designation,
-            int position
+            int position,
+            Set<ServiceYearGrant> recordedGrants
     ) {
         validateGradePromotionDate(
                 currentGrade,
@@ -651,7 +710,8 @@ public class CareerHistoryValidator {
                 grade2AchievedDate,
                 grade1AchievedDate,
                 designation != null ? designation.getService() : null,
-                position
+                position,
+                recordedGrants
         );
     }
 
@@ -663,9 +723,19 @@ public class CareerHistoryValidator {
             LocalDate grade2AchievedDate,
             LocalDate grade1AchievedDate,
             ServiceType service,
-            int position
+            int position,
+            Set<ServiceYearGrant> recordedGrants
     ) {
         if (currentGrade == Grade.III && newGrade == Grade.II) {
+            if (serviceYearRecorded(
+                    recordedGrants,
+                    actionDate,
+                    currentGrade,
+                    newGrade,
+                    firstAppointmentDate
+            )) {
+                return;
+            }
             LocalDate minimumDate = careerProgressionService
                     .getMinimumGrade2PromotionDate(firstAppointmentDate, service);
             if (minimumDate != null && actionDate.isBefore(minimumDate)) {
@@ -686,6 +756,15 @@ public class CareerHistoryValidator {
                         "Career history event #" + position
                                 + " requires a prior Grade II achievement date"
                 );
+            }
+            if (serviceYearRecorded(
+                    recordedGrants,
+                    actionDate,
+                    currentGrade,
+                    newGrade,
+                    grade2AchievedDate
+            )) {
+                return;
             }
             LocalDate minimumDate = careerProgressionService
                     .getMinimumGrade1PromotionDate(grade2AchievedDate, service);
@@ -708,6 +787,15 @@ public class CareerHistoryValidator {
                                 + " requires a prior Grade I achievement date"
                 );
             }
+            if (serviceYearRecorded(
+                    recordedGrants,
+                    actionDate,
+                    currentGrade,
+                    newGrade,
+                    grade1AchievedDate
+            )) {
+                return;
+            }
             LocalDate minimumDate = careerProgressionService
                     .getMinimumSupraPromotionDate(grade1AchievedDate, service);
             if (minimumDate != null && actionDate.isBefore(minimumDate)) {
@@ -729,6 +817,15 @@ public class CareerHistoryValidator {
                                 + " requires a prior Grade I achievement date"
                 );
             }
+            if (serviceYearRecorded(
+                    recordedGrants,
+                    actionDate,
+                    currentGrade,
+                    newGrade,
+                    grade1AchievedDate
+            )) {
+                return;
+            }
             LocalDate minimumDate = careerProgressionService
                     .getMinimumSpecialPromotionDate(grade1AchievedDate, service);
             if (minimumDate != null && actionDate.isBefore(minimumDate)) {
@@ -741,6 +838,113 @@ public class CareerHistoryValidator {
                 );
             }
         }
+    }
+
+    private boolean serviceYearRecorded(
+            Set<ServiceYearGrant> recordedGrants,
+            LocalDate actionDate,
+            Grade fromGrade,
+            Grade toGrade,
+            LocalDate baseDate
+    ) {
+        if (recordedGrants == null || recordedGrants.isEmpty()
+                || actionDate == null || baseDate == null) {
+            return false;
+        }
+        return recordedGrants.contains(new ServiceYearGrant(
+                actionDate,
+                fromGrade,
+                toGrade,
+                baseDate
+        ));
+    }
+
+    private Set<ServiceYearGrant> collectServiceYearGrants(
+            List<CareerHistoryEventRequest> events
+    ) {
+        if (events == null || events.isEmpty()) {
+            return Set.of();
+        }
+
+        Set<ServiceYearGrant> grants = new HashSet<>();
+        LocalDate firstAppointmentDate = null;
+        LocalDate grade2AchievedDate = null;
+        LocalDate grade1AchievedDate = null;
+        Grade currentGrade = null;
+
+        for (CareerHistoryEventRequest event : events) {
+            if (event == null || event.getActionType() == null || event.getActionDate() == null) {
+                continue;
+            }
+            switch (event.getActionType()) {
+                case SERVICE_APPOINTMENT -> {
+                    firstAppointmentDate = event.getActionDate();
+                    grade2AchievedDate = null;
+                    grade1AchievedDate = null;
+                    currentGrade = Grade.III;
+                }
+                case NEW_APPOINTMENT -> {
+                    firstAppointmentDate = event.getActionDate();
+                    currentGrade = event.getGrade() != null ? event.getGrade() : Grade.III;
+                }
+                case PERMANENT_CONFIRMATION -> grants.add(new ServiceYearGrant(
+                        event.getActionDate(),
+                        Grade.III,
+                        null,
+                        firstAppointmentDate
+                ));
+                case PROMOTION, ASSIGNMENT_GRADE_UPDATE -> {
+                    Grade nextGrade = event.getGrade();
+                    LocalDate baseDate = serviceYearBaseDate(
+                            currentGrade,
+                            nextGrade,
+                            firstAppointmentDate,
+                            grade2AchievedDate,
+                            grade1AchievedDate
+                    );
+                    if (baseDate != null && nextGrade != null) {
+                        grants.add(new ServiceYearGrant(
+                                event.getActionDate(),
+                                currentGrade,
+                                nextGrade,
+                                baseDate
+                        ));
+                    }
+                    if (nextGrade == Grade.II && grade2AchievedDate == null) {
+                        grade2AchievedDate = event.getActionDate();
+                    }
+                    if (nextGrade == Grade.I && grade1AchievedDate == null) {
+                        grade1AchievedDate = event.getActionDate();
+                    }
+                    if (nextGrade != null) {
+                        currentGrade = nextGrade;
+                    }
+                }
+                default -> {
+                }
+            }
+        }
+        return grants;
+    }
+
+    private LocalDate serviceYearBaseDate(
+            Grade currentGrade,
+            Grade newGrade,
+            LocalDate firstAppointmentDate,
+            LocalDate grade2AchievedDate,
+            LocalDate grade1AchievedDate
+    ) {
+        if (currentGrade == Grade.III && newGrade == Grade.II) {
+            return firstAppointmentDate;
+        }
+        if (currentGrade == Grade.II && newGrade == Grade.I) {
+            return grade2AchievedDate;
+        }
+        if (currentGrade == Grade.I
+                && (newGrade == Grade.SUPRA || newGrade == Grade.SPECIAL)) {
+            return grade1AchievedDate;
+        }
+        return null;
     }
 
     private void requireTimelineWorkplace(

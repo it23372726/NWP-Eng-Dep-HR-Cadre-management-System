@@ -8,6 +8,8 @@ import {
     Paper,
     Stack,
     TextField,
+    Tabs,
+    Tab,
     Typography
 } from "@mui/material";
 import CheckCircleOutlineRoundedIcon from "@mui/icons-material/CheckCircleOutlineRounded";
@@ -19,7 +21,7 @@ import { getDefaultRouteForUser } from "../constants/permissions";
 import { useOrganizationSettings } from "../context/OrganizationSettingsContext";
 import OrganizationLogo from "../components/OrganizationLogo";
 import { setStoredUser } from "../hooks/useAuth";
-import { login } from "../services/authService";
+import { login, employeeLogin } from "../services/authService";
 import { generateCorrelationId } from "../utils/tokenUtils";
 
 const FEATURE_ITEMS = [
@@ -42,6 +44,8 @@ export default function LoginPage() {
         password: "",
         workstation: localStorage.getItem("clientHost") || ""
     });
+    const [loginMode, setLoginMode] = useState("staff");
+    const isEmployeeLogin = loginMode === "employee";
     const [submitting, setSubmitting] = useState(false);
     const [errorMessage, setErrorMessage] = useState("");
 
@@ -65,7 +69,7 @@ export default function LoginPage() {
         setErrorMessage("");
 
         try {
-            const response = await login({
+            const response = await (isEmployeeLogin ? employeeLogin : login)({
                 username: formData.username,
                 password: formData.password
             });
@@ -86,8 +90,12 @@ export default function LoginPage() {
             setStoredUser(user);
             await refresh();
             navigate(getDefaultRouteForUser(user));
-        } catch {
-            setErrorMessage("The username or password is incorrect. Please check your details and try again.");
+        } catch (error) {
+            setErrorMessage(error.response?.status === 429
+                ? "Too many sign-in attempts. Please try again in 15 minutes."
+                : isEmployeeLogin
+                    ? "The S/N number or NIC is incorrect. Please check your details and try again."
+                    : "The username or password is incorrect. Please check your details and try again.");
         } finally {
             setSubmitting(false);
         }
@@ -258,6 +266,21 @@ export default function LoginPage() {
                         }}
                     >
                         <Stack spacing={2.25}>
+                            <Tabs value={loginMode} variant="fullWidth" aria-label="Sign-in type"
+                                onChange={(_, mode) => {
+                                    setLoginMode(mode);
+                                    setFormData((current) => ({ ...current, username: "", password: "" }));
+                                    setErrorMessage("");
+                                }}>
+                                <Tab value="staff" label="Staff sign in" disabled={submitting} />
+                                <Tab value="employee" label="Employee sign in" disabled={submitting} />
+                            </Tabs>
+                            {isEmployeeLogin && (
+                                <Typography variant="body2" color="text.secondary">
+                                    Use your S/N number and NIC to view your own profile and career history.
+                                    This access is read-only.
+                                </Typography>
+                            )}
                             {errorMessage && (
                                 <Alert severity="error" onClose={() => setErrorMessage("")}>
                                     {errorMessage}
@@ -265,7 +288,7 @@ export default function LoginPage() {
                             )}
 
                             <TextField
-                                label="Username"
+                                label={isEmployeeLogin ? "S/N number" : "Username"}
                                 name="username"
                                 value={formData.username}
                                 onChange={handleChange}
@@ -276,7 +299,7 @@ export default function LoginPage() {
                             />
 
                             <TextField
-                                label="Password"
+                                label={isEmployeeLogin ? "NIC" : "Password"}
                                 type="password"
                                 name="password"
                                 value={formData.password}
@@ -286,7 +309,7 @@ export default function LoginPage() {
                                 fullWidth
                             />
 
-                            <TextField
+                            {!isEmployeeLogin && <TextField
                                 label="Workstation name"
                                 name="workstation"
                                 value={formData.workstation}
@@ -294,7 +317,7 @@ export default function LoginPage() {
                                 autoComplete="off"
                                 helperText="Optional identifier used in audit records"
                                 fullWidth
-                            />
+                            />}
 
                             <Button
                                 type="submit"

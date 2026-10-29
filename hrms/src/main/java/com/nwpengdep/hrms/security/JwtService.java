@@ -37,6 +37,33 @@ public class JwtService {
                 .compact();
     }
 
+    public String generateEmployeeToken(com.nwpengdep.hrms.entity.Employee employee) {
+        return Jwts.builder()
+                .setSubject(String.valueOf(employee.getId()))
+                .claim("identityType", "EMPLOYEE")
+                .claim("credentialStamp", employeeCredentialStamp(employee))
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + Math.min(jwtExpiration, 3600000L)))
+                .signWith(key, SignatureAlgorithm.HS256).compact();
+    }
+
+    public Claims extractClaims(String token) {
+        return Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token).getBody();
+    }
+
+    // Keyed fingerprint invalidates sessions after identifier changes without putting NIC in the JWT.
+    public String employeeCredentialStamp(com.nwpengdep.hrms.entity.Employee employee) {
+        try {
+            javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+            mac.init(new javax.crypto.spec.SecretKeySpec(secret.getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256"));
+            String value = employee.getId() + "\n" + employee.getEmployeeNo() + "\n" + employee.getNic();
+            return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(
+                    mac.doFinal(value.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (java.security.GeneralSecurityException e) {
+            throw new IllegalStateException("Cannot validate employee session", e);
+        }
+    }
+
     public String extractUsername(String token) {
 
         Claims claims = Jwts.parserBuilder()

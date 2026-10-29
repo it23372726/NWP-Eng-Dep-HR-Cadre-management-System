@@ -77,7 +77,7 @@ class EmployeeServicePrivateVehicleTest {
                 mock(OfficeService.class),
                 new EmployeeServiceResolver(),
                 mock(TrainingGraduationService.class)
-        , mock(ServiceAppointmentService.class));
+        , mock(ServiceAppointmentService.class), mock(SalaryIncrementService.class));
 
         ServiceType service = new ServiceType();
         service.setId(1L);

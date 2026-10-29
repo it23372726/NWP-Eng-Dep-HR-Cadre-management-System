@@ -16,6 +16,7 @@ import {
     buildPermanentCreatePayload,
     buildPendingPermanentCreatePayload,
     buildTrainingCreatePayload,
+    withSalaryIncrements,
     emptyForm,
     findTrainingServiceLevelId,
     validateCareerHistoryTimeline,
@@ -43,6 +44,7 @@ import EmployeeDependentDetailsSection from "./EmployeeDependentDetailsSection";
 import EmployeePhotoUpload from "./EmployeePhotoUpload";
 import EmployeeQualificationsSection from "./EmployeeQualificationsSection";
 import EmployeeWorkplaceSection from "./EmployeeWorkplaceSection";
+import SalaryIncrementEntrySection from "./SalaryIncrementEntrySection";
 
 const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
     { handleSubmit, open },
@@ -53,6 +55,8 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
     const [serviceLevels, setServiceLevels] = useState([]);
     const [formData, setFormData] = useState(emptyForm);
     const [historyEvents, setHistoryEvents] = useState([]);
+    const [salaryIncrements, setSalaryIncrements] = useState([]);
+    const [salaryIncrementError, setSalaryIncrementError] = useState("");
     const [assignmentError, setAssignmentError] = useState("");
     const [submitError, setSubmitError] = useState("");
     const photoOptionsRef = useRef({ photoFile: null, removePhoto: false });
@@ -65,6 +69,8 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
         if (open) {
             setFormData(emptyForm);
             setHistoryEvents([]);
+            setSalaryIncrements([]);
+            setSalaryIncrementError("");
             setAssignmentError("");
             setSubmitError("");
             photoOptionsRef.current = { photoFile: null, removePhoto: false };
@@ -155,9 +161,10 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
 
     const handleChange = (event) => {
         const { name, type, checked, value } = event.target;
+        const fieldValue = type === "checkbox" ? checked : value;
         let nextFormData = {
             ...formData,
-            [name]: type === "checkbox" ? checked : value
+            [name]: fieldValue
         };
 
         if (name === "employmentType") {
@@ -166,6 +173,7 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
             } else {
                 nextFormData.grade = "None";
                 setHistoryEvents([]);
+                setSalaryIncrements([]);
             }
             if (value === "CONTRACT") {
                 nextFormData.currentDepartment = nextFormData.currentDepartment
@@ -179,8 +187,8 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
             }
         }
 
-        nextFormData = applyPrivateVehicleFormChanges(nextFormData, name, value);
-        nextFormData = applyMaritalStatusFormChanges(nextFormData, name, value);
+        nextFormData = applyPrivateVehicleFormChanges(nextFormData, name, fieldValue);
+        nextFormData = applyMaritalStatusFormChanges(nextFormData, name, fieldValue);
 
         const designationForRules = name === "designationId"
             ? designations.find((item) => item.id === Number(value))
@@ -211,6 +219,7 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
         setSubmitError("");
 
         if (!events.length) {
+            setSalaryIncrements([]);
             return;
         }
 
@@ -247,6 +256,11 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
             : null;
         if (dependentError) {
             setSubmitError(dependentError);
+            return false;
+        }
+
+        if (salaryIncrements.length && salaryIncrementError) {
+            setSubmitError(salaryIncrementError);
             return false;
         }
 
@@ -294,11 +308,14 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
             }
 
             handleSubmit(
-                buildPermanentCreatePayload(
-                    formData,
-                    historyEvents,
-                    selectedDesignation,
-                    services
+                withSalaryIncrements(
+                    buildPermanentCreatePayload(
+                        formData,
+                        historyEvents,
+                        selectedDesignation,
+                        services
+                    ),
+                    salaryIncrements
                 ),
                 photoOptionsRef.current
             );
@@ -327,7 +344,10 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
             }
 
             handleSubmit(
-                buildTrainingCreatePayload(formData),
+                withSalaryIncrements(
+                    buildTrainingCreatePayload(formData),
+                    salaryIncrements
+                ),
                 photoOptionsRef.current
             );
             return true;
@@ -412,6 +432,13 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
                                 readOnlyWorkplace
                                 onIncrementDateChange={handleChange}
                             />
+                            <SalaryIncrementEntrySection
+                                events={historyEvents}
+                                incrementDate={formData.incremantDate}
+                                drafts={salaryIncrements}
+                                onChange={setSalaryIncrements}
+                                onDraftError={setSalaryIncrementError}
+                            />
 
                             <EmployeeQualificationsSection
                                 formData={formData}
@@ -482,6 +509,13 @@ const EmployeeCreateForm = forwardRef(function EmployeeCreateForm(
                                 currentWorkingPlace: value
                             }))
                         }
+                    />
+                    <SalaryIncrementEntrySection
+                        appointmentDate={formData.dateOfFirstAppointment}
+                        incrementDate={formData.incremantDate}
+                        drafts={salaryIncrements}
+                        onChange={setSalaryIncrements}
+                        onDraftError={setSalaryIncrementError}
                     />
                 </>
             ) : (

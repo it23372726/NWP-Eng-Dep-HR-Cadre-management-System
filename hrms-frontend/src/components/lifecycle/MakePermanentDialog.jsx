@@ -44,14 +44,22 @@ export default function MakePermanentDialog({
         setForm({ confirmationDate: "", remarks: "" });
     }, [open, initialAction]);
 
-    const effectiveMinDate = combineMinDates(minDate, previousEventDate);
+    const keepsRecordedDate = Boolean(
+        initialAction?.actionDate
+        && form.confirmationDate === initialAction.actionDate
+    );
+    const effectiveMinDate = keepsRecordedDate
+        ? null
+        : combineMinDates(minDate, previousEventDate);
     const dateBeforeMinimum = Boolean(
-        effectiveMinDate
+        !keepsRecordedDate
+        && effectiveMinDate
         && form.confirmationDate
         && form.confirmationDate < effectiveMinDate
     );
     const dateAfterMaximum = Boolean(
-        maxDate
+        !keepsRecordedDate
+        && maxDate
         && form.confirmationDate
         && form.confirmationDate > maxDate
     );
@@ -108,7 +116,7 @@ export default function MakePermanentDialog({
                             slotProps={{
                                 htmlInput: {
                                     ...(effectiveMinDate ? { min: effectiveMinDate } : {}),
-                                    ...(maxDate ? { max: maxDate } : {})
+                                    ...(maxDate && !keepsRecordedDate ? { max: maxDate } : {})
                                 }
                             }}
                             error={dateBeforeMinimum || dateAfterMaximum}

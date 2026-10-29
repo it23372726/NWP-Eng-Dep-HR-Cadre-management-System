@@ -62,6 +62,9 @@ class EmployeeActionServiceNwpCouncilDateTest {
     @Mock
     private CurrentUserService currentUserService;
 
+    @Mock
+    private CareerHistoryValidator careerHistoryValidator;
+
     @InjectMocks
     private EmployeeActionService employeeActionService;
 

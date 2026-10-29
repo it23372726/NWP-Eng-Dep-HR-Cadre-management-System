@@ -64,7 +64,7 @@ function ProfileSubsection({ title, children }) {
     );
 }
 
-function InfoField({ label, value, size = { xs: 12, sm: 6, md: 4 } }) {
+function InfoField({ label, value, size = { xs: 6, sm: 6, md: 6 } }) {
     return (
         <Grid size={size}>
             <EmployeeProfileInfoItem label={label} value={value} sx={{ height: "100%" }} />
@@ -231,11 +231,11 @@ function buildCareerProgressionMilestones({
     const milestoneConfigs = {
         permanent: {
             title: "Permanent Confirmation",
-            description: "Complete Grade III requirements and 3-year service.",
+            description: "Complete Grade III requirements and the applicable probation period.",
             statusChip: permanentStatusChip,
             details: [
                 {
-                    label: "3-Year Service Due",
+                    label: "Probation Completion Date",
                     value: threeYearDate ? formatDate(threeYearDate) : "—"
                 },
                 {
@@ -470,10 +470,11 @@ export default function EmployeeProfilePersonalTab({
         onMakePermanent
     });
     return (
-        <Stack spacing={3}>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "minmax(0, 1fr)", lg: "minmax(0, 5fr) minmax(0, 7fr)" }, gap: 3, alignItems: "start" }}>
             <ProfileSection
                 icon={<BadgeIcon fontSize="small" />}
                 title="Personal & contact details"
+                sx={{ order: 1, minWidth: 0 }}
                 description="Identity, communication, and residence information for this employee."
             >
                 <Stack spacing={2.5}>
@@ -509,6 +510,7 @@ export default function EmployeeProfilePersonalTab({
                 <ProfileSection
                     icon={<FamilyIcon fontSize="small" />}
                     title="Family & dependent details"
+                    sx={{ order: 3, gridColumn: "1 / -1", minWidth: 0 }}
                     description="Recorded spouse and child information used for dependent administration."
                 >
                     <Stack spacing={3}>
@@ -589,6 +591,7 @@ export default function EmployeeProfilePersonalTab({
             <ProfileSection
                 icon={<WorkIcon fontSize="small" />}
                 title="Employment & assignment"
+                sx={{ order: 2, minWidth: 0 }}
                 description="Current position, workplace, service classification, and appointment dates."
             >
                 <Stack spacing={3}>
@@ -728,6 +731,7 @@ export default function EmployeeProfilePersonalTab({
             <ProfileSection
                 icon={<ProgressIcon fontSize="small" />}
                 title="Career progression"
+                sx={{ order: 4, gridColumn: "1 / -1", minWidth: 0 }}
                 description="Completed and upcoming permanent-service milestones for this employee."
             >
                 {!isPermanentEmployee ? (
@@ -743,7 +747,7 @@ export default function EmployeeProfilePersonalTab({
                         {careerMilestones.map((milestone) => (
                             <Grid
                                 key={milestone.id}
-                                size={{ xs: 12, sm: 6, lg: 3 }}
+                                size={{ xs: 12, sm: 6, lg: 12 / Math.min(careerMilestones.length, 4) }}
                                 sx={{ display: "flex", minWidth: 0 }}
                             >
                                 <CareerMilestoneCard
@@ -760,6 +764,6 @@ export default function EmployeeProfilePersonalTab({
                 )}
             </ProfileSection>
             )}
-        </Stack>
+        </Box>
     );
 }

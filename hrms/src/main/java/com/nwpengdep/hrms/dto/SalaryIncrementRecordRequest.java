@@ -14,6 +14,8 @@ public class SalaryIncrementRecordRequest {
 
     private boolean catchUpToCurrentYear;
 
+    private Integer catchUpThroughYear;
+
     private UUID expectedLastOperationId;
 
     private String serviceAppointmentKey;

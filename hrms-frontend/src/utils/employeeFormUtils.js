@@ -16,7 +16,8 @@ import {
 } from "../constants/hrms";
 import {
     getCareerHistoryEventMinDate,
-    PROBATION_YEARS
+    PROBATION_YEARS,
+    completedInitialProbation
 } from "./gradeAchievementDates";
 import { validateCareerHistoryChronology, validateTimelineDate } from "./timelineDates";
 import { parseLegacyMonthDay } from "./monthDayDate";
@@ -793,6 +794,22 @@ const resolvePresentClassGradeDate = (state, timelineForm) => {
     return timelineForm.appointmentDateToPresentClassGrade || null;
 };
 
+export const withSalaryIncrements = (payload, drafts) => {
+    if (!drafts?.length) {
+        return payload;
+    }
+
+    return {
+        ...payload,
+        salaryIncrements: drafts.map((draft) => ({
+            doneDate: draft.doneDate,
+            catchUpToCurrentYear: Boolean(draft.catchUpToCurrentYear),
+            catchUpThroughYear: draft.catchUpThroughYear ?? null,
+            serviceAppointmentKey: draft.serviceAppointmentKey || null
+        }))
+    };
+};
+
 export const buildPermanentCreatePayload = (
     formData,
     historyEvents,
@@ -963,6 +980,7 @@ const mapActionToCareerEvent = (action, designations, serviceLevelFallback, empl
     const base = {
         actionDate: action.actionDate ?? "",
         remarks: action.remarks ?? "",
+        appointmentBasis: action.appointmentBasis ?? "",
         reason: action.reason ?? "",
         transferredFrom: action.transferredFrom ?? "",
         transferredTo: action.transferredTo ?? ""
@@ -974,6 +992,7 @@ const mapActionToCareerEvent = (action, designations, serviceLevelFallback, empl
         case "SERVICE_APPOINTMENT":
             return { ...base, actionType: action.actionType, designationId: action.newDesignationId,
                 serviceId: action.serviceId, serviceLevelId: action.serviceLevelId, grade: "III",
+                fromDepartment: action.fromDepartment, fromOffice: action.fromOffice,
                 department: action.department, office: action.office, district: districtValue(action.district),
                 serviceAppointmentKey: action.serviceAppointmentKey, appointmentBasis: action.appointmentBasis,
                 incrementDate: action.incrementDate, firstIncrementDueDate: action.firstIncrementDueDate };
@@ -1031,9 +1050,9 @@ const mapActionToCareerEvent = (action, designations, serviceLevelFallback, empl
                         ?? serviceLevelFallback
                         ?? employee?.serviceLevel?.id
                         ?? "",
-                    ...(isPrimaryDepartment(action.fromDepartment)
+                    ...(action.fromDepartment
                         && action.department
-                        && !isPrimaryDepartment(action.department)
+                        && action.fromDepartment !== action.department
                         ? {
                             transferringOut: true,
                             toDepartment: action.department,
@@ -1055,9 +1074,9 @@ const mapActionToCareerEvent = (action, designations, serviceLevelFallback, empl
                     designations,
                     serviceLevelFallback
                 ),
-                ...(isPrimaryDepartment(action.fromDepartment)
+                ...(action.fromDepartment
                     && action.department
-                    && !isPrimaryDepartment(action.department)
+                    && action.fromDepartment !== action.department
                     ? {
                         transferringOut: true,
                         toDepartment: action.department,
@@ -1488,7 +1507,7 @@ export const validateCareerHistoryServiceYears = ({
     }
 
     if (actionType === "PERMANENT_CONFIRMATION") {
-        return `Confirmation date cannot be earlier than ${formatServiceYearDate(minDate)} (end of the ${PROBATION_YEARS}-year probation period).`;
+        return `Confirmation date cannot be earlier than ${formatServiceYearDate(minDate)} (end of the ${timelineState?.probationYears ?? PROBATION_YEARS}-year probation period).`;
     }
 
     if (timelineState?.grade === "III" && grade === "II") {
@@ -1499,7 +1518,96 @@ export const validateCareerHistoryServiceYears = ({
         return `Effective date cannot be earlier than ${formatServiceYearDate(minDate)} (Grade I service period from Grade II achievement).`;
     }
 
+    if (timelineState?.grade === "I" && grade === "Supra") {
+        return `Effective date cannot be earlier than ${formatServiceYearDate(minDate)} (Supra service period from Grade I).`;
+    }
+
+    if (timelineState?.grade === "I" && grade === "Special") {
+        return `Effective date cannot be earlier than ${formatServiceYearDate(minDate)} (Special service period from Grade I).`;
+    }
+
     return null;
+};
+
+const emptyTimelineState = () => ({
+    designationId: null,
+    recordedDesignationName: null,
+    specialDesignationName: null,
+    serviceId: null,
+    grade: null,
+    serviceLevelId: null,
+    currentDepartment: null,
+    currentOffice: null,
+    currentDistrictOfWorking: null,
+    firstAppointmentDate: null,
+    grade2AchievedDate: null,
+    grade1AchievedDate: null,
+    active: false
+});
+
+const serviceYearGrantKey = (event, timelineState) => {
+    if (!event?.actionDate) {
+        return null;
+    }
+
+    if (event.actionType === "PERMANENT_CONFIRMATION") {
+        if (!timelineState?.firstAppointmentDate) {
+            return null;
+        }
+        return [
+            "PERMANENT_CONFIRMATION",
+            event.actionDate,
+            timelineState.firstAppointmentDate
+        ].join("|");
+    }
+
+    if (event.actionType !== "PROMOTION"
+        && event.actionType !== "ASSIGNMENT_GRADE_UPDATE") {
+        return null;
+    }
+
+    const fromGrade = timelineState?.grade;
+    let baseDate = null;
+    if (fromGrade === "III" && event.grade === "II") {
+        baseDate = timelineState.firstAppointmentDate;
+    } else if (fromGrade === "II" && event.grade === "I") {
+        baseDate = timelineState.grade2AchievedDate;
+    } else if (fromGrade === "I" && (event.grade === "Supra" || event.grade === "Special")) {
+        baseDate = timelineState.grade1AchievedDate;
+    }
+
+    if (!baseDate) {
+        return null;
+    }
+
+    return [
+        event.actionType,
+        event.actionDate,
+        fromGrade,
+        event.grade,
+        baseDate
+    ].join("|");
+};
+
+const collectRecordedServiceYearGrants = (events) => {
+    const grants = new Set();
+    if (!events?.length) {
+        return grants;
+    }
+
+    let timelineState = emptyTimelineState();
+    events.forEach((event) => {
+        if (event?.actionType === "TRANSFER_IN" && event.autoCreated) {
+            timelineState = applyEventToTimelineState(timelineState, event);
+            return;
+        }
+        const key = serviceYearGrantKey(event, timelineState);
+        if (key) {
+            grants.add(key);
+        }
+        timelineState = applyEventToTimelineState(timelineState, event);
+    });
+    return grants;
 };
 
 const applyEventToTimelineState = (state, event) => {
@@ -1507,6 +1615,7 @@ const applyEventToTimelineState = (state, event) => {
 
     switch (event.actionType) {
         case "SERVICE_APPOINTMENT":
+            next.probationYears = state.completedInitialProbation ? 1 : PROBATION_YEARS;
             next.designationId = event.designationId; next.recordedDesignationName = null; next.specialDesignationName = null;
             next.serviceId = event.serviceId; next.grade = "III"; next.firstAppointmentDate = event.actionDate;
             next.permanentConfirmed = false; next.permanentConfirmationDate = null;
@@ -1544,6 +1653,8 @@ const applyEventToTimelineState = (state, event) => {
             }
             break;
         case "PERMANENT_CONFIRMATION":
+            next.completedInitialProbation = state.completedInitialProbation
+                || completedInitialProbation(state.firstAppointmentDate, event.actionDate);
             next.permanentConfirmed = true;
             next.permanentConfirmationDate = event.actionDate;
             break;
@@ -1563,6 +1674,9 @@ const applyEventToTimelineState = (state, event) => {
             if (event.grade) {
                 if (next.grade === "III" && event.grade === "II") {
                     next.grade2AchievedDate = event.actionDate;
+                }
+                if (next.grade === "II" && event.grade === "I") {
+                    next.grade1AchievedDate = event.actionDate;
                 }
                 next.grade = event.grade;
             }
@@ -1789,7 +1903,8 @@ export const validateCareerHistoryTimeline = (
     events,
     designations,
     serviceLevels,
-    services = []
+    services = [],
+    recordedEvents = null
 ) => {
     if (!events?.length) {
         return null;
@@ -1800,20 +1915,8 @@ export const validateCareerHistoryTimeline = (
         return chronologyError;
     }
 
-    let timelineState = {
-        designationId: null,
-        recordedDesignationName: null,
-        specialDesignationName: null,
-        serviceId: null,
-        grade: null,
-        serviceLevelId: null,
-        currentDepartment: null,
-        currentOffice: null,
-        currentDistrictOfWorking: null,
-        firstAppointmentDate: null,
-        grade2AchievedDate: null,
-        active: false
-    };
+    const recordedGrants = collectRecordedServiceYearGrants(recordedEvents);
+    let timelineState = emptyTimelineState();
 
     for (let index = 0; index < events.length; index += 1) {
         const event = events[index];
@@ -1840,20 +1943,23 @@ export const validateCareerHistoryTimeline = (
             }
         }
 
-        const serviceYearsError = validateCareerHistoryServiceYears({
-            actionType: event.actionType,
-            actionDate: event.actionDate,
-            grade: event.grade,
-            timelineState,
-            designations,
-            services,
-            designationId:
-                event.actionType === "PROMOTION"
-                    || event.actionType === "TRANSFER_OUT"
-                    ? event.designationId
-                    : timelineState.designationId,
-            serviceId: event.serviceId ?? timelineState.serviceId
-        });
+        const recordedKey = serviceYearGrantKey(event, timelineState);
+        const serviceYearsError = recordedKey && recordedGrants.has(recordedKey)
+            ? null
+            : validateCareerHistoryServiceYears({
+                actionType: event.actionType,
+                actionDate: event.actionDate,
+                grade: event.grade,
+                timelineState,
+                designations,
+                services,
+                designationId:
+                    event.actionType === "PROMOTION"
+                        || event.actionType === "TRANSFER_OUT"
+                        ? event.designationId
+                        : timelineState.designationId,
+                serviceId: event.serviceId ?? timelineState.serviceId
+            });
 
         if (serviceYearsError) {
             const label =

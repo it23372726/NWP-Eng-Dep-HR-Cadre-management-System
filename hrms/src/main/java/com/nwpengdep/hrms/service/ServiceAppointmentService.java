@@ -121,6 +121,7 @@ public class ServiceAppointmentService {
         clearAchievements(current);
         Set<String> seen = new HashSet<>();
         seen.add(INITIAL);
+        boolean completedInitialProbation = false;
         for (EmployeeAction action : actions) {
             if (action.getActionType() == EmployeeActionType.NEW_APPOINTMENT && !Boolean.TRUE.equals(action.getTrainingAppointment())) {
                 current.setStartDate(action.getActionDate());
@@ -144,7 +145,8 @@ public class ServiceAppointmentService {
                     next.getRequirements().clear();
                 }
                 next.setSuperseded(false); next.setEndDate(null); next.setStartDate(action.getActionDate());
-                next.setProbationEndDate(action.getActionDate().plusYears(3));
+                next.setProbationEndDate(action.getActionDate().plusYears(completedInitialProbation
+                        ? ProbationPolicy.SUBSEQUENT_YEARS : ProbationPolicy.INITIAL_YEARS));
                 setAssignment(next, action.getNewDesignation(), null, action.getServiceLevelId());
                 next.setAppointmentBasis(action.getAppointmentBasis());
                 next.setIncrementDate(action.getIncrementDate());
@@ -155,11 +157,14 @@ public class ServiceAppointmentService {
                 }
                 clearAchievements(next); current = next;
             }
-            if (action.getActionType() == EmployeeActionType.PERMANENT_CONFIRMATION) current.setPermanentConfirmationDate(action.getActionDate());
+            if (action.getActionType() == EmployeeActionType.PERMANENT_CONFIRMATION) {
+                current.setPermanentConfirmationDate(action.getActionDate());
+                completedInitialProbation |= ProbationPolicy.completedInitialProbation(current.getStartDate(), action.getActionDate());
+            }
             if (action.getActionType() == EmployeeActionType.PROMOTION || action.getActionType() == EmployeeActionType.ASSIGNMENT_GRADE_UPDATE) {
                 if (action.getOldGrade() == Grade.III && action.getNewGrade() == Grade.II) current.setGrade2AchievedDate(action.getActionDate());
                 if (action.getOldGrade() == Grade.II && action.getNewGrade() == Grade.I) current.setGrade1AchievedDate(action.getActionDate());
-                if (action.getOldGrade() == Grade.I && action.getNewGrade() == Grade.SUPRA) current.setSupraAchievedDate(action.getActionDate());
+                if (SupraPromotionPolicy.isEntryGrade(action.getOldGrade()) && action.getNewGrade() == Grade.SUPRA) current.setSupraAchievedDate(action.getActionDate());
                 if (action.getOldGrade() == Grade.I && action.getNewGrade() == Grade.SPECIAL) current.setSpecialAchievedDate(action.getActionDate());
             }
         }

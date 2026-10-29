@@ -38,6 +38,7 @@ public class EmployeeListItemResponse {
     private String profilePhotoPath;
     private LocalDate dateOfBirth;
     private LocalDate dateOfFirstAppointment;
+    private LocalDate probationEndDate;
     private String contactNo;
 
     private String currentDepartment;

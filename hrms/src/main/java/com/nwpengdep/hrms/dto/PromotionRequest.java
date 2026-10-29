@@ -27,6 +27,9 @@ public class PromotionRequest {
 
     private String remarks;
 
+    /** Examination passed for promotion to a Supra-only designation. */
+    private String appointmentBasis;
+
     private Boolean ebGrade2Passed;
 
     private Boolean otherGrade2RequirementCompleted;

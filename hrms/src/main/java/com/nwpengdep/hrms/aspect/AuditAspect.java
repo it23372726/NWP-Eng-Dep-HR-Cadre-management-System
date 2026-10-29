@@ -48,6 +48,7 @@ public class AuditAspect {
     @Around("within(@org.springframework.web.bind.annotation.RestController *) "
             + "&& !within(com.nwpengdep.hrms.controller.AuditLogController) "
             + "&& !within(com.nwpengdep.hrms.controller.AuthController) "
+            + "&& !within(com.nwpengdep.hrms.controller.EmployeePortalController) "
             + "&& !within(com.nwpengdep.hrms.controller.UserController) "
             + "&& !within(com.nwpengdep.hrms.controller.TestController)")
     public Object auditControllerCall(ProceedingJoinPoint joinPoint) throws Throwable {

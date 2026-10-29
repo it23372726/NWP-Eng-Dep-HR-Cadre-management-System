@@ -491,6 +491,14 @@ public class EmployeeLifecycleService {
             validateSpecialDesignationRequest(request.getSpecialDesignationName(), false);
         }
 
+        boolean supraExamPromotion = SupraPromotionPolicy.isSupraOnly(targetDesignation)
+                && request.getGrade() == Grade.SUPRA;
+        if (supraExamPromotion) {
+            if (!SupraPromotionPolicy.isEntryGrade(oldGrade))
+                throw new IllegalArgumentException("Supra promotion requires current Grade III, II or I.");
+            SupraPromotionPolicy.validateExam(request.getAppointmentBasis());
+        }
+
         ServiceLevel targetServiceLevel =
                 serviceLevelService.resolve(request.getServiceLevelId());
 
@@ -502,12 +510,14 @@ public class EmployeeLifecycleService {
         careerProgression.setGrade1RequiredYears(employeeService.getGrade1RequiredYears());
         careerProgressionService.recalculateEmployeeCareer(employee);
 
+        if (!supraExamPromotion) {
         careerProgressionService.validateAssignmentEffectiveDate(
                 employee,
                 oldGrade,
                 request.getGrade(),
                 request.getPromotionDate()
         );
+        }
 
         if (oldGrade == Grade.III
                 && request.getGrade() == Grade.II
@@ -531,7 +541,7 @@ public class EmployeeLifecycleService {
             );
         }
 
-        if (oldGrade == Grade.I
+        if (!supraExamPromotion && oldGrade == Grade.I
                 && request.getGrade() == Grade.SUPRA
                 && !careerProgressionService.isQualifiedForSupraOn(
                         employee,
@@ -641,7 +651,14 @@ public class EmployeeLifecycleService {
                 request
         );
 
-        if (designationChanged && gradeChanged) {
+        if (supraExamPromotion) {
+            EmployeeAction promotion = employeeActionService.recordActionWithGrades(
+                    employee, EmployeeActionType.PROMOTION, request.getPromotionDate(),
+                    oldDesignation, targetDesignation, targetRecordedName, targetSpecialName,
+                    oldGrade, Grade.SUPRA, null, null, null, request.getRemarks(), promotionWorkplace);
+            promotion.setAppointmentBasis(request.getAppointmentBasis().trim());
+            employeeActionService.saveAction(promotion);
+        } else if (designationChanged && gradeChanged) {
             String gradeUpdateRecordedName = null;
             String gradeUpdateSpecialName = null;
             if (isCustomPromotion || oldDesignation == null) {
@@ -950,12 +967,7 @@ public class EmployeeLifecycleService {
             return current;
         }
 
-        if (!DepartmentConstants.isNwpEngineering(current.getDepartment())) {
-            throw new RuntimeException(
-                    "Transfer out on promotion is only available for employees "
-                            + "in N.W.P. Engineering Department"
-            );
-        }
+
 
         if (request.getToDepartment() == null || request.getToDepartment().isBlank()) {
             throw new RuntimeException("Destination department is required");
@@ -967,7 +979,7 @@ public class EmployeeLifecycleService {
         String normalizedDestination = DepartmentConstants.normalize(
                 request.getToDepartment().trim()
         );
-        if (DepartmentConstants.isNwpEngineering(normalizedDestination)) {
+        if (java.util.Objects.equals(DepartmentConstants.normalize(current.getDepartment()), normalizedDestination)) {
             throw new RuntimeException(
                     "Use \"Stays in department\" when the employee remains in "
                             + DepartmentConstants.NWP_ENGINEERING
@@ -1006,7 +1018,8 @@ public class EmployeeLifecycleService {
             throw new RuntimeException(
                     "Confirmation date cannot be earlier than "
                             + probationEndDate
-                            + ". The employee must complete the 3-year "
+                            + ". The employee must complete the "
+                            + ProbationPolicy.yearsForCurrentAppointment(employee) + "-year "
                             + "probation period from the first appointment date."
             );
         }

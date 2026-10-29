@@ -397,6 +397,26 @@ class SalaryIncrementServiceTest {
     }
 
     @Test
+    void selectedCatchUpYearLeavesLaterYearsOutstanding() {
+        employee.setDateOfFirstAppointment(LocalDate.of(2005, 1, 1));
+        SalaryIncrementRecordRequest request = request(LocalDate.of(2022, 4, 1));
+        request.setCatchUpToCurrentYear(true);
+        request.setCatchUpThroughYear(2022);
+        SalaryIncrementStatusDto status = salaryIncrementService.recordIncrement(1L, request);
+        assertEquals(2023, status.getNextDueYear());
+        assertEquals(2022, status.getLastOperationToYear());
+        assertTrue(recorded().stream().allMatch(record -> record.getDueYear() <= 2022));
+    }
+
+    @Test
+    void catchUpRejectsYearBeyondLatestDueYear() {
+        employee.setDateOfFirstAppointment(LocalDate.of(2005, 1, 1));
+        SalaryIncrementRecordRequest request = request(LocalDate.of(2025, 4, 1));
+        request.setCatchUpThroughYear(2026);
+        assertThrows(IllegalArgumentException.class, () -> salaryIncrementService.recordIncrement(1L, request));
+    }
+
+    @Test
     void catchUpCreatesOneRowPerMissingYearWithSharedOperationId() {
         employee.setDateOfFirstAppointment(LocalDate.of(2021, 1, 1));
         seedRecordedYear(2021, LocalDate.of(2021, 3, 20), SalaryIncrementOperationType.SINGLE);

@@ -138,13 +138,19 @@ export default function TrainingAppointmentDialog({
         && !hasTrainingPeriodCompleted(employee, form.appointmentDate)
     );
 
+    const keepsRecordedDate = Boolean(
+        initialAction?.actionDate
+        && form.appointmentDate === initialAction.actionDate
+    );
     const dateBeforeMinimum = Boolean(
-        minimumDate
+        !keepsRecordedDate
+        && minimumDate
         && form.appointmentDate
         && form.appointmentDate < minimumDate
     );
     const dateAfterMaximum = Boolean(
-        maxDate
+        !keepsRecordedDate
+        && maxDate
         && form.appointmentDate
         && form.appointmentDate > maxDate
     );
@@ -215,8 +221,8 @@ export default function TrainingAppointmentDialog({
                             required
                             slotProps={{
                                 htmlInput: {
-                                    ...(minimumDate ? { min: minimumDate } : {}),
-                                    ...(maxDate ? { max: maxDate } : {})
+                                    ...(minimumDate && !keepsRecordedDate ? { min: minimumDate } : {}),
+                                    ...(maxDate && !keepsRecordedDate ? { max: maxDate } : {})
                                 }
                             }}
                             error={dateBeforeMinimum || dateAfterMaximum}

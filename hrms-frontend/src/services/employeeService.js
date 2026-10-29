@@ -1,4 +1,5 @@
 import api from "../api/axios";
+import { getStoredUser } from "../hooks/useAuth";
 
 export const getEmployees = async () => {
     const response = await api.get("/employees/active");
@@ -45,7 +46,7 @@ export const deleteEmployeePhoto = async (id) => {
 };
 
 export const fetchEmployeePhotoBlob = async (id, cacheKey = "") => {
-    const response = await api.get(`/employees/${id}/photo`, {
+    const response = await api.get(getStoredUser()?.role === "EMPLOYEE" ? "/employee-portal/photo" : `/employees/${id}/photo`, {
         params: cacheKey ? { v: cacheKey } : undefined,
         responseType: "blob",
         validateStatus: (status) => status === 200 || status === 404
@@ -83,7 +84,7 @@ export const searchInactiveEmployees = async (keyword) => {
 };
 
 export const getVehiclePermitStatus = async (id) => {
-    const response = await api.get(`/employees/${id}/vehicle-permit`);
+    const response = await api.get(getStoredUser()?.role === "EMPLOYEE" ? "/employee-portal/vehicle-permit" : `/employees/${id}/vehicle-permit`);
     return response.data;
 };
 
@@ -107,14 +108,14 @@ export const undoVehiclePermitCollection = async (id) => {
 };
 
 export const downloadEmployeeSummaryPdf = async (id) => {
-    const response = await api.get(`/employees/${id}/export/summary-pdf`, {
+    const response = await api.get(getStoredUser()?.role === "EMPLOYEE" ? "/employee-portal/export/summary-pdf" : `/employees/${id}/export/summary-pdf`, {
         responseType: "blob"
     });
     return response.data;
 };
 
 export const downloadEmployeeDependentDetailsPdf = async (id) => {
-    const response = await api.get(`/employees/${id}/export/dependent-details-pdf`, {
+    const response = await api.get(getStoredUser()?.role === "EMPLOYEE" ? "/employee-portal/export/dependent-details-pdf" : `/employees/${id}/export/dependent-details-pdf`, {
         responseType: "blob"
     });
     return response.data;

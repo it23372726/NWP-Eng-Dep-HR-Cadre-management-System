@@ -90,7 +90,7 @@ public class EmployeeRequirementSyncService {
         if (oldGrade == Grade.II && newGrade == Grade.I) {
             markGrade1RequirementsCompleted(employee, effectiveDate);
         }
-        if (oldGrade == Grade.I && newGrade == Grade.SUPRA) {
+        if (SupraPromotionPolicy.isEntryGrade(oldGrade) && newGrade == Grade.SUPRA) {
             markSupraRequirementsCompleted(employee, effectiveDate);
         }
         if (oldGrade == Grade.I && newGrade == Grade.SPECIAL) {

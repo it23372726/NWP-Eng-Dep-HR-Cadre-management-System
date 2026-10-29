@@ -189,8 +189,8 @@ public interface EmployeeActionRepository
             WHERE a.actionType = :actionType
               AND a.oldDesignation IS NOT NULL
               AND (
-                    a.department = :department
-                    OR a.fromDepartment = :department
+                    a.fromDepartment = :department
+                    OR (a.fromDepartment IS NULL AND a.department = :department)
               )
               AND a.actionDate BETWEEN :from AND :to
               AND (a.deleted IS NULL OR a.deleted = false)
@@ -209,6 +209,7 @@ public interface EmployeeActionRepository
             WHERE a.actionType = :actionType
               AND a.newDesignation IS NOT NULL
               AND a.department = :department
+              AND (a.fromDepartment IS NULL OR a.fromDepartment = :department)
               AND a.actionDate BETWEEN :from AND :to
               AND (a.deleted IS NULL OR a.deleted = false)
             GROUP BY a.newDesignation.id
@@ -219,6 +220,47 @@ public interface EmployeeActionRepository
             @Param("from") LocalDate from,
             @Param("to") LocalDate to
     );
+
+
+    @Query("""
+            SELECT a.newDesignation.id, COUNT(a) FROM EmployeeAction a
+            WHERE a.actionType = com.nwpengdep.hrms.entity.EmployeeActionType.PROMOTION
+              AND a.newDesignation IS NOT NULL AND a.department = :department
+              AND a.fromDepartment IS NOT NULL AND a.fromDepartment <> :department
+              AND a.actionDate BETWEEN :from AND :to
+              AND (a.deleted IS NULL OR a.deleted = false)
+            GROUP BY a.newDesignation.id
+            """)
+    List<Object[]> countPromotionTransfersIn(@Param("department") String department,
+            @Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    @Query("""
+            SELECT a.newDesignation.id, COUNT(a) FROM EmployeeAction a
+            WHERE a.actionType = com.nwpengdep.hrms.entity.EmployeeActionType.SERVICE_APPOINTMENT
+              AND a.department = :department AND a.fromDepartment = :department
+              AND a.actionDate BETWEEN :from AND :to AND (a.deleted IS NULL OR a.deleted = false)
+            GROUP BY a.newDesignation.id
+            """)
+    List<Object[]> countServiceAppointmentStays(@Param("department") String department, @Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    @Query("""
+            SELECT a.oldDesignation.id, COUNT(a) FROM EmployeeAction a
+            WHERE a.actionType = com.nwpengdep.hrms.entity.EmployeeActionType.SERVICE_APPOINTMENT
+              AND a.fromDepartment = :department AND a.department <> :department
+              AND a.actionDate BETWEEN :from AND :to AND (a.deleted IS NULL OR a.deleted = false)
+            GROUP BY a.oldDesignation.id
+            """)
+    List<Object[]> countServiceAppointmentTransfersOut(@Param("department") String department, @Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    @Query("""
+            SELECT a.newDesignation.id, COUNT(a) FROM EmployeeAction a
+            WHERE a.actionType = com.nwpengdep.hrms.entity.EmployeeActionType.SERVICE_APPOINTMENT
+              AND a.department = :department AND a.fromDepartment <> :department
+              AND a.actionDate BETWEEN :from AND :to AND (a.deleted IS NULL OR a.deleted = false)
+            GROUP BY a.newDesignation.id
+            """)
+    List<Object[]> countServiceAppointmentTransfersIn(@Param("department") String department, @Param("from") LocalDate from, @Param("to") LocalDate to);
+
 
     @Query("""
             SELECT COUNT(a)

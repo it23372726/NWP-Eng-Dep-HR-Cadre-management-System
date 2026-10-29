@@ -8,6 +8,8 @@ import {
     FormControlLabel,
     Radio,
     RadioGroup,
+    TextField,
+    MenuItem,
     Typography
 } from "@mui/material";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
@@ -16,7 +18,7 @@ import { useEffect, useMemo, useState } from "react";
 import { dialogActionsSx, datePickerTextFieldProps } from "../utils/formLayout";
 import {
     formatSalaryIncrementDate,
-    getCatchUpOptionLabel,
+    resolveDueDate,
     getMinSalaryIncrementCatchUpDate,
     getMinSalaryIncrementEditDate,
     getMinSalaryIncrementRecordDate,
@@ -56,6 +58,10 @@ export default function RecordSalaryIncrementDialog({
     saving = false,
     mode = "record"
 }) {
+    const [catchUpThroughYear, setCatchUpThroughYear] = useState("");
+    const effectiveStatus = { ...salaryIncrementStatus,
+        catchUpTargetDueDate: catchUpThroughYear ? resolveDueDate(
+            employee?.incremantDate || salaryIncrementStatus?.catchUpTargetDueDate?.slice(5), Number(catchUpThroughYear)) : salaryIncrementStatus?.catchUpTargetDueDate };
     const isEdit = mode === "edit";
     const canCatchUp = !isEdit && salaryIncrementStatus?.canCatchUpToCurrentYear;
     const [recordMode, setRecordMode] = useState("single");
@@ -64,6 +70,7 @@ export default function RecordSalaryIncrementDialog({
     useEffect(() => {
         if (open) {
             setRecordMode("single");
+            setCatchUpThroughYear(salaryIncrementStatus?.catchUpTargetYear || "");
             setDoneDate(defaultDoneDate(salaryIncrementStatus, employee, mode, "single"));
         }
     }, [open, salaryIncrementStatus, employee, mode]);
@@ -78,7 +85,7 @@ export default function RecordSalaryIncrementDialog({
     const minDate = isEdit
         ? getMinSalaryIncrementEditDate(salaryIncrementStatus)
         : isCatchUp
-            ? getMinSalaryIncrementCatchUpDate(salaryIncrementStatus)
+            ? getMinSalaryIncrementCatchUpDate(effectiveStatus)
             : getMinSalaryIncrementRecordDate(salaryIncrementStatus);
     const maxDate = todayInputValue();
     const minDayjs = minDate ? dayjs(minDate) : undefined;
@@ -89,13 +96,13 @@ export default function RecordSalaryIncrementDialog({
         }
 
         if (isCatchUp) {
-            return validateSalaryIncrementCatchUpDate(doneDate, salaryIncrementStatus);
+            return validateSalaryIncrementCatchUpDate(doneDate, effectiveStatus);
         }
 
         return validateSalaryIncrementRecordDate(doneDate, salaryIncrementStatus);
-    }, [doneDate, salaryIncrementStatus, isEdit, isCatchUp]);
+    }, [doneDate, salaryIncrementStatus, isEdit, isCatchUp, catchUpThroughYear]);
     const helperMode = isEdit ? "edit" : isCatchUp ? "catchUp" : "record";
-    const canSubmit = Boolean(doneDate) && !validationError;
+    const canSubmit = Boolean(doneDate) && !validationError && (!isCatchUp || Boolean(catchUpThroughYear));
 
     const handleDateChange = (nextValue) => {
         if (!nextValue?.isValid()) {
@@ -117,7 +124,7 @@ export default function RecordSalaryIncrementDialog({
     };
 
     const handleConfirm = () => {
-        onConfirm(doneDate, { catchUpToCurrentYear: isCatchUp });
+        onConfirm(doneDate, { catchUpToCurrentYear: isCatchUp, catchUpThroughYear: isCatchUp ? Number(catchUpThroughYear) : undefined });
     };
 
     return (
@@ -138,7 +145,7 @@ export default function RecordSalaryIncrementDialog({
                     {isEdit
                         ? "Update the date this employee's salary increment was processed."
                         : isCatchUp
-                            ? "Mark all missed increments through the current year as done in one step. Use this for legacy employees with many overdue years."
+                            ? "Mark missed increments through your selected year as done in one step. Later years remain outstanding."
                             : "Record the date this employee's salary increment was processed."}
                     {!isEdit && !isCatchUp && salaryIncrementStatus?.nextDueDate && (
                         <>
@@ -152,9 +159,9 @@ export default function RecordSalaryIncrementDialog({
                     {isCatchUp && salaryIncrementStatus?.catchUpTargetDueDate && (
                         <>
                             {" "}
-                            The current-year due date is{" "}
+                            The selected year’s due date is{" "}
                             <strong>
-                                {formatSalaryIncrementDate(salaryIncrementStatus.catchUpTargetDueDate)}
+                                {formatSalaryIncrementDate(effectiveStatus.catchUpTargetDueDate)}
                             </strong>.
                         </>
                     )}
@@ -174,12 +181,18 @@ export default function RecordSalaryIncrementDialog({
                             <FormControlLabel
                                 value="catchUp"
                                 control={<Radio />}
-                                label={getCatchUpOptionLabel(salaryIncrementStatus)}
+                                label="Catch up through a selected year"
                             />
                         </RadioGroup>
                     </FormControl>
                 )}
 
+                {isCatchUp && <TextField select fullWidth label="Catch up through year" value={catchUpThroughYear}
+                    onChange={event => setCatchUpThroughYear(Number(event.target.value))} sx={{ mb: 2 }}
+                    helperText="Only missing increments up to and including this year will be recorded.">
+                    {Array.from({ length: Math.max(0, (salaryIncrementStatus?.catchUpTargetYear || 0) - (salaryIncrementStatus?.nextDueYear || 0) + 1) }, (_, index) => salaryIncrementStatus.nextDueYear + index)
+                        .map(year => <MenuItem key={year} value={year}>{year}</MenuItem>)}
+                </TextField>}
                 <DatePicker
                     label="Increment done date"
                     value={toDayjs(doneDate)}
@@ -192,7 +205,7 @@ export default function RecordSalaryIncrementDialog({
                             ...datePickerTextFieldProps,
                             error: Boolean(doneDate && validationError),
                             helperText: getSalaryIncrementRecordHelperText(
-                                salaryIncrementStatus,
+                                effectiveStatus,
                                 helperMode
                             )
                         }

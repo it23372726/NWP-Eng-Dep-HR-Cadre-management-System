@@ -64,12 +64,23 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/organization-settings/logo")
                         .permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/login")
+                        .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/employee-login")
                         .permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**")
                         .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/employee-portal/profile", "/api/employee-portal/history",
+                                "/api/employee-portal/photo", "/api/employee-portal/vehicle-permit", "/api/employee-portal/salary-increment",
+                                "/api/employee-portal/export/summary-pdf", "/api/employee-portal/export/dependent-details-pdf")
+                        .hasAuthority("EMPLOYEE_SELF")
+                        .requestMatchers(HttpMethod.POST, "/api/auth/logout").authenticated()
                         .anyRequest()
-                        .authenticated()
+                        .access((authentication, context) -> {
+                            var current = authentication.get();
+                            return new org.springframework.security.authorization.AuthorizationDecision(
+                                    current != null && current.isAuthenticated()
+                                    && !(current instanceof org.springframework.security.authentication.AnonymousAuthenticationToken)
+                                    && !(current.getPrincipal() instanceof com.nwpengdep.hrms.security.EmployeePrincipal));
+                        })
                 )
                 .addFilterBefore(
                         jwtAuthFilter,

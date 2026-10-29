@@ -10,6 +10,8 @@ import lombok.Data;
 import java.time.LocalDate;
 import java.util.List;
 
+import jakarta.validation.Valid;
+
 @Data
 public class EmployeeRequest {
 
@@ -133,6 +135,9 @@ public class EmployeeRequest {
     private List<EmployeeRequirementRequest> requirements;
 
     private List<CareerHistoryEventRequest> careerHistory;
+
+    @Valid
+    private List<SalaryIncrementRecordRequest> salaryIncrements;
 
     private EmployeeSpouseRequest spouse;
 

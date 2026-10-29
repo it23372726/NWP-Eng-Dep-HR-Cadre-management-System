@@ -43,7 +43,7 @@ import TrainingAppointmentDialog from "./lifecycle/TrainingAppointmentDialog";
 import MakePermanentDialog from "./lifecycle/MakePermanentDialog";
 import SimpleLifecycleDialog from "./lifecycle/SimpleLifecycleDialog";
 import { getPreviousEventDateForEdit, getNextEventDateForEdit } from "../utils/timelineDates";
-import { getPermanentConfirmationMinDate } from "../utils/gradeAchievementDates";
+import { getPermanentConfirmationMinDate, getEmployeeProbationMinDate, getProbationTimelineState } from "../utils/gradeAchievementDates";
 import { getLifecycleEditDateBounds } from "../utils/lifecycleEditBounds";
 import { EmployeeProfileEmptyState } from "./EmployeeProfileSection";
 
@@ -319,7 +319,7 @@ export default function EmployeeActionHistoryTable({
 
     const permanentConfirmationMinDate = (() => {
         if (selectedAction?.actionType !== "PERMANENT_CONFIRMATION") {
-            return getPermanentConfirmationMinDate(employee?.dateOfFirstAppointment);
+            return getEmployeeProbationMinDate(employee);
         }
         const chronological = [...(actions ?? [])]
             .filter((item) => item?.actionDate && !(item.actionType === "TRANSFER_IN" && item.autoCreated))
@@ -328,15 +328,11 @@ export default function EmployeeActionHistoryTable({
                 return byDate !== 0 ? byDate : (left.id ?? 0) - (right.id ?? 0);
             });
         const index = chronological.findIndex((item) => item.id === selectedAction.id);
-        for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
-            const prior = chronological[cursor];
-            if (prior.actionType === "NEW_APPOINTMENT"
-                || prior.actionType === "SERVICE_APPOINTMENT"
-                || prior.trainingGraduation) {
-                return getPermanentConfirmationMinDate(prior.actionDate);
-            }
+        if (index >= 0) {
+            const state = getProbationTimelineState(chronological.slice(0, index));
+            return getPermanentConfirmationMinDate(state.firstAppointmentDate, state.probationYears);
         }
-        return getPermanentConfirmationMinDate(employee?.dateOfFirstAppointment);
+        return getEmployeeProbationMinDate(employee);
     })();
 
     const closeEdit = () => {
@@ -576,6 +572,7 @@ export default function EmployeeActionHistoryTable({
                                     toDepartment: data.toDepartment,
                                     toOffice: data.toOffice,
                                     toDistrict: data.toDistrict,
+                                    appointmentBasis: data.appointmentBasis,
                                     remarks: data.remarks
                                 }, "Promotion updated");
                             }}

@@ -14,8 +14,8 @@ export function EmployeeProfileSection({
             variant="outlined"
             sx={{
                 overflow: "hidden",
-                borderRadius: 3,
-                boxShadow: 1,
+                borderRadius: "16px",
+                boxShadow: "0 4px 24px rgba(20, 45, 70, 0.035)",
                 ...sx
             }}
         >
@@ -23,8 +23,8 @@ export function EmployeeProfileSection({
                 direction={{ xs: "column", sm: "row" }}
                 spacing={1.5}
                 sx={{
-                    px: { xs: 2, sm: 2.5 },
-                    py: 2,
+                    px: { xs: 2.5, sm: 3 },
+                    py: 2.25,
                     bgcolor: "grey.50",
                     borderBottom: "1px solid",
                     borderColor: "divider",
@@ -36,9 +36,9 @@ export function EmployeeProfileSection({
                     {icon && (
                         <Box
                             sx={{
-                                width: 40,
-                                height: 40,
-                                borderRadius: 2.5,
+                                width: 36,
+                                height: 36,
+                                borderRadius: "10px",
                                 display: "grid",
                                 placeItems: "center",
                                 bgcolor: "primary.50",
@@ -50,7 +50,7 @@ export function EmployeeProfileSection({
                         </Box>
                     )}
                     <Box sx={{ minWidth: 0 }}>
-                        <Typography variant="h6">{title}</Typography>
+                        <Typography variant="h6" sx={{ fontSize: "1.05rem", fontWeight: 750 }}>{title}</Typography>
                         {description && (
                             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
                                 {description}
@@ -60,7 +60,7 @@ export function EmployeeProfileSection({
                 </Stack>
                 {action && <Box sx={{ flexShrink: 0 }}>{action}</Box>}
             </Stack>
-            <Box sx={{ p: { xs: 2, sm: 2.5 }, ...contentSx }}>
+            <Box sx={{ p: { xs: 2.5, sm: 3 }, ...contentSx }}>
                 {children}
             </Box>
         </Paper>
@@ -82,7 +82,7 @@ export function EmployeeProfileSubsection({ title, description, action, children
                 <Box>
                     <Typography
                         variant="subtitle2"
-                        sx={{ fontWeight: 750, color: "text.primary" }}
+                        sx={{ fontWeight: 750, color: "text.secondary", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.07em" }}
                     >
                         {title}
                     </Typography>
@@ -124,12 +124,11 @@ export function EmployeeProfileInfoItem({ label, value, icon, wide = false, sx }
     return (
         <Box
             sx={{
-                p: 1.5,
+                py: 1.5,
+                px: 0,
                 minWidth: 0,
-                minHeight: 72,
-                borderRadius: 2.25,
-                bgcolor: "grey.50",
-                border: "1px solid",
+                minHeight: 76,
+                borderBottom: "1px solid",
                 borderColor: "divider",
                 gridColumn: wide ? "1 / -1" : "auto",
                 ...sx
@@ -144,7 +143,7 @@ export function EmployeeProfileInfoItem({ label, value, icon, wide = false, sx }
                 <Typography
                     variant="caption"
                     color="text.secondary"
-                    sx={{ fontWeight: 700 }}
+                    sx={{ fontWeight: 500, lineHeight: 1.5 }}
                 >
                     {label}
                 </Typography>
@@ -152,7 +151,7 @@ export function EmployeeProfileInfoItem({ label, value, icon, wide = false, sx }
             {typeof displayValue === "string" || typeof displayValue === "number" ? (
                 <Typography
                     variant="body2"
-                    sx={{ fontWeight: 650, overflowWrap: "anywhere" }}
+                    sx={{ fontWeight: 600, overflowWrap: "anywhere", lineHeight: 1.6 }}
                 >
                     {displayValue}
                 </Typography>
@@ -170,7 +169,7 @@ export function EmployeeProfileEmptyState({ icon, title, description }) {
             sx={{
                 p: { xs: 3, sm: 5 },
                 textAlign: "center",
-                borderRadius: 3,
+                borderRadius: "16px",
                 borderStyle: "dashed"
             }}
         >
@@ -179,7 +178,7 @@ export function EmployeeProfileEmptyState({ icon, title, description }) {
                     {icon}
                 </Box>
             )}
-            <Typography variant="h6">{title}</Typography>
+            <Typography variant="h6" sx={{ fontSize: "1.05rem", fontWeight: 750 }}>{title}</Typography>
             {description && (
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                     {description}

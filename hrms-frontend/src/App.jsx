@@ -50,6 +50,7 @@ export default function App() {
         <Suspense fallback={<PageLoader />}>
             <Routes>
                 <Route path="/" element={<LoginPage />} />
+                <Route path="/employees/self" element={<ProtectedRoute employeePortal><EmployeeProfilePage /></ProtectedRoute>} />
 
                 <Route
                     element={(

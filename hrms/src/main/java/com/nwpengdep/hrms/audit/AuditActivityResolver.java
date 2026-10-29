@@ -510,6 +510,7 @@ public class AuditActivityResolver {
                 details.put("doneDate", request.getDoneDate().toString());
             }
             details.put("catchUpToCurrentYear", request.isCatchUpToCurrentYear());
+            details.put("catchUpThroughYear", request.getCatchUpThroughYear());
         }
 
         if (result instanceof SalaryIncrementStatusDto status) {

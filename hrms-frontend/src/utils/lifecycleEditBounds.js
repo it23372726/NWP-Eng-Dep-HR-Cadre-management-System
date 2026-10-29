@@ -6,7 +6,7 @@ import {
     minIsoDate,
     todayIsoDate
 } from "./timelineDates";
-import { PROBATION_YEARS } from "./gradeAchievementDates";
+import { PROBATION_YEARS, getProbationTimelineState } from "./gradeAchievementDates";
 
 const subtractYears = (date, years) => {
     if (!date || years == null || years === "") {
@@ -89,13 +89,17 @@ export function getLifecycleEditDateBounds({
         || Boolean(action.trainingGraduation);
 
     if (isFirstAppointmentClock) {
-        const laterConfirmation = laterEvents.find(
+        const probationYears = action.actionType === "SERVICE_APPOINTMENT"
+            ? getProbationTimelineState(sorted.slice(0, index + 1)).probationYears : PROBATION_YEARS;
+        const nextServiceIndex = laterEvents.findIndex(event => event.actionType === "SERVICE_APPOINTMENT");
+        const periodEvents = nextServiceIndex < 0 ? laterEvents : laterEvents.slice(0, nextServiceIndex);
+        const laterConfirmation = periodEvents.find(
             (event) => event.actionType === "PERMANENT_CONFIRMATION"
         );
         if (laterConfirmation) {
             tightenMax(
-                subtractYears(laterConfirmation.actionDate, PROBATION_YEARS),
-                `Permanent confirmation on ${formatTimelineDate(laterConfirmation.actionDate)} requires ${PROBATION_YEARS} years after this appointment. Move that confirmation first, or keep this date on or before ${formatTimelineDate(subtractYears(laterConfirmation.actionDate, PROBATION_YEARS))}.`
+                subtractYears(laterConfirmation.actionDate, probationYears),
+                `Permanent confirmation on ${formatTimelineDate(laterConfirmation.actionDate)} requires ${probationYears} year(s) after this appointment. Move that confirmation first, or keep this date on or before ${formatTimelineDate(subtractYears(laterConfirmation.actionDate, probationYears))}.`
             );
         }
 
@@ -167,6 +171,10 @@ export function lifecycleEditDateHelperText({
         return maxReason;
     }
     return minHelper;
+}
+
+export function recordedDateKept(value, recordedDate) {
+    return Boolean(value && recordedDate && value === recordedDate);
 }
 
 export function isLifecycleEditDateInvalid(value, minDate, maxDate) {

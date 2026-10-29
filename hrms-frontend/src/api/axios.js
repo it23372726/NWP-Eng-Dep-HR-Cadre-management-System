@@ -8,6 +8,7 @@ const api = axios.create({
 });
 
 const publicEndpoints = [
+    { method: "post", path: "/auth/employee-login" },
     { method: "post", path: "/auth/login" },
     { method: "get", path: "/organization-settings/branding" },
     { method: "get", path: "/organization-settings/logo" }
